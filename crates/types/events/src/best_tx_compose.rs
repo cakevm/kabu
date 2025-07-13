@@ -1,9 +1,9 @@
 use crate::SwapComposeData;
 use alloy_primitives::U256;
-use loom_types_blockchain::LoomDataTypes;
+use kabu_types_blockchain::KabuDataTypes;
 
 #[derive(Default)]
-pub struct BestTxSwapCompose<DB, LDT: LoomDataTypes> {
+pub struct BestTxSwapCompose<DB, LDT: KabuDataTypes> {
     validity_pct: Option<U256>,
     best_profit_swap: Option<SwapComposeData<DB, LDT>>,
     best_profit_gas_ratio_swap: Option<SwapComposeData<DB, LDT>>,
@@ -11,7 +11,7 @@ pub struct BestTxSwapCompose<DB, LDT: LoomDataTypes> {
     best_tips_gas_ratio_swap: Option<SwapComposeData<DB, LDT>>,
 }
 
-impl<DB: Clone + Default + 'static, LDT: LoomDataTypes> BestTxSwapCompose<DB, LDT> {
+impl<DB: Clone + Default + 'static, LDT: KabuDataTypes> BestTxSwapCompose<DB, LDT> {
     pub fn new_with_pct<T: Into<U256>>(validity_pct: T) -> Self {
         BestTxSwapCompose {
             validity_pct: Some(validity_pct.into()),

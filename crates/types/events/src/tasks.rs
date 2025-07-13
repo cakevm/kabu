@@ -1,4 +1,4 @@
-use loom_types_entities::{EntityAddress, PoolClass};
+use kabu_types_entities::{EntityAddress, PoolClass};
 
 #[derive(Clone, Debug)]
 pub enum LoomTask {

@@ -2,15 +2,15 @@ use alloy_primitives::{hex, Bytes, B256};
 use eyre::eyre;
 use tracing::{error, info};
 
-use loom_core_actors::{Accessor, Actor, ActorResult, SharedState, WorkerResult};
-use loom_core_actors_macros::Accessor;
-use loom_core_blockchain::Blockchain;
-use loom_types_blockchain::{LoomDataTypes, LoomDataTypesEthereum};
-use loom_types_entities::{AccountNonceAndBalanceState, KeyStore, LoomTxSigner, TxSigners};
+use kabu_core_actors::{Accessor, Actor, ActorResult, SharedState, WorkerResult};
+use kabu_core_actors_macros::Accessor;
+use kabu_core_blockchain::Blockchain;
+use kabu_types_blockchain::{KabuDataTypes, KabuDataTypesEthereum};
+use kabu_types_entities::{AccountNonceAndBalanceState, KeyStore, LoomTxSigner, TxSigners};
 
 /// The one-shot actor adds a new signer to the signers and monitor list after and stops.
 #[derive(Accessor)]
-pub struct InitializeSignersOneShotBlockingActor<LDT: LoomDataTypes> {
+pub struct InitializeSignersOneShotBlockingActor<LDT: KabuDataTypes> {
     key: Option<Vec<u8>>,
     #[accessor]
     signers: Option<SharedState<TxSigners<LDT>>>,
@@ -20,7 +20,7 @@ pub struct InitializeSignersOneShotBlockingActor<LDT: LoomDataTypes> {
 
 async fn initialize_signers_one_shot_worker(
     key: Vec<u8>,
-    signers: SharedState<TxSigners<LoomDataTypesEthereum>>,
+    signers: SharedState<TxSigners<KabuDataTypesEthereum>>,
     monitor: SharedState<AccountNonceAndBalanceState>,
 ) -> WorkerResult {
     let new_signer = signers.write().await.add_privkey(Bytes::from(key));
@@ -29,7 +29,7 @@ async fn initialize_signers_one_shot_worker(
     Ok("Signer added".to_string())
 }
 
-impl<LDT: LoomDataTypes> InitializeSignersOneShotBlockingActor<LDT> {
+impl<LDT: KabuDataTypes> InitializeSignersOneShotBlockingActor<LDT> {
     pub fn new(key: Option<Vec<u8>>) -> InitializeSignersOneShotBlockingActor<LDT> {
         let key = key.unwrap_or_else(|| B256::random().to_vec());
 
@@ -65,7 +65,7 @@ impl<LDT: LoomDataTypes> InitializeSignersOneShotBlockingActor<LDT> {
     }
 }
 
-impl Actor for InitializeSignersOneShotBlockingActor<LoomDataTypesEthereum> {
+impl Actor for InitializeSignersOneShotBlockingActor<KabuDataTypesEthereum> {
     fn start_and_wait(&self) -> eyre::Result<()> {
         let key = match self.key.clone() {
             Some(key) => key,

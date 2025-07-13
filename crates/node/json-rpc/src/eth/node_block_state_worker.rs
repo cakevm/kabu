@@ -4,10 +4,10 @@ use alloy_provider::Provider;
 use alloy_rpc_types::{BlockId, Header};
 use tracing::{debug, error};
 
-use loom_core_actors::{subscribe, Broadcaster, WorkerResult};
-use loom_node_debug_provider::DebugProviderExt;
-use loom_types_blockchain::{debug_trace_block, LoomDataTypesEVM};
-use loom_types_events::{BlockStateUpdate, Message, MessageBlockStateUpdate};
+use kabu_core_actors::{subscribe, Broadcaster, WorkerResult};
+use kabu_node_debug_provider::DebugProviderExt;
+use kabu_types_blockchain::{debug_trace_block, KabuDataTypesEVM};
+use kabu_types_events::{BlockStateUpdate, Message, MessageBlockStateUpdate};
 
 pub async fn new_node_block_state_worker<P, N, LDT>(
     client: P,
@@ -17,7 +17,7 @@ pub async fn new_node_block_state_worker<P, N, LDT>(
 where
     N: Network,
     P: Provider<N> + DebugProviderExt<N> + Send + Sync + Clone + 'static,
-    LDT: LoomDataTypesEVM,
+    LDT: KabuDataTypesEVM,
 {
     subscribe!(block_header_receiver);
 

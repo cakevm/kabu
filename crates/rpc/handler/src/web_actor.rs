@@ -1,11 +1,11 @@
 use crate::router::router;
 use axum::Router;
-use loom_core_actors::{Actor, ActorResult, WorkerResult};
-use loom_core_actors_macros::Consumer;
-use loom_core_blockchain::{Blockchain, BlockchainState};
-use loom_rpc_state::AppState;
-use loom_storage_db::DbPool;
-use loom_types_blockchain::LoomDataTypesEthereum;
+use kabu_core_actors::{Actor, ActorResult, WorkerResult};
+use kabu_core_actors_macros::Consumer;
+use kabu_core_blockchain::{Blockchain, BlockchainState};
+use kabu_rpc_state::AppState;
+use kabu_storage_db::DbPool;
+use kabu_types_blockchain::KabuDataTypesEthereum;
 use revm::{DatabaseCommit, DatabaseRef};
 use std::net::SocketAddr;
 use tokio::net::TcpListener;
@@ -17,12 +17,12 @@ pub async fn start_web_server_worker<S, DB>(
     host: String,
     extra_router: Router<S>,
     bc: Blockchain,
-    state: BlockchainState<DB, LoomDataTypesEthereum>,
+    state: BlockchainState<DB, KabuDataTypesEthereum>,
     db_pool: DbPool,
     shutdown_token: CancellationToken,
 ) -> WorkerResult
 where
-    DB: DatabaseRef<Error = loom_evm_db::LoomDBError> + DatabaseCommit + Send + Sync + Clone + Default + 'static,
+    DB: DatabaseRef<Error = kabu_evm_db::KabuDBError> + DatabaseCommit + Send + Sync + Clone + Default + 'static,
     S: Clone + Send + Sync + 'static,
     Router: From<Router<S>>,
 {
@@ -52,12 +52,12 @@ pub struct WebServerActor<S, DB: Clone + Send + Sync + 'static> {
     shutdown_token: CancellationToken,
     db_pool: DbPool,
     bc: Option<Blockchain>,
-    state: Option<BlockchainState<DB, LoomDataTypesEthereum>>,
+    state: Option<BlockchainState<DB, KabuDataTypesEthereum>>,
 }
 
 impl<S, DB> WebServerActor<S, DB>
 where
-    DB: DatabaseRef<Error = loom_evm_db::LoomDBError> + Send + Sync + Clone + Default + 'static,
+    DB: DatabaseRef<Error = kabu_evm_db::KabuDBError> + Send + Sync + Clone + Default + 'static,
     S: Clone + Send + Sync + 'static,
     Router: From<Router<S>>,
 {
@@ -65,7 +65,7 @@ where
         Self { host, extra_router, shutdown_token, db_pool, bc: None, state: None }
     }
 
-    pub fn on_bc(self, bc: &Blockchain, state: &BlockchainState<DB, LoomDataTypesEthereum>) -> Self {
+    pub fn on_bc(self, bc: &Blockchain, state: &BlockchainState<DB, KabuDataTypesEthereum>) -> Self {
         Self { bc: Some(bc.clone()), state: Some(state.clone()), ..self }
     }
 }
@@ -74,7 +74,7 @@ impl<S, DB> Actor for WebServerActor<S, DB>
 where
     S: Clone + Send + Sync + 'static,
     Router: From<Router<S>>,
-    DB: DatabaseRef<Error = loom_evm_db::LoomDBError> + DatabaseCommit + Send + Sync + Clone + Default + 'static,
+    DB: DatabaseRef<Error = kabu_evm_db::KabuDBError> + DatabaseCommit + Send + Sync + Clone + Default + 'static,
 {
     fn start(&self) -> ActorResult {
         let task = tokio::spawn(start_web_server_worker(

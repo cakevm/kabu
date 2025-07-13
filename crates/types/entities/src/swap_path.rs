@@ -278,7 +278,7 @@ mod test {
     use crate::{Pool, PoolAbiEncoder, PoolClass, PoolProtocol, PreswapRequirement, SwapDirection};
     use alloy_primitives::{Address, U256};
     use eyre::{eyre, ErrReport};
-    use loom_evm_utils::LoomExecuteEvm;
+    use kabu_evm_utils::LoomExecuteEvm;
     use std::any::Any;
     use tokio::task::JoinHandle;
     use tracing::error;

@@ -4,9 +4,9 @@ use crate::pool_opcodes_encoder::swap_opcodes_encoders::MulticallerOpcodesPayloa
 use crate::pool_opcodes_encoder::SwapOpcodesEncoderTrait;
 use alloy_primitives::{Address, Bytes, U256};
 use eyre::eyre;
-use loom_defi_abi::AbiEncoderHelper;
-use loom_types_blockchain::{MulticallerCall, MulticallerCalls};
-use loom_types_entities::{Pool, PreswapRequirement, SwapAmountType};
+use kabu_defi_abi::AbiEncoderHelper;
+use kabu_types_blockchain::{MulticallerCall, MulticallerCalls};
+use kabu_types_entities::{Pool, PreswapRequirement, SwapAmountType};
 use tracing::{trace, warn};
 
 pub struct UniswapV2SwapOpcodesEncoder;

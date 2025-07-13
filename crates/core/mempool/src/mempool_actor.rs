@@ -1,3 +1,4 @@
+use crate::kabu_data_types::KabuTx;
 use alloy_primitives::BlockNumber;
 use chrono::{Duration, Utc};
 use eyre::eyre;
@@ -5,14 +6,14 @@ use influxdb::{Timestamp, WriteQuery};
 use tokio::sync::broadcast::error::RecvError;
 use tracing::{debug, error, info, trace};
 
-use loom_core_actors::{run_sync, subscribe, Accessor, Actor, ActorResult, Broadcaster, Consumer, Producer, SharedState, WorkerResult};
-use loom_core_actors_macros::{Accessor, Consumer, Producer};
-use loom_core_blockchain::Blockchain;
-use loom_types_blockchain::{ChainParameters, Mempool, MempoolTx};
-use loom_types_blockchain::{LoomBlock, LoomDataTypes, LoomDataTypesEthereum, LoomHeader, LoomTx};
-use loom_types_events::{MempoolEvents, MessageBlock, MessageBlockHeader, MessageMempoolDataUpdate};
+use kabu_core_actors::{run_sync, subscribe, Accessor, Actor, ActorResult, Broadcaster, Consumer, Producer, SharedState, WorkerResult};
+use kabu_core_actors_macros::{Accessor, Consumer, Producer};
+use kabu_core_blockchain::Blockchain;
+use kabu_types_blockchain::{ChainParameters, Mempool, MempoolTx};
+use kabu_types_blockchain::{KabuBlock, KabuDataTypes, KabuDataTypesEthereum, KabuHeader, LoomTx};
+use kabu_types_events::{MempoolEvents, MessageBlock, MessageBlockHeader, MessageMempoolDataUpdate};
 
-pub async fn new_mempool_worker<LDT: LoomDataTypes>(
+pub async fn new_mempool_worker<LDT: KabuDataTypes>(
     chain_parameters: ChainParameters,
     mempool: SharedState<Mempool<LDT>>,
     mempool_update_rx: Broadcaster<MessageMempoolDataUpdate<LDT>>,
@@ -186,7 +187,7 @@ pub async fn new_mempool_worker<LDT: LoomDataTypes>(
 }
 
 #[derive(Accessor, Consumer, Producer)]
-pub struct MempoolActor<LDT: LoomDataTypes + 'static = LoomDataTypesEthereum> {
+pub struct MempoolActor<LDT: KabuDataTypes + 'static = KabuDataTypesEthereum> {
     chain_parameters: ChainParameters,
     #[accessor]
     mempool: Option<SharedState<Mempool<LDT>>>,
@@ -202,7 +203,7 @@ pub struct MempoolActor<LDT: LoomDataTypes + 'static = LoomDataTypesEthereum> {
     influxdb_write_channel_tx: Option<Broadcaster<WriteQuery>>,
 }
 
-impl<LDT: LoomDataTypes> Default for MempoolActor<LDT> {
+impl<LDT: KabuDataTypes> Default for MempoolActor<LDT> {
     fn default() -> Self {
         Self {
             chain_parameters: ChainParameters::ethereum(),
@@ -216,7 +217,7 @@ impl<LDT: LoomDataTypes> Default for MempoolActor<LDT> {
     }
 }
 
-impl<LDT: LoomDataTypes> MempoolActor<LDT> {
+impl<LDT: KabuDataTypes> MempoolActor<LDT> {
     pub fn new() -> MempoolActor<LDT> {
         MempoolActor::default()
     }
@@ -234,7 +235,7 @@ impl<LDT: LoomDataTypes> MempoolActor<LDT> {
     }
 }
 
-impl<LDT: LoomDataTypes> Actor for MempoolActor<LDT> {
+impl<LDT: KabuDataTypes> Actor for MempoolActor<LDT> {
     fn start(&self) -> ActorResult {
         let task = tokio::task::spawn(new_mempool_worker(
             self.chain_parameters.clone(),

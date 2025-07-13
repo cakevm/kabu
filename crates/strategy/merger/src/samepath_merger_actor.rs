@@ -1,3 +1,4 @@
+use crate::kabu_data_types::KabuTx;
 use std::collections::HashMap;
 use std::marker::PhantomData;
 use std::ops::Deref;
@@ -17,15 +18,15 @@ use tokio::sync::broadcast::error::RecvError;
 use tokio::sync::RwLock;
 use tracing::{debug, error, info, trace};
 
-use loom_core_actors::{subscribe, Accessor, Actor, ActorResult, Broadcaster, Consumer, Producer, SharedState, WorkerResult};
-use loom_core_actors_macros::{Accessor, Consumer, Producer};
-use loom_core_blockchain::{Blockchain, BlockchainState, Strategy};
-use loom_evm_db::{DatabaseHelpers, LoomDBError};
-use loom_evm_utils::{evm_dyn_transact, LoomEVMWrapper};
-use loom_node_debug_provider::DebugProviderExt;
-use loom_types_blockchain::{debug_trace_call_pre_state, GethStateUpdate, GethStateUpdateVec, LoomDataTypes, LoomTx, TRACING_CALL_OPTS};
-use loom_types_entities::{DataFetcher, FetchState, LatestBlock, MarketState, Swap};
-use loom_types_events::{MarketEvents, MessageSwapCompose, SwapComposeData, SwapComposeMessage, TxComposeData};
+use kabu_core_actors::{subscribe, Accessor, Actor, ActorResult, Broadcaster, Consumer, Producer, SharedState, WorkerResult};
+use kabu_core_actors_macros::{Accessor, Consumer, Producer};
+use kabu_core_blockchain::{Blockchain, BlockchainState, Strategy};
+use kabu_evm_db::{DatabaseHelpers, KabuDBError};
+use kabu_evm_utils::{evm_dyn_transact, KabuEVMWrapper};
+use kabu_node_debug_provider::DebugProviderExt;
+use kabu_types_blockchain::{debug_trace_call_pre_state, GethStateUpdate, GethStateUpdateVec, KabuDataTypes, LoomTx, TRACING_CALL_OPTS};
+use kabu_types_entities::{DataFetcher, FetchState, LatestBlock, MarketState, Swap};
+use kabu_types_events::{MarketEvents, MessageSwapCompose, SwapComposeData, SwapComposeMessage, TxComposeData};
 
 lazy_static! {
     static ref COINBASE: Address = "0x1f9090aaE28b8a3dCeaDf281B0F12828e676c326".parse().unwrap();
@@ -72,7 +73,7 @@ async fn same_path_merger_task<P, N, DB>(
 where
     N: Network<TransactionRequest = TransactionRequest>,
     P: Provider<N> + DebugProviderExt<N> + Send + Sync + Clone + 'static,
-    DB: Database<Error = LoomDBError> + DatabaseRef<Error = LoomDBError> + DatabaseCommit + Send + Sync + Clone + 'static,
+    DB: Database<Error = KabuDBError> + DatabaseRef<Error = KabuDBError> + DatabaseCommit + Send + Sync + Clone + 'static,
 {
     debug!("same_path_merger_task stuffing_txs len {}", stuffing_txes.len());
 
@@ -130,7 +131,7 @@ where
 
         DatabaseHelpers::apply_geth_state_update_vec(&mut db, states);
 
-        let mut evm = LoomEVMWrapper::new(db);
+        let mut evm = KabuEVMWrapper::new(db);
         evm.get_mut().modify_block(|block| {
             block.number = request.tx_compose.next_block_number;
             block.timestamp = request.tx_compose.next_block_timestamp;
@@ -191,7 +192,7 @@ where
     }
 
     if let Some(db) = rdb {
-        let mut evm = LoomEVMWrapper::new(db.clone());
+        let mut evm = KabuEVMWrapper::new(db.clone());
         evm.get_mut().modify_block(|block| {
             block.number = request.tx_compose.next_block_number;
             block.timestamp = request.tx_compose.next_block_timestamp;
@@ -238,7 +239,7 @@ where
 async fn same_path_merger_worker<
     N: Network<TransactionRequest = TransactionRequest>,
     P: Provider<N> + DebugProviderExt<N> + Send + Sync + Clone + 'static,
-    DB: DatabaseRef<Error = LoomDBError> + Database<Error = LoomDBError> + DatabaseCommit + Send + Sync + Clone + 'static,
+    DB: DatabaseRef<Error = KabuDBError> + Database<Error = KabuDBError> + DatabaseCommit + Send + Sync + Clone + 'static,
 >(
     client: P,
     latest_block: SharedState<LatestBlock>,
@@ -371,7 +372,7 @@ impl<P, N, DB> SamePathMergerActor<P, N, DB>
 where
     N: Network,
     P: Provider<N> + DebugProviderExt<N> + Send + Sync + Clone + 'static,
-    DB: DatabaseRef<Error = LoomDBError> + DatabaseRef<Error = LoomDBError> + DatabaseCommit + Send + Sync + Clone + 'static,
+    DB: DatabaseRef<Error = KabuDBError> + DatabaseRef<Error = KabuDBError> + DatabaseCommit + Send + Sync + Clone + 'static,
 {
     pub fn new(client: P) -> Self {
         Self {
@@ -385,7 +386,7 @@ where
         }
     }
 
-    pub fn on_bc<LDT: LoomDataTypes>(self, bc: &Blockchain, state: &BlockchainState<DB, LDT>, strategy: &Strategy<DB>) -> Self {
+    pub fn on_bc<LDT: KabuDataTypes>(self, bc: &Blockchain, state: &BlockchainState<DB, LDT>, strategy: &Strategy<DB>) -> Self {
         Self {
             market_state: Some(state.market_state_commit()),
             latest_block: Some(bc.latest_block()),
@@ -401,7 +402,7 @@ impl<P, N, DB> Actor for SamePathMergerActor<P, N, DB>
 where
     N: Network<TransactionRequest = TransactionRequest>,
     P: Provider<N> + DebugProviderExt<N> + Send + Sync + Clone + 'static,
-    DB: DatabaseRef<Error = LoomDBError> + Database<Error = LoomDBError> + DatabaseCommit + Send + Sync + Clone + 'static,
+    DB: DatabaseRef<Error = KabuDBError> + Database<Error = KabuDBError> + DatabaseCommit + Send + Sync + Clone + 'static,
 {
     fn start(&self) -> ActorResult {
         let task = tokio::task::spawn(same_path_merger_worker(

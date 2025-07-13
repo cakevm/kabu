@@ -1,3 +1,4 @@
+use crate::kabu_data_types::KabuTx;
 use alloy_consensus::Transaction;
 use alloy_eips::{BlockId, BlockNumberOrTag};
 use alloy_network::Network;
@@ -6,13 +7,13 @@ use alloy_provider::Provider;
 use alloy_rpc_types::eth::Log as EthLog;
 use alloy_rpc_types::TransactionTrait;
 use alloy_sol_types::SolEventInterface;
-use loom_core_actors::{Accessor, Actor, ActorResult, Broadcaster, Consumer, SharedState, WorkerResult};
-use loom_core_actors_macros::{Accessor, Consumer};
-use loom_core_blockchain::Blockchain;
-use loom_defi_abi::IERC20::IERC20Events;
-use loom_types_blockchain::{LoomBlock, LoomDataTypes, LoomTx};
-use loom_types_entities::{AccountNonceAndBalanceState, EntityAddress, LatestBlock};
-use loom_types_events::MarketEvents;
+use kabu_core_actors::{Accessor, Actor, ActorResult, Broadcaster, Consumer, SharedState, WorkerResult};
+use kabu_core_actors_macros::{Accessor, Consumer};
+use kabu_core_blockchain::Blockchain;
+use kabu_defi_abi::IERC20::IERC20Events;
+use kabu_types_blockchain::{KabuBlock, KabuDataTypes, LoomTx};
+use kabu_types_entities::{AccountNonceAndBalanceState, EntityAddress, LatestBlock};
+use kabu_types_events::MarketEvents;
 use std::marker::PhantomData;
 use std::time::Duration;
 use tokio::sync::broadcast::error::RecvError;
@@ -61,7 +62,7 @@ pub async fn nonce_and_balance_monitor_worker<LDT>(
     market_events_rx: Broadcaster<MarketEvents<LDT>>,
 ) -> WorkerResult
 where
-    LDT: LoomDataTypes<Log = EthLog>,
+    LDT: KabuDataTypes<Log = EthLog>,
     LDT::Address: Into<EntityAddress>,
 {
     let mut market_events = market_events_rx.subscribe();
@@ -143,7 +144,7 @@ where
 }
 
 #[derive(Accessor, Consumer)]
-pub struct NonceAndBalanceMonitorActor<P, N, LDT: LoomDataTypes + 'static> {
+pub struct NonceAndBalanceMonitorActor<P, N, LDT: KabuDataTypes + 'static> {
     client: P,
     only_once: bool,
     with_fetcher: bool,
@@ -160,7 +161,7 @@ impl<P, N, LDT> NonceAndBalanceMonitorActor<P, N, LDT>
 where
     N: Network,
     P: Provider<N> + Send + Sync + Clone + 'static,
-    LDT: LoomDataTypes + 'static,
+    LDT: KabuDataTypes + 'static,
 {
     pub fn new(client: P) -> NonceAndBalanceMonitorActor<P, N, LDT> {
         NonceAndBalanceMonitorActor {
@@ -196,7 +197,7 @@ impl<P, N, LDT> Actor for NonceAndBalanceMonitorActor<P, N, LDT>
 where
     N: Network,
     P: Provider<N> + Send + Sync + Clone + 'static,
-    LDT: LoomDataTypes<Log = EthLog> + 'static,
+    LDT: KabuDataTypes<Log = EthLog> + 'static,
     LDT::Address: Into<EntityAddress>,
 {
     fn start(&self) -> ActorResult {

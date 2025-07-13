@@ -1,5 +1,5 @@
 [package]
-name = "loom-defi-uniswap-v3-math"
+name = "kabu-defi-uniswap-v3-math"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true

@@ -20,14 +20,14 @@ use std::path::Path;
 use std::sync::Arc;
 use tracing::{debug, error, info, trace};
 
-use loom_core_actors::{Actor, ActorResult, Broadcaster, Producer, WorkerResult};
-use loom_core_actors_macros::Producer;
-use loom_core_blockchain::Blockchain;
-use loom_evm_utils::reth_types::append_all_matching_block_logs;
-use loom_node_actor_config::NodeBlockActorConfig;
-use loom_node_debug_provider::DebugProviderExt;
-use loom_types_blockchain::LoomDataTypesEthereum;
-use loom_types_events::{
+use kabu_core_actors::{Actor, ActorResult, Broadcaster, Producer, WorkerResult};
+use kabu_core_actors_macros::Producer;
+use kabu_core_blockchain::Blockchain;
+use kabu_evm_utils::reth_types::append_all_matching_block_logs;
+use kabu_node_actor_config::NodeBlockActorConfig;
+use kabu_node_debug_provider::DebugProviderExt;
+use kabu_types_blockchain::KabuDataTypesEthereum;
+use kabu_types_events::{
     BlockHeaderEventData, BlockLogs, BlockStateUpdate, BlockUpdate, Message, MessageBlock, MessageBlockHeader, MessageBlockLogs,
     MessageBlockStateUpdate,
 };
@@ -88,7 +88,7 @@ where
                     }
 
                         if let Some(block_headers_channel) = &new_block_headers_channel {
-                            if let Err(e) = block_headers_channel.send(MessageBlockHeader::new_with_time(BlockHeaderEventData::<LoomDataTypesEthereum>::new( block_header.clone()))) {
+                            if let Err(e) = block_headers_channel.send(MessageBlockHeader::new_with_time(BlockHeaderEventData::<KabuDataTypesEthereum>::new( block_header.clone()))) {
                                 error!("Block header broadcaster error {}", e);
                             }
                         };
@@ -341,9 +341,9 @@ mod test {
 
     use crate::reth_worker::RethDbAccessBlockActor;
     use eyre::Result;
-    use loom_core_actors::{Actor, Broadcaster, Producer};
-    use loom_node_actor_config::NodeBlockActorConfig;
-    use loom_types_events::{MessageBlock, MessageBlockHeader, MessageBlockLogs, MessageBlockStateUpdate};
+    use kabu_core_actors::{Actor, Broadcaster, Producer};
+    use kabu_node_actor_config::NodeBlockActorConfig;
+    use kabu_types_events::{MessageBlock, MessageBlockHeader, MessageBlockLogs, MessageBlockStateUpdate};
 
     #[tokio::test]
     #[ignore]

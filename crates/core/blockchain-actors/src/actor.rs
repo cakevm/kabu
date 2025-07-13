@@ -3,43 +3,43 @@ use alloy_primitives::{Address, B256, U256};
 use alloy_provider::Provider;
 use axum::Router;
 use eyre::{eyre, Result};
-use loom_broadcast_accounts::{InitializeSignersOneShotBlockingActor, NonceAndBalanceMonitorActor, TxSignersActor};
-use loom_broadcast_broadcaster::FlashbotsBroadcastActor;
-use loom_broadcast_flashbots::client::RelayConfig;
-use loom_broadcast_flashbots::Flashbots;
-use loom_core_actors::{Actor, ActorsManager, SharedState};
-use loom_core_block_history::BlockHistoryActor;
-use loom_core_blockchain::{Blockchain, BlockchainState, Strategy};
-use loom_core_mempool::MempoolActor;
-use loom_core_router::SwapRouterActor;
-use loom_defi_address_book::TokenAddressEth;
-use loom_defi_health_monitor::{MetricsRecorderActor, PoolHealthMonitorActor, StuffingTxMonitorActor};
-use loom_defi_market::{
+use kabu_broadcast_accounts::{InitializeSignersOneShotBlockingActor, NonceAndBalanceMonitorActor, TxSignersActor};
+use kabu_broadcast_broadcaster::FlashbotsBroadcastActor;
+use kabu_broadcast_flashbots::client::RelayConfig;
+use kabu_broadcast_flashbots::Flashbots;
+use kabu_core_actors::{Actor, ActorsManager, SharedState};
+use kabu_core_block_history::BlockHistoryActor;
+use kabu_core_blockchain::{Blockchain, BlockchainState, Strategy};
+use kabu_core_mempool::MempoolActor;
+use kabu_core_router::SwapRouterActor;
+use kabu_defi_address_book::TokenAddressEth;
+use kabu_defi_health_monitor::{MetricsRecorderActor, PoolHealthMonitorActor, StuffingTxMonitorActor};
+use kabu_defi_market::{
     HistoryPoolLoaderOneShotActor, NewPoolLoaderActor, PoolLoaderActor, ProtocolPoolLoaderOneShotActor, RequiredPoolLoaderActor,
 };
-use loom_defi_pools::{PoolLoadersBuilder, PoolsLoadingConfig};
-use loom_defi_preloader::MarketStatePreloadedOneShotActor;
-use loom_defi_price::PriceActor;
-use loom_evm_db::{DatabaseLoomExt, LoomDBError};
-use loom_evm_utils::NWETH;
-use loom_execution_estimator::{EvmEstimatorActor, GethEstimatorActor};
-use loom_execution_multicaller::MulticallerSwapEncoder;
-use loom_metrics::InfluxDbWriterActor;
-use loom_node_actor_config::NodeBlockActorConfig;
+use kabu_defi_pools::{PoolLoadersBuilder, PoolsLoadingConfig};
+use kabu_defi_preloader::MarketStatePreloadedOneShotActor;
+use kabu_defi_price::PriceActor;
+use kabu_evm_db::{DatabaseKabuExt, KabuDBError};
+use kabu_evm_utils::NWETH;
+use kabu_execution_estimator::{EvmEstimatorActor, GethEstimatorActor};
+use kabu_execution_multicaller::MulticallerSwapEncoder;
+use kabu_metrics::InfluxDbWriterActor;
+use kabu_node_actor_config::NodeBlockActorConfig;
 #[cfg(feature = "db-access")]
-use loom_node_db_access::RethDbAccessBlockActor;
-use loom_node_debug_provider::DebugProviderExt;
-use loom_node_grpc::NodeExExGrpcActor;
-use loom_node_json_rpc::{NodeBlockActor, NodeMempoolActor, WaitForNodeSyncOneShotBlockingActor};
-use loom_rpc_handler::WebServerActor;
-use loom_storage_db::DbPool;
-use loom_strategy_backrun::{
+use kabu_node_db_access::RethDbAccessBlockActor;
+use kabu_node_debug_provider::DebugProviderExt;
+use kabu_node_grpc::NodeExExGrpcActor;
+use kabu_node_json_rpc::{NodeBlockActor, NodeMempoolActor, WaitForNodeSyncOneShotBlockingActor};
+use kabu_rpc_handler::WebServerActor;
+use kabu_storage_db::DbPool;
+use kabu_strategy_backrun::{
     BackrunConfig, BlockStateChangeProcessorActor, PendingTxStateChangeProcessorActor, StateChangeArbSearcherActor,
 };
-use loom_strategy_merger::{ArbSwapPathMergerActor, DiffPathMergerActor, SamePathMergerActor};
-use loom_types_blockchain::{LoomDataTypesEVM, LoomDataTypesEthereum};
-use loom_types_entities::required_state::RequiredState;
-use loom_types_entities::{BlockHistoryState, PoolClass, SwapEncoder, TxSigners};
+use kabu_strategy_merger::{ArbSwapPathMergerActor, DiffPathMergerActor, SamePathMergerActor};
+use kabu_types_blockchain::{KabuDataTypesEVM, KabuDataTypesEthereum};
+use kabu_types_entities::required_state::RequiredState;
+use kabu_types_entities::{BlockHistoryState, PoolClass, SwapEncoder, TxSigners};
 use revm::{Database, DatabaseCommit, DatabaseRef};
 use std::collections::HashMap;
 use std::marker::PhantomData;
@@ -51,7 +51,7 @@ pub struct BlockchainActors<
     N,
     DB: Clone + Send + Sync + 'static,
     E: Clone = MulticallerSwapEncoder,
-    LDT: LoomDataTypesEVM + 'static = LoomDataTypesEthereum,
+    LDT: KabuDataTypesEVM + 'static = KabuDataTypesEthereum,
 > {
     provider: P,
     bc: Blockchain<LDT>,
@@ -68,14 +68,14 @@ pub struct BlockchainActors<
     _n: PhantomData<N>,
 }
 
-impl<P, DB, E> BlockchainActors<P, Ethereum, DB, E, LoomDataTypesEthereum>
+impl<P, DB, E> BlockchainActors<P, Ethereum, DB, E, KabuDataTypesEthereum>
 where
     P: Provider<Ethereum> + DebugProviderExt<Ethereum> + Send + Sync + Clone + 'static,
-    DB: DatabaseRef<Error = LoomDBError>
-        + Database<Error = LoomDBError>
+    DB: DatabaseRef<Error = KabuDBError>
+        + Database<Error = KabuDBError>
         + DatabaseCommit
-        + DatabaseLoomExt
-        + BlockHistoryState<LoomDataTypesEthereum>
+        + DatabaseKabuExt
+        + BlockHistoryState<KabuDataTypesEthereum>
         + Send
         + Sync
         + Clone
@@ -86,9 +86,9 @@ where
     pub fn new(
         provider: P,
         encoder: E,
-        bc: Blockchain<LoomDataTypesEthereum>,
-        state: BlockchainState<DB, LoomDataTypesEthereum>,
-        strategy: Strategy<DB, LoomDataTypesEthereum>,
+        bc: Blockchain<KabuDataTypesEthereum>,
+        state: BlockchainState<DB, KabuDataTypesEthereum>,
+        strategy: Strategy<DB, KabuDataTypesEthereum>,
         relays: Vec<RelayConfig>,
     ) -> Self {
         Self {
@@ -185,7 +185,7 @@ where
         self.mutlicaller_address = Some(swap_encoder.address());
         self.encoder = Some(swap_encoder);
         self.actor_manager.start(
-            SwapRouterActor::<DB, LoomDataTypesEthereum>::new().with_signers(self.signers.clone()).on_bc(&self.bc, &self.strategy),
+            SwapRouterActor::<DB, KabuDataTypesEthereum>::new().with_signers(self.signers.clone()).on_bc(&self.bc, &self.strategy),
         )?;
         Ok(self)
     }
@@ -194,8 +194,8 @@ where
     pub fn with_market_state_preloader(&mut self) -> Result<&mut Self> {
         let mut address_vec = self.signers.inner().try_read()?.get_address_vec();
 
-        if let Some(loom_multicaller) = self.mutlicaller_address {
-            address_vec.push(loom_multicaller.into());
+        if let Some(kabu_multicaller) = self.mutlicaller_address {
+            address_vec.push(kabu_multicaller.into());
         }
 
         self.actor_manager.start_and_wait(
@@ -222,19 +222,19 @@ where
         market_state_preloader = market_state_preloader.with_copied_accounts(address_to_copy);
 
         market_state_preloader = market_state_preloader.with_new_account(
-            loom_execution_multicaller::DEFAULT_VIRTUAL_ADDRESS,
+            kabu_execution_multicaller::DEFAULT_VIRTUAL_ADDRESS,
             0,
             U256::ZERO,
-            loom_execution_multicaller::MulticallerDeployer::new().account_info().code,
+            kabu_execution_multicaller::MulticallerDeployer::new().account_info().code,
         );
 
         market_state_preloader = market_state_preloader.with_token_balance(
             TokenAddressEth::WETH,
-            loom_execution_multicaller::DEFAULT_VIRTUAL_ADDRESS,
+            kabu_execution_multicaller::DEFAULT_VIRTUAL_ADDRESS,
             NWETH::from_float(10.0),
         );
 
-        self.mutlicaller_address = Some(loom_execution_multicaller::DEFAULT_VIRTUAL_ADDRESS);
+        self.mutlicaller_address = Some(kabu_execution_multicaller::DEFAULT_VIRTUAL_ADDRESS);
 
         self.actor_manager.start_and_wait(market_state_preloader.on_bc(&self.bc, &self.state))?;
         Ok(self)
@@ -350,7 +350,7 @@ where
     /// Start pool loader from new block events
     pub fn with_new_pool_loader(&mut self, pools_config: PoolsLoadingConfig) -> Result<&mut Self> {
         let pool_loader =
-            Arc::new(PoolLoadersBuilder::<P, Ethereum, LoomDataTypesEthereum>::default_pool_loaders(self.provider.clone(), pools_config));
+            Arc::new(PoolLoadersBuilder::<P, Ethereum, KabuDataTypesEthereum>::default_pool_loaders(self.provider.clone(), pools_config));
         self.actor_manager.start(NewPoolLoaderActor::new(pool_loader).on_bc(&self.bc))?;
         Ok(self)
     }
@@ -358,14 +358,14 @@ where
     /// Start pool loader for last 10000 blocks
     pub fn with_pool_history_loader(&mut self, pools_config: PoolsLoadingConfig) -> Result<&mut Self> {
         let pool_loaders =
-            Arc::new(PoolLoadersBuilder::<P, Ethereum, LoomDataTypesEthereum>::default_pool_loaders(self.provider.clone(), pools_config));
+            Arc::new(PoolLoadersBuilder::<P, Ethereum, KabuDataTypesEthereum>::default_pool_loaders(self.provider.clone(), pools_config));
         self.actor_manager.start(HistoryPoolLoaderOneShotActor::new(self.provider.clone(), pool_loaders).on_bc(&self.bc))?;
         Ok(self)
     }
 
     /// Start pool loader from new block events
     pub fn with_pool_loader(&mut self, pools_config: PoolsLoadingConfig) -> Result<&mut Self> {
-        let pool_loaders = Arc::new(PoolLoadersBuilder::<P, Ethereum, LoomDataTypesEthereum>::default_pool_loaders(
+        let pool_loaders = Arc::new(PoolLoadersBuilder::<P, Ethereum, KabuDataTypesEthereum>::default_pool_loaders(
             self.provider.clone(),
             pools_config.clone(),
         ));
@@ -376,7 +376,7 @@ where
     /// Start pool loader for curve + steth + wsteth
     pub fn with_curve_pool_protocol_loader(&mut self, pools_config: PoolsLoadingConfig) -> Result<&mut Self> {
         let pool_loaders =
-            Arc::new(PoolLoadersBuilder::<P, Ethereum, LoomDataTypesEthereum>::default_pool_loaders(self.provider.clone(), pools_config));
+            Arc::new(PoolLoadersBuilder::<P, Ethereum, KabuDataTypesEthereum>::default_pool_loaders(self.provider.clone(), pools_config));
         self.actor_manager.start(ProtocolPoolLoaderOneShotActor::new(self.provider.clone(), pool_loaders).on_bc(&self.bc))?;
         Ok(self)
     }
@@ -395,7 +395,7 @@ where
 
     //
     pub fn with_preloaded_state(&mut self, pools: Vec<(Address, PoolClass)>, state_required: Option<RequiredState>) -> Result<&mut Self> {
-        let pool_loaders = Arc::new(PoolLoadersBuilder::<P, Ethereum, LoomDataTypesEthereum>::default_pool_loaders(
+        let pool_loaders = Arc::new(PoolLoadersBuilder::<P, Ethereum, KabuDataTypesEthereum>::default_pool_loaders(
             self.provider.clone(),
             PoolsLoadingConfig::default(),
         ));

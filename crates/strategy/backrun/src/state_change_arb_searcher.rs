@@ -16,22 +16,22 @@ use tracing::{debug, error, info, trace};
 
 use crate::BackrunConfig;
 use crate::SwapCalculator;
-use loom_core_actors::{subscribe, Accessor, Actor, ActorResult, Broadcaster, Consumer, Producer, SharedState, WorkerResult};
-use loom_core_actors_macros::{Accessor, Consumer, Producer};
-use loom_core_blockchain::{Blockchain, Strategy};
-use loom_evm_db::{DatabaseHelpers, LoomDBError};
-use loom_evm_utils::LoomEVMWrapper;
-use loom_types_blockchain::{LoomDataTypes, LoomDataTypesEVM};
-use loom_types_entities::strategy_config::StrategyConfig;
-use loom_types_entities::{Market, PoolWrapper, Swap, SwapDirection, SwapError, SwapLine, SwapPath};
-use loom_types_events::{
+use kabu_core_actors::{subscribe, Accessor, Actor, ActorResult, Broadcaster, Consumer, Producer, SharedState, WorkerResult};
+use kabu_core_actors_macros::{Accessor, Consumer, Producer};
+use kabu_core_blockchain::{Blockchain, Strategy};
+use kabu_evm_db::{DatabaseHelpers, KabuDBError};
+use kabu_evm_utils::KabuEVMWrapper;
+use kabu_types_blockchain::{KabuDataTypes, KabuDataTypesEVM};
+use kabu_types_entities::strategy_config::StrategyConfig;
+use kabu_types_entities::{Market, PoolWrapper, Swap, SwapDirection, SwapError, SwapLine, SwapPath};
+use kabu_types_events::{
     BestTxSwapCompose, HealthEvent, Message, MessageHealthEvent, MessageSwapCompose, StateUpdateEvent, SwapComposeData, SwapComposeMessage,
     TxComposeData,
 };
 
 async fn state_change_arb_searcher_task<
-    DB: DatabaseRef<Error = LoomDBError> + Database<Error = LoomDBError> + DatabaseCommit + Send + Sync + Clone + Default + 'static,
-    LDT: LoomDataTypesEVM,
+    DB: DatabaseRef<Error = KabuDBError> + Database<Error = KabuDBError> + DatabaseCommit + Send + Sync + Clone + Default + 'static,
+    LDT: KabuDataTypesEVM,
 >(
     thread_pool: Arc<ThreadPool>,
     backrun_config: BackrunConfig,
@@ -111,14 +111,14 @@ async fn state_change_arb_searcher_task<
     let market_state_clone = db.clone();
     let swap_path_vec_len = swap_path_vec.len();
 
-    //let evm = Arc::new(LoomEVMWrapper::new(market_state_clone));
+    //let evm = Arc::new(KabuEVMWrapper::new(market_state_clone));
 
     let _tasks = tokio::task::spawn(async move {
         thread_pool.install(|| {
             swap_path_vec.into_par_iter().for_each_with((&swap_path_tx, &market_state_clone, &next_header), |req, item| {
                 let mut mut_item: SwapLine = SwapLine { path: item, ..Default::default() };
 
-                let mut evm = LoomEVMWrapper::new(req.1.clone()).with_header(req.2);
+                let mut evm = KabuEVMWrapper::new(req.1.clone()).with_header(req.2);
 
                 let calc_result = SwapCalculator::calculate(&mut mut_item, evm.get_mut());
 
@@ -226,8 +226,8 @@ async fn state_change_arb_searcher_task<
 }
 
 pub async fn state_change_arb_searcher_worker<
-    DB: DatabaseRef<Error = LoomDBError> + Database<Error = LoomDBError> + DatabaseCommit + Send + Sync + Clone + Default + 'static,
-    LDT: LoomDataTypesEVM,
+    DB: DatabaseRef<Error = KabuDBError> + Database<Error = KabuDBError> + DatabaseCommit + Send + Sync + Clone + Default + 'static,
+    LDT: KabuDataTypesEVM,
 >(
     backrun_config: BackrunConfig,
     market: SharedState<Market>,
@@ -266,7 +266,7 @@ pub async fn state_change_arb_searcher_worker<
 }
 
 #[derive(Accessor, Consumer, Producer)]
-pub struct StateChangeArbSearcherActor<DB: Clone + Send + Sync + 'static, LDT: LoomDataTypes + 'static> {
+pub struct StateChangeArbSearcherActor<DB: Clone + Send + Sync + 'static, LDT: KabuDataTypes + 'static> {
     backrun_config: BackrunConfig,
     #[accessor]
     market: Option<SharedState<Market>>,
@@ -281,8 +281,8 @@ pub struct StateChangeArbSearcherActor<DB: Clone + Send + Sync + 'static, LDT: L
 }
 
 impl<
-        DB: DatabaseRef<Error = LoomDBError> + Database<Error = LoomDBError> + DatabaseCommit + Send + Sync + Clone + 'static,
-        LDT: LoomDataTypesEVM + 'static,
+        DB: DatabaseRef<Error = KabuDBError> + Database<Error = KabuDBError> + DatabaseCommit + Send + Sync + Clone + 'static,
+        LDT: KabuDataTypesEVM + 'static,
     > StateChangeArbSearcherActor<DB, LDT>
 {
     pub fn new(backrun_config: BackrunConfig) -> StateChangeArbSearcherActor<DB, LDT> {
@@ -309,8 +309,8 @@ impl<
 }
 
 impl<
-        DB: DatabaseRef<Error = LoomDBError> + Database<Error = LoomDBError> + DatabaseCommit + Send + Sync + Clone + Default + 'static,
-        LDT: LoomDataTypesEVM + 'static,
+        DB: DatabaseRef<Error = KabuDBError> + Database<Error = KabuDBError> + DatabaseCommit + Send + Sync + Clone + Default + 'static,
+        LDT: KabuDataTypesEVM + 'static,
     > Actor for StateChangeArbSearcherActor<DB, LDT>
 {
     fn start(&self) -> ActorResult {

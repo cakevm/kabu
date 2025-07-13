@@ -10,9 +10,9 @@ use alloy::{
     rpc::types::{AccessList, AccessListItem, TransactionRequest},
 };
 use eyre::eyre;
+use kabu_evm_db::KabuDBError;
+use kabu_types_blockchain::GethStateUpdate;
 use lazy_static::lazy_static;
-use loom_evm_db::LoomDBError;
-use loom_types_blockchain::GethStateUpdate;
 use revm::context::result::{EVMError, ExecutionResult, HaltReason, Output, ResultAndState};
 use revm::context::setters::ContextSetters;
 use revm::context::{BlockEnv, CfgEnv, ContextTr, TxEnv};
@@ -66,54 +66,54 @@ pub enum LoomEvmGethTraceError {
     Halted(HaltReason, u64, CallFrame),
 }
 
-type LoomExecuteOutputType = Result<ResultAndState, EVMError<LoomDBError>>;
+type LoomExecuteOutputType = Result<ResultAndState, EVMError<KabuDBError>>;
 
-type LoomExecuteCommitOutputType = Result<ExecutionResult, EVMError<LoomDBError>>;
+type LoomExecuteCommitOutputType = Result<ExecutionResult, EVMError<KabuDBError>>;
 
 pub trait LoomExecuteCommitEvm:
     ExecuteCommitEvm<Output = LoomExecuteOutputType, CommitOutput = LoomExecuteCommitOutputType> + ContextSetters<Tx = TxEnv, Block = BlockEnv>
 {
 }
 pub trait LoomExecuteEvm: ExecuteEvm<Output = LoomExecuteOutputType> + ContextSetters<Tx = TxEnv, Block = BlockEnv> {
-    fn get_db_ref(&self) -> &dyn DatabaseRef<Error = LoomDBError>;
+    fn get_db_ref(&self) -> &dyn DatabaseRef<Error = KabuDBError>;
 }
 
 #[allow(type_alias_bounds)]
-pub type LoomEVMType<DB: DatabaseRef<Error = LoomDBError> + Database<Error = LoomDBError> + DatabaseCommit> =
+pub type LoomEVMType<DB: DatabaseRef<Error = KabuDBError> + Database<Error = KabuDBError> + DatabaseCommit> =
     MainnetEvm<Context<BlockEnv, TxEnv, CfgEnv, DB, JournaledState<DB>>, ()>;
 
 impl<DB> LoomExecuteEvm for LoomEVMType<DB>
 where
-    DB: Database<Error = LoomDBError> + DatabaseRef<Error = LoomDBError> + DatabaseCommit + Clone,
+    DB: Database<Error = KabuDBError> + DatabaseRef<Error = KabuDBError> + DatabaseCommit + Clone,
 {
-    fn get_db_ref(&self) -> &dyn DatabaseRef<Error = LoomDBError> {
+    fn get_db_ref(&self) -> &dyn DatabaseRef<Error = KabuDBError> {
         let a = self.ctx_ref().db_ref();
-        a as &dyn DatabaseRef<Error = LoomDBError>
+        a as &dyn DatabaseRef<Error = KabuDBError>
     }
 }
 
 impl<DB> LoomExecuteCommitEvm for LoomEVMType<DB> where
-    DB: Database<Error = LoomDBError> + DatabaseRef<Error = LoomDBError> + DatabaseCommit + Clone
+    DB: Database<Error = KabuDBError> + DatabaseRef<Error = KabuDBError> + DatabaseCommit + Clone
 {
 }
 
-pub struct LoomEVMWrapper<DB>(LoomEVMType<DB>)
+pub struct KabuEVMWrapper<DB>(LoomEVMType<DB>)
 where
     DB: Database;
 
-impl<DB> Clone for LoomEVMWrapper<DB>
+impl<DB> Clone for KabuEVMWrapper<DB>
 where
     DB: Database + Clone,
     DB::Error: Clone,
 {
     fn clone(&self) -> Self {
-        LoomEVMWrapper(self.0.clone().build_mainnet())
+        KabuEVMWrapper(self.0.clone().build_mainnet())
     }
 }
 
-impl<DB> LoomEVMWrapper<DB>
+impl<DB> KabuEVMWrapper<DB>
 where
-    DB: Database<Error = LoomDBError> + DatabaseRef<Error = LoomDBError> + DatabaseCommit + Clone + 'static,
+    DB: Database<Error = KabuDBError> + DatabaseRef<Error = KabuDBError> + DatabaseCommit + Clone + 'static,
 {
     pub fn get_evm(&self) -> &LoomEVMType<DB> {
         &self.0
@@ -228,14 +228,14 @@ impl EVMParserHelper {
     }
 }
 
-impl<DB> LoomEVMWrapper<DB>
+impl<DB> KabuEVMWrapper<DB>
 where
-    DB: Database<Error = loom_evm_db::LoomDBError> + DatabaseCommit + DatabaseRef<Error = loom_evm_db::LoomDBError>,
+    DB: Database<Error = kabu_evm_db::KabuDBError> + DatabaseCommit + DatabaseRef<Error = kabu_evm_db::KabuDBError>,
 {
     pub fn new(db: DB) -> Self {
         let ctx = Context::<BlockEnv, TxEnv, CfgEnv, DB, JournaledState<DB>>::new(db, LATEST);
         let evm = ctx.build_mainnet();
-        LoomEVMWrapper(evm)
+        KabuEVMWrapper(evm)
     }
 
     pub fn with_header<H: BlockHeader>(self, header: &H) -> Self {
@@ -278,7 +278,7 @@ where
 
 pub fn evm_call<E, T>(evm: &mut E, tx: T) -> Result<(Vec<u8>, u64), LoomEvmError>
 where
-    E: ExecuteEvm<Output = Result<ResultAndState, EVMError<LoomDBError>>> + ContextSetters<Tx = TxEnv>,
+    E: ExecuteEvm<Output = Result<ResultAndState, EVMError<KabuDBError>>> + ContextSetters<Tx = TxEnv>,
     T: Into<TransactionRequest>,
 {
     let tx_env = tx_req_to_env(tx);
@@ -294,7 +294,7 @@ where
 
 pub fn evm_call_raw<E, T>(evm: &mut E, tx: T) -> Result<ResultAndState, LoomEvmError>
 where
-    E: ExecuteEvm<Output = Result<ResultAndState, EVMError<LoomDBError>>> + ContextSetters<Tx = TxEnv>,
+    E: ExecuteEvm<Output = Result<ResultAndState, EVMError<KabuDBError>>> + ContextSetters<Tx = TxEnv>,
     T: Into<TransactionRequest>,
 {
     let tx_env = tx_req_to_env(tx);
@@ -319,7 +319,7 @@ where
 
 fn evm_access_list<T, E>(evm: &mut E, tx: T) -> Result<(u64, AccessList), LoomEvmError>
 where
-    E: ExecuteEvm<Output = Result<ResultAndState, EVMError<LoomDBError>>> + ContextSetters<Tx = TxEnv>,
+    E: ExecuteEvm<Output = Result<ResultAndState, EVMError<KabuDBError>>> + ContextSetters<Tx = TxEnv>,
     T: Into<TransactionRequest>,
 {
     let tx_env = tx_req_to_env(tx);
@@ -347,7 +347,7 @@ where
 
 pub fn evm_transact<T, E>(evm: &mut E, tx: T) -> Result<(Vec<u8>, u64), LoomEvmError>
 where
-    E: ExecuteCommitEvm<CommitOutput = Result<ResultAndState, EVMError<LoomDBError>>> + ContextSetters<Tx = TxEnv>,
+    E: ExecuteCommitEvm<CommitOutput = Result<ResultAndState, EVMError<KabuDBError>>> + ContextSetters<Tx = TxEnv>,
     T: Into<TransactionRequest>,
 {
     let tx_env = tx_req_to_env(tx);
@@ -388,7 +388,7 @@ mod tests {
 
     #[test]
     fn test_evm_call() {
-        let mut mainnet_evm = LoomEVMWrapper::new(CacheDB::new(EmptyDBTyped::<LoomDBError>::new()));
+        let mut mainnet_evm = KabuEVMWrapper::new(CacheDB::new(EmptyDBTyped::<KabuDBError>::new()));
         evm_call(mainnet_evm.get_evm_mut(), TransactionRequest::default()).unwrap();
     }
 }

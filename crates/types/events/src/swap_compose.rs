@@ -3,13 +3,13 @@ use crate::Message;
 use alloy_eips::eip2718::Encodable2718;
 use alloy_primitives::{Bytes, U256};
 use eyre::{eyre, Result};
-use loom_types_blockchain::{LoomDataTypes, LoomDataTypesEthereum};
-use loom_types_entities::{EntityAddress, Swap};
+use kabu_types_blockchain::{KabuDataTypes, KabuDataTypesEthereum};
+use kabu_types_entities::{EntityAddress, Swap};
 use revm::DatabaseRef;
 use std::ops::Deref;
 
 #[derive(Clone, Debug)]
-pub enum TxState<LDT: LoomDataTypes = LoomDataTypesEthereum> {
+pub enum TxState<LDT: KabuDataTypes = KabuDataTypesEthereum> {
     Stuffing(LDT::Transaction),
     SignatureRequired(LDT::TransactionRequest),
     ReadyForBroadcast(Bytes),
@@ -27,13 +27,13 @@ impl TxState {
 }
 
 #[derive(Clone, Debug)]
-pub enum SwapComposeMessage<DB, LDT: LoomDataTypes = LoomDataTypesEthereum> {
+pub enum SwapComposeMessage<DB, LDT: KabuDataTypes = KabuDataTypesEthereum> {
     Prepare(SwapComposeData<DB, LDT>),
     Estimate(SwapComposeData<DB, LDT>),
     Ready(SwapComposeData<DB, LDT>),
 }
 
-impl<DB, LDT: LoomDataTypes> Deref for SwapComposeMessage<DB, LDT> {
+impl<DB, LDT: KabuDataTypes> Deref for SwapComposeMessage<DB, LDT> {
     type Target = SwapComposeData<DB, LDT>;
 
     fn deref(&self) -> &Self::Target {
@@ -41,7 +41,7 @@ impl<DB, LDT: LoomDataTypes> Deref for SwapComposeMessage<DB, LDT> {
     }
 }
 
-impl<DB, LDT: LoomDataTypes> SwapComposeMessage<DB, LDT> {
+impl<DB, LDT: KabuDataTypes> SwapComposeMessage<DB, LDT> {
     pub fn data(&self) -> &SwapComposeData<DB, LDT> {
         match self {
             SwapComposeMessage::Prepare(x) | SwapComposeMessage::Estimate(x) | SwapComposeMessage::Ready(x) => x,
@@ -50,7 +50,7 @@ impl<DB, LDT: LoomDataTypes> SwapComposeMessage<DB, LDT> {
 }
 
 #[derive(Clone, Debug)]
-pub struct SwapComposeData<DB, LDT: LoomDataTypes = LoomDataTypesEthereum> {
+pub struct SwapComposeData<DB, LDT: KabuDataTypes = KabuDataTypesEthereum> {
     pub tx_compose: TxComposeData<LDT>,
     pub swap: Swap,
     pub prestate: Option<DB>,
@@ -61,7 +61,7 @@ pub struct SwapComposeData<DB, LDT: LoomDataTypes = LoomDataTypesEthereum> {
     pub tips: Option<U256>,
 }
 
-impl<DB: Clone + 'static, LDT: LoomDataTypes> SwapComposeData<DB, LDT> {
+impl<DB: Clone + 'static, LDT: KabuDataTypes> SwapComposeData<DB, LDT> {
     pub fn same_stuffing(&self, others_stuffing_txs_hashes: &[LDT::TxHash]) -> bool {
         let tx_len = self.tx_compose.stuffing_txs_hashes.len();
 
@@ -107,7 +107,7 @@ impl<DB: Clone + 'static, LDT: LoomDataTypes> SwapComposeData<DB, LDT> {
     }
 }
 
-impl<DB: DatabaseRef + Send + Sync + Clone + 'static, LDT: LoomDataTypes> Default for SwapComposeData<DB, LDT> {
+impl<DB: DatabaseRef + Send + Sync + Clone + 'static, LDT: KabuDataTypes> Default for SwapComposeData<DB, LDT> {
     fn default() -> Self {
         Self {
             tx_compose: Default::default(),
@@ -122,9 +122,9 @@ impl<DB: DatabaseRef + Send + Sync + Clone + 'static, LDT: LoomDataTypes> Defaul
     }
 }
 
-pub type MessageSwapCompose<DB, LDT = LoomDataTypesEthereum> = Message<SwapComposeMessage<DB, LDT>>;
+pub type MessageSwapCompose<DB, LDT = KabuDataTypesEthereum> = Message<SwapComposeMessage<DB, LDT>>;
 
-impl<DB, LDT: LoomDataTypes> MessageSwapCompose<DB, LDT> {
+impl<DB, LDT: KabuDataTypes> MessageSwapCompose<DB, LDT> {
     pub fn prepare(data: SwapComposeData<DB, LDT>) -> Self {
         Message::new(SwapComposeMessage::Prepare(data))
     }

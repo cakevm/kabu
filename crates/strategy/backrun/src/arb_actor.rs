@@ -4,20 +4,20 @@ use crate::BackrunConfig;
 use alloy_network::Network;
 use alloy_provider::Provider;
 use influxdb::WriteQuery;
-use loom_core_actors::{Accessor, Actor, ActorResult, Broadcaster, Consumer, Producer, SharedState, WorkerResult};
-use loom_core_actors_macros::{Accessor, Consumer, Producer};
-use loom_evm_db::LoomDBError;
-use loom_node_debug_provider::DebugProviderExt;
-use loom_types_blockchain::{LoomDataTypesEVM, Mempool};
-use loom_types_entities::{BlockHistory, LatestBlock, Market, MarketState};
-use loom_types_events::{MarketEvents, MempoolEvents, MessageHealthEvent, MessageSwapCompose};
+use kabu_core_actors::{Accessor, Actor, ActorResult, Broadcaster, Consumer, Producer, SharedState, WorkerResult};
+use kabu_core_actors_macros::{Accessor, Consumer, Producer};
+use kabu_evm_db::KabuDBError;
+use kabu_node_debug_provider::DebugProviderExt;
+use kabu_types_blockchain::{KabuDataTypesEVM, Mempool};
+use kabu_types_entities::{BlockHistory, LatestBlock, Market, MarketState};
+use kabu_types_events::{MarketEvents, MempoolEvents, MessageHealthEvent, MessageSwapCompose};
 use revm::{Database, DatabaseCommit, DatabaseRef};
 use std::marker::PhantomData;
 use tokio::task::JoinHandle;
 use tracing::info;
 
 #[derive(Accessor, Consumer, Producer)]
-pub struct StateChangeArbActor<P, N, DB: Clone + Send + Sync + 'static, LDT: LoomDataTypesEVM + 'static> {
+pub struct StateChangeArbActor<P, N, DB: Clone + Send + Sync + 'static, LDT: KabuDataTypesEVM + 'static> {
     backrun_config: BackrunConfig,
     client: P,
     use_blocks: bool,
@@ -51,7 +51,7 @@ where
     N: Network,
     P: Provider<N> + DebugProviderExt<N> + Send + Sync + Clone + 'static,
     DB: DatabaseRef + Send + Sync + Clone + 'static,
-    LDT: LoomDataTypesEVM + 'static,
+    LDT: KabuDataTypesEVM + 'static,
 {
     pub fn new(client: P, use_blocks: bool, use_mempool: bool, backrun_config: BackrunConfig) -> StateChangeArbActor<P, N, DB, LDT> {
         StateChangeArbActor {
@@ -78,8 +78,8 @@ impl<P, N, DB, LDT> Actor for StateChangeArbActor<P, N, DB, LDT>
 where
     N: Network<TransactionRequest = LDT::TransactionRequest>,
     P: Provider<N> + DebugProviderExt<N> + Send + Sync + Clone + 'static,
-    DB: DatabaseRef<Error = LoomDBError> + Database<Error = LoomDBError> + DatabaseCommit + Send + Sync + Clone + Default + 'static,
-    LDT: LoomDataTypesEVM + 'static,
+    DB: DatabaseRef<Error = KabuDBError> + Database<Error = KabuDBError> + DatabaseCommit + Send + Sync + Clone + Default + 'static,
+    LDT: KabuDataTypesEVM + 'static,
 {
     fn start(&self) -> ActorResult {
         let searcher_pool_update_channel = Broadcaster::new(100);

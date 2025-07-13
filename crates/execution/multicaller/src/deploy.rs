@@ -142,13 +142,13 @@ mod test {
     use std::env;
     use std::sync::Arc;
 
-    use loom_node_debug_provider::AnvilDebugProviderFactory;
+    use kabu_node_debug_provider::AnvilDebugProviderFactory;
 
     use super::*;
 
     #[tokio::test]
     async fn test_deploy() -> Result<()> {
-        let _ = env_logger::try_init_from_env(env_logger::Env::default().default_filter_or("info,loom_multicaller=off"));
+        let _ = env_logger::try_init_from_env(env_logger::Env::default().default_filter_or("info,kabu_multicaller=off"));
 
         let node_url = env::var("MAINNET_WS")?;
 

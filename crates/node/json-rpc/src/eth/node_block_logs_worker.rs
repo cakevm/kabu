@@ -6,9 +6,9 @@ use alloy_rpc_types::{Filter, Header};
 use tokio::sync::broadcast::Receiver;
 use tracing::{debug, error};
 
-use loom_core_actors::{subscribe, Broadcaster, WorkerResult};
-use loom_types_blockchain::LoomDataTypesEVM;
-use loom_types_events::{BlockLogs, Message, MessageBlockLogs};
+use kabu_core_actors::{subscribe, Broadcaster, WorkerResult};
+use kabu_types_blockchain::KabuDataTypesEVM;
+use kabu_types_events::{BlockLogs, Message, MessageBlockLogs};
 
 pub async fn new_node_block_logs_worker<N, P, LDT>(
     client: P,
@@ -18,7 +18,7 @@ pub async fn new_node_block_logs_worker<N, P, LDT>(
 where
     N: Network,
     P: Provider<N> + Send + Sync + 'static,
-    LDT: LoomDataTypesEVM,
+    LDT: KabuDataTypesEVM,
 {
     subscribe!(block_header_receiver);
 

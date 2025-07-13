@@ -5,11 +5,11 @@ use std::sync::Arc;
 use tokio::sync::broadcast::error::RecvError;
 use tracing::{debug, error};
 
-use loom_core_actors::{subscribe, Actor, ActorResult, Broadcaster, Consumer, Producer, WorkerResult};
-use loom_core_actors_macros::{Consumer, Producer};
-use loom_core_blockchain::Blockchain;
-use loom_types_entities::PoolLoaders;
-use loom_types_events::{LoomTask, MessageBlockLogs};
+use kabu_core_actors::{subscribe, Actor, ActorResult, Broadcaster, Consumer, Producer, WorkerResult};
+use kabu_core_actors_macros::{Consumer, Producer};
+use kabu_core_blockchain::Blockchain;
+use kabu_types_entities::PoolLoaders;
+use kabu_types_events::{LoomTask, MessageBlockLogs};
 
 use crate::logs_parser::process_log_entries;
 

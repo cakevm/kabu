@@ -3,13 +3,13 @@ use std::collections::BTreeMap;
 use std::env;
 
 use criterion::{black_box, criterion_group, criterion_main, Criterion};
-use loom_defi_address_book::TokenAddressEth;
-use loom_defi_pools::{UniswapV2Pool, UniswapV3Pool};
-use loom_evm_db::LoomDBType;
-use loom_node_debug_provider::AnvilDebugProviderFactory;
-use loom_strategy_backrun::SwapCalculator;
-use loom_types_entities::required_state::RequiredStateReader;
-use loom_types_entities::{EntityAddress, Market, PoolClass, PoolWrapper, SwapLine, SwapPath, Token};
+use kabu_defi_address_book::TokenAddressEth;
+use kabu_defi_pools::{UniswapV2Pool, UniswapV3Pool};
+use kabu_evm_db::KabuDBType;
+use kabu_node_debug_provider::AnvilDebugProviderFactory;
+use kabu_strategy_backrun::SwapCalculator;
+use kabu_types_entities::required_state::RequiredStateReader;
+use kabu_types_entities::{EntityAddress, Market, PoolClass, PoolWrapper, SwapLine, SwapPath, Token};
 
 pub fn bench_swap_calculator(c: &mut Criterion) {
     let mut group = c.benchmark_group("swap_calculator");
@@ -23,7 +23,7 @@ pub fn bench_swap_calculator(c: &mut Criterion) {
     let block_number = 20935488u64;
     let rt = tokio::runtime::Builder::new_multi_thread().enable_all().build().unwrap();
 
-    let mut state_db = LoomDBType::default();
+    let mut state_db = KabuDBType::default();
     let (swap_path, state_db) = rt
         .block_on(async {
             let node_url = env::var("MAINNET_WS")?;
@@ -56,7 +56,7 @@ pub fn bench_swap_calculator(c: &mut Criterion) {
             directions.insert(last_pool.clone(), last_pool.get_swap_directions());
             let swap_path = market.build_swap_path_vec(&directions).unwrap().get(0).unwrap().clone();
 
-            Ok::<(SwapPath, LoomDBType), eyre::Error>((swap_path, state_db.clone()))
+            Ok::<(SwapPath, KabuDBType), eyre::Error>((swap_path, state_db.clone()))
         })
         .expect("Could not fetch state");
 

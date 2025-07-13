@@ -5,7 +5,7 @@ use crate::pool_abi_encoder::pools::{
 use crate::pool_abi_encoder::ProtocolAbiSwapEncoderTrait;
 use alloy_primitives::{Address, Bytes, U256};
 use eyre::OptionExt;
-use loom_types_entities::{Pool, PoolClass};
+use kabu_types_entities::{Pool, PoolClass};
 use std::collections::HashMap;
 use std::sync::Arc;
 
@@ -109,8 +109,8 @@ impl ProtocolAbiSwapEncoderTrait for ProtocolABIEncoderV2 {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use loom_defi_pools::UniswapV3Pool;
-    use loom_types_entities::PreswapRequirement;
+    use kabu_defi_pools::UniswapV3Pool;
+    use kabu_types_entities::PreswapRequirement;
 
     #[test]
     fn test_default() {

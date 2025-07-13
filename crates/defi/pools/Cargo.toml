@@ -1,5 +1,5 @@
 [package]
-name = "loom-defi-pools"
+name = "kabu-defi-pools"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
@@ -8,13 +8,13 @@ homepage.workspace = true
 repository.workspace = true
 
 [dependencies]
-loom-defi-abi.workspace = true
-loom-defi-address-book.workspace = true
-loom-defi-uniswap-v3-math.workspace = true
-loom-evm-db.workspace = true
-loom-evm-utils.workspace = true
-loom-types-blockchain.workspace = true
-loom-types-entities.workspace = true
+kabu-defi-abi.workspace = true
+kabu-defi-address-book.workspace = true
+kabu-defi-uniswap-v3-math.workspace = true
+kabu-evm-db.workspace = true
+kabu-evm-utils.workspace = true
+kabu-types-blockchain.workspace = true
+kabu-types-entities.workspace = true
 
 async-stream.workspace = true
 eyre.workspace = true
@@ -35,7 +35,7 @@ debug-calculation = []
 
 
 [dev-dependencies]
-loom-node-debug-provider.workspace = true
+kabu-node-debug-provider.workspace = true
 
 alloy-rpc-client.workspace = true
 alloy-transport.workspace = true

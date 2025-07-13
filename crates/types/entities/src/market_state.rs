@@ -1,6 +1,6 @@
 use alloy_primitives::{Address, BlockHash, BlockNumber, U256};
-use loom_evm_db::DatabaseHelpers;
-use loom_types_blockchain::{GethStateUpdate, GethStateUpdateVec};
+use kabu_evm_db::DatabaseHelpers;
+use kabu_types_blockchain::{GethStateUpdate, GethStateUpdateVec};
 use revm::{Database, DatabaseCommit, DatabaseRef};
 use std::collections::{HashMap, HashSet};
 

@@ -1,18 +1,18 @@
-use loom_core_actors::SharedState;
-use loom_evm_db::DatabaseLoomExt;
-use loom_types_blockchain::LoomDataTypes;
-use loom_types_entities::{BlockHistory, BlockHistoryState, MarketState};
+use kabu_core_actors::SharedState;
+use kabu_evm_db::DatabaseKabuExt;
+use kabu_types_blockchain::KabuDataTypes;
+use kabu_types_entities::{BlockHistory, BlockHistoryState, MarketState};
 use revm::{Database, DatabaseCommit, DatabaseRef};
 
 #[derive(Clone)]
-pub struct BlockchainState<DB: Clone + Send + Sync + 'static, LDT: LoomDataTypes> {
+pub struct BlockchainState<DB: Clone + Send + Sync + 'static, LDT: KabuDataTypes> {
     market_state: SharedState<MarketState<DB>>,
     block_history_state: SharedState<BlockHistory<DB, LDT>>,
 }
 
 impl<
-        DB: DatabaseRef + Database + DatabaseCommit + BlockHistoryState<LDT> + DatabaseLoomExt + Send + Sync + Clone + Default + 'static,
-        LDT: LoomDataTypes,
+        DB: DatabaseRef + Database + DatabaseCommit + BlockHistoryState<LDT> + DatabaseKabuExt + Send + Sync + Clone + Default + 'static,
+        LDT: KabuDataTypes,
     > Default for BlockchainState<DB, LDT>
 {
     fn default() -> Self {
@@ -21,8 +21,8 @@ impl<
 }
 
 impl<
-        DB: DatabaseRef + Database + DatabaseCommit + BlockHistoryState<LDT> + DatabaseLoomExt + Send + Sync + Clone + Default + 'static,
-        LDT: LoomDataTypes,
+        DB: DatabaseRef + Database + DatabaseCommit + BlockHistoryState<LDT> + DatabaseKabuExt + Send + Sync + Clone + Default + 'static,
+        LDT: KabuDataTypes,
     > BlockchainState<DB, LDT>
 {
     pub fn new() -> Self {
@@ -41,7 +41,7 @@ impl<
     }
 }
 
-impl<DB: Clone + Send + Sync, LDT: LoomDataTypes> BlockchainState<DB, LDT> {
+impl<DB: Clone + Send + Sync, LDT: KabuDataTypes> BlockchainState<DB, LDT> {
     pub fn market_state_commit(&self) -> SharedState<MarketState<DB>> {
         self.market_state.clone()
     }

@@ -134,7 +134,7 @@ pub fn tx_to_evm_tx(tx: &Transaction) -> TxEnv {
         gas_price: U256::from(tx.max_fee_per_gas()),
         gas_priority_fee: Some(U256::from(tx.max_priority_fee_per_gas().unwrap_or_default())),
 
-        // Not used in loom context
+        // Not used in kabu context
         blob_hashes: vec![],
         max_fee_per_blob_gas: None,
         access_list: vec![],

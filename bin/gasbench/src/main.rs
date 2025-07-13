@@ -18,17 +18,17 @@ use crate::cli::Cli;
 use crate::dto::SwapLineDTO;
 use crate::preloader::preload_pools;
 use crate::soltest::create_sol_test;
-use loom_node_debug_provider::AnvilDebugProviderFactory;
+use kabu_node_debug_provider::AnvilDebugProviderFactory;
 
-use loom_defi_address_book::UniswapV2PoolAddress;
-use loom_types_entities::{EntityAddress, Market, MarketState, PoolWrapper, Swap, SwapAmountType, SwapDirection, SwapLine};
+use kabu_defi_address_book::UniswapV2PoolAddress;
+use kabu_types_entities::{EntityAddress, Market, MarketState, PoolWrapper, Swap, SwapAmountType, SwapDirection, SwapLine};
 
-use loom_core_actors::SharedState;
-use loom_defi_preloader::preload_market_state;
-use loom_evm_db::LoomDBType;
-use loom_evm_utils::{BalanceCheater, LoomEVMWrapper, NWETH};
-use loom_execution_multicaller::pool_opcodes_encoder::ProtocolSwapOpcodesEncoderV2;
-use loom_execution_multicaller::{
+use kabu_core_actors::SharedState;
+use kabu_defi_preloader::preload_market_state;
+use kabu_evm_db::KabuDBType;
+use kabu_evm_utils::{BalanceCheater, KabuEVMWrapper, NWETH};
+use kabu_execution_multicaller::pool_opcodes_encoder::ProtocolSwapOpcodesEncoderV2;
+use kabu_execution_multicaller::{
     MulticallerDeployer, MulticallerEncoder, MulticallerSwapEncoder, ProtocolABIEncoderV2, SwapLineEncoder, SwapStepEncoder,
 };
 
@@ -70,7 +70,7 @@ async fn main() -> Result<()> {
     BalanceCheater::set_anvil_token_balance_float(client.clone(), NWETH::ADDRESS, multicaller_address, 1.0).await?;
 
     // Initialization
-    let cache_db = LoomDBType::default();
+    let cache_db = KabuDBType::default();
 
     let market_instance = Market::default();
 
@@ -122,7 +122,7 @@ async fn main() -> Result<()> {
         ..Default::default()
     };
 
-    let mut evm = LoomEVMWrapper::new(CacheDB::new(db)).with_block_env(block_env);
+    let mut evm = KabuEVMWrapper::new(CacheDB::new(db)).with_block_env(block_env);
 
     let in_amount_f64 = 1.0;
     let in_amount = NWETH::from_float(in_amount_f64);

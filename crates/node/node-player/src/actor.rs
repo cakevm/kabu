@@ -7,15 +7,15 @@ use crate::worker::node_player_worker;
 use alloy_network::{Ethereum, Network};
 use alloy_primitives::BlockNumber;
 use alloy_provider::Provider;
-use loom_core_actors::{Accessor, Actor, ActorResult, Broadcaster, Consumer, Producer, SharedState, WorkerResult};
-use loom_core_actors_macros::{Accessor, Consumer, Producer};
-use loom_core_blockchain::{Blockchain, BlockchainState};
-use loom_evm_db::{DatabaseLoomExt, LoomDBError};
-use loom_node_debug_provider::DebugProviderExt;
-use loom_types_blockchain::Mempool;
-use loom_types_blockchain::{LoomDataTypes, LoomDataTypesEthereum};
-use loom_types_entities::MarketState;
-use loom_types_events::{MessageBlock, MessageBlockHeader, MessageBlockLogs, MessageBlockStateUpdate, MessageTxCompose};
+use kabu_core_actors::{Accessor, Actor, ActorResult, Broadcaster, Consumer, Producer, SharedState, WorkerResult};
+use kabu_core_actors_macros::{Accessor, Consumer, Producer};
+use kabu_core_blockchain::{Blockchain, BlockchainState};
+use kabu_evm_db::{DatabaseKabuExt, KabuDBError};
+use kabu_node_debug_provider::DebugProviderExt;
+use kabu_types_blockchain::Mempool;
+use kabu_types_blockchain::{KabuDataTypes, KabuDataTypesEthereum};
+use kabu_types_entities::MarketState;
+use kabu_types_events::{MessageBlock, MessageBlockHeader, MessageBlockLogs, MessageBlockStateUpdate, MessageTxCompose};
 use tokio::task::JoinHandle;
 
 #[derive(Producer, Consumer, Accessor)]
@@ -28,7 +28,7 @@ pub struct NodeBlockPlayerActor<P, N, DB: Send + Sync + Clone + 'static> {
     #[accessor]
     market_state: Option<SharedState<MarketState<DB>>>,
     #[consumer]
-    compose_channel: Option<Broadcaster<MessageTxCompose<LoomDataTypesEthereum>>>,
+    compose_channel: Option<Broadcaster<MessageTxCompose<KabuDataTypesEthereum>>>,
     #[producer]
     block_header_channel: Option<Broadcaster<MessageBlockHeader>>,
     #[producer]
@@ -44,10 +44,10 @@ impl<P, N, DB> NodeBlockPlayerActor<P, N, DB>
 where
     N: Network,
     P: Provider<N> + DebugProviderExt<N> + Send + Sync + Clone + 'static,
-    DB: Database<Error = loom_evm_db::LoomDBError>
-        + DatabaseRef<Error = loom_evm_db::LoomDBError>
+    DB: Database<Error = kabu_evm_db::KabuDBError>
+        + DatabaseRef<Error = kabu_evm_db::KabuDBError>
         + DatabaseCommit
-        + DatabaseLoomExt
+        + DatabaseKabuExt
         + Send
         + Sync
         + Clone
@@ -69,7 +69,7 @@ where
         }
     }
 
-    pub fn on_bc<LDT: LoomDataTypes>(self, bc: &Blockchain, state: &BlockchainState<DB, LDT>) -> Self {
+    pub fn on_bc<LDT: KabuDataTypes>(self, bc: &Blockchain, state: &BlockchainState<DB, LDT>) -> Self {
         Self {
             mempool: Some(bc.mempool()),
             block_header_channel: Some(bc.new_block_headers_channel()),
@@ -87,7 +87,7 @@ impl<P, N, DB> Actor for NodeBlockPlayerActor<P, N, DB>
 where
     P: Provider<Ethereum> + DebugProviderExt<Ethereum> + Send + Sync + Clone + 'static,
     N: Send + Sync,
-    DB: Database<Error = LoomDBError> + DatabaseRef<Error = LoomDBError> + DatabaseCommit + DatabaseLoomExt + Send + Sync + Clone + 'static,
+    DB: Database<Error = KabuDBError> + DatabaseRef<Error = KabuDBError> + DatabaseCommit + DatabaseKabuExt + Send + Sync + Clone + 'static,
 {
     fn start(&self) -> ActorResult {
         let mut handles: Vec<JoinHandle<WorkerResult>> = Vec::new();

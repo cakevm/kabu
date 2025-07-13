@@ -8,17 +8,17 @@ use alloy_rpc_types::TransactionRequest;
 use eyre::Result;
 use tracing::{debug, error, info};
 
-use loom_core_actors::{run_sync, subscribe, Actor, ActorResult, Broadcaster, Producer, SharedState, WorkerResult};
-use loom_core_actors::{Accessor, Consumer};
-use loom_core_actors_macros::{Accessor, Consumer, Producer};
-use loom_core_blockchain::{Blockchain, BlockchainState};
-use loom_node_debug_provider::DebugProviderExt;
-use loom_types_entities::required_state::RequiredStateReader;
-use loom_types_entities::{EntityAddress, Market, MarketState, PoolClass, PoolLoaders, PoolWrapper, SwapDirection};
-use loom_types_events::{LoomTask, MarketEvents};
+use kabu_core_actors::{run_sync, subscribe, Actor, ActorResult, Broadcaster, Producer, SharedState, WorkerResult};
+use kabu_core_actors::{Accessor, Consumer};
+use kabu_core_actors_macros::{Accessor, Consumer, Producer};
+use kabu_core_blockchain::{Blockchain, BlockchainState};
+use kabu_node_debug_provider::DebugProviderExt;
+use kabu_types_entities::required_state::RequiredStateReader;
+use kabu_types_entities::{EntityAddress, Market, MarketState, PoolClass, PoolLoaders, PoolWrapper, SwapDirection};
+use kabu_types_events::{LoomTask, MarketEvents};
 
-use loom_types_blockchain::{get_touched_addresses, LoomDataTypes, LoomDataTypesEVM};
-use loom_types_entities::pool_config::PoolsLoadingConfig;
+use kabu_types_blockchain::{get_touched_addresses, KabuDataTypes, KabuDataTypesEVM};
+use kabu_types_entities::pool_config::PoolsLoadingConfig;
 use revm::{Database, DatabaseCommit, DatabaseRef};
 use tokio::sync::Semaphore;
 
@@ -108,7 +108,7 @@ where
     P: Provider<N> + DebugProviderExt<N> + Send + Sync + Clone + 'static,
     PL: Provider<N> + Send + Sync + Clone + 'static,
     DB: DatabaseRef + Database + DatabaseCommit + Send + Sync + Clone + 'static,
-    LDT: LoomDataTypesEVM + 'static,
+    LDT: KabuDataTypesEVM + 'static,
 {
     debug!(%pool_id, %pool_class, "Fetching pool");
 
@@ -126,7 +126,7 @@ where
     N: Network<TransactionRequest = LDT::TransactionRequest>,
     P: Provider<N> + DebugProviderExt<N> + Send + Sync + Clone + 'static,
     DB: Database + DatabaseRef + DatabaseCommit + Send + Sync + Clone + 'static,
-    LDT: LoomDataTypesEVM,
+    LDT: KabuDataTypesEVM,
 {
     match pool_wrapped.get_state_required() {
         Ok(required_state) => match RequiredStateReader::<LDT>::fetch_calls_and_slots::<N, P>(client, required_state, None).await {
@@ -234,7 +234,7 @@ where
         }
     }
 
-    pub fn on_bc<LDT: LoomDataTypes>(self, bc: &Blockchain, state: &BlockchainState<DB, LDT>) -> Self {
+    pub fn on_bc<LDT: KabuDataTypes>(self, bc: &Blockchain, state: &BlockchainState<DB, LDT>) -> Self {
         Self {
             market: Some(bc.market()),
             market_state: Some(state.market_state_commit()),

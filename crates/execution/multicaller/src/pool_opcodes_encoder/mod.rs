@@ -3,8 +3,8 @@ pub use crate::pool_opcodes_encoder::swap_opcodes_encoders::MulticallerOpcodesPa
 use alloy_primitives::Address;
 pub use curve::CurveSwapOpcodesEncoder;
 use eyre::{eyre, Result};
-use loom_types_blockchain::MulticallerCalls;
-use loom_types_entities::{Pool, SwapAmountType};
+use kabu_types_blockchain::MulticallerCalls;
+use kabu_types_entities::{Pool, SwapAmountType};
 pub use steth::StEthSwapEncoder;
 pub use swap_opcodes_encoders::ProtocolSwapOpcodesEncoderV2;
 pub use uniswap2::UniswapV2SwapOpcodesEncoder;

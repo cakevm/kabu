@@ -1,8 +1,8 @@
 use alloy_primitives::Address;
 use criterion::{criterion_group, criterion_main, Criterion};
+use kabu_defi_address_book::TokenAddressEth;
+use kabu_types_entities::{Market, MockPool, Pool, PoolWrapper, Token};
 use lazy_static::lazy_static;
-use loom_defi_address_book::TokenAddressEth;
-use loom_types_entities::{Market, MockPool, Pool, PoolWrapper, Token};
 use std::collections::BTreeMap;
 use std::sync::Arc;
 

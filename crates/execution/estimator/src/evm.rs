@@ -11,14 +11,14 @@ use std::marker::PhantomData;
 use tokio::sync::broadcast::error::RecvError;
 use tracing::{debug, error, info, trace};
 
-use loom_core_blockchain::{Blockchain, Strategy};
-use loom_evm_utils::{LoomEVMWrapper, NWETH};
-use loom_types_entities::{EstimationError, Swap, SwapEncoder};
+use kabu_core_blockchain::{Blockchain, Strategy};
+use kabu_evm_utils::{KabuEVMWrapper, NWETH};
+use kabu_types_entities::{EstimationError, Swap, SwapEncoder};
 
-use loom_core_actors::{subscribe, Actor, ActorResult, Broadcaster, Consumer, Producer, WorkerResult};
-use loom_core_actors_macros::{Consumer, Producer};
-use loom_evm_db::{AlloyDB, DatabaseLoomExt, LoomDBError};
-use loom_types_events::{HealthEvent, MessageHealthEvent, MessageSwapCompose, SwapComposeData, SwapComposeMessage, TxComposeData, TxState};
+use kabu_core_actors::{subscribe, Actor, ActorResult, Broadcaster, Consumer, Producer, WorkerResult};
+use kabu_core_actors_macros::{Consumer, Producer};
+use kabu_evm_db::{AlloyDB, DatabaseKabuExt, KabuDBError};
+use kabu_types_events::{HealthEvent, MessageHealthEvent, MessageSwapCompose, SwapComposeData, SwapComposeMessage, TxComposeData, TxState};
 use revm::{Database, DatabaseCommit, DatabaseRef};
 
 async fn estimator_task<N, DB>(
@@ -31,7 +31,7 @@ async fn estimator_task<N, DB>(
 ) -> Result<()>
 where
     N: Network,
-    DB: DatabaseRef<Error = LoomDBError> + Database<Error = LoomDBError> + DatabaseCommit + DatabaseLoomExt + Send + Sync + Clone + 'static,
+    DB: DatabaseRef<Error = KabuDBError> + Database<Error = KabuDBError> + DatabaseCommit + DatabaseKabuExt + Send + Sync + Clone + 'static,
 {
     debug!(
         gas_limit = estimate_request.tx_compose.gas,
@@ -85,7 +85,7 @@ where
         }
     }
 
-    let mut evm = LoomEVMWrapper::new(db.clone());
+    let mut evm = KabuEVMWrapper::new(db.clone());
     evm.get_mut().modify_block(|block| {
         block.number = estimate_request.tx_compose.next_block_number;
         block.timestamp = estimate_request.tx_compose.next_block_timestamp;
@@ -247,7 +247,7 @@ async fn estimator_worker<N, DB>(
 ) -> WorkerResult
 where
     N: Network,
-    DB: DatabaseRef<Error = LoomDBError> + Database<Error = LoomDBError> + DatabaseCommit + DatabaseLoomExt + Send + Sync + Clone + 'static,
+    DB: DatabaseRef<Error = KabuDBError> + Database<Error = KabuDBError> + DatabaseCommit + DatabaseKabuExt + Send + Sync + Clone + 'static,
 {
     subscribe!(compose_channel_rx);
 
@@ -306,7 +306,7 @@ where
     N: Network,
     P: Provider<Ethereum>,
     E: SwapEncoder + Send + Sync + Clone + 'static,
-    DB: DatabaseRef + DatabaseLoomExt + Send + Sync + Clone + 'static,
+    DB: DatabaseRef + DatabaseKabuExt + Send + Sync + Clone + 'static,
 {
     pub fn new(encoder: E) -> Self {
         Self {
@@ -348,7 +348,7 @@ where
     N: Network,
     P: Provider<N> + Send + Sync + Clone + 'static,
     E: SwapEncoder + Clone + Send + Sync + 'static,
-    DB: DatabaseRef<Error = LoomDBError> + Database<Error = LoomDBError> + DatabaseCommit + DatabaseLoomExt + Send + Sync + Clone,
+    DB: DatabaseRef<Error = KabuDBError> + Database<Error = KabuDBError> + DatabaseCommit + DatabaseKabuExt + Send + Sync + Clone,
 {
     fn start(&self) -> ActorResult {
         let task = tokio::task::spawn(estimator_worker(

@@ -9,7 +9,7 @@ repository.workspace = true
 exclude.workspace = true
 
 [dependencies]
-loom-types-entities.workspace = true
+kabu-types-entities.workspace = true
 
 aes.workspace = true
 clap.workspace = true

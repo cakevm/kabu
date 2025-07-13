@@ -1,5 +1,5 @@
 [package]
-name = "loom-strategy-merger"
+name = "kabu-strategy-merger"
 edition.workspace = true
 exclude.workspace = true
 homepage.workspace = true
@@ -9,16 +9,16 @@ rust-version.workspace = true
 version.workspace = true
 
 [dependencies]
-loom-core-actors.workspace = true
-loom-core-actors-macros.workspace = true
-loom-core-blockchain.workspace = true
-loom-evm-db.workspace = true
-loom-evm-utils.workspace = true
-loom-execution-multicaller.workspace = true
-loom-node-debug-provider.workspace = true
-loom-types-blockchain.workspace = true
-loom-types-entities.workspace = true
-loom-types-events.workspace = true
+kabu-core-actors.workspace = true
+kabu-core-actors-macros.workspace = true
+kabu-core-blockchain.workspace = true
+kabu-evm-db.workspace = true
+kabu-evm-utils.workspace = true
+kabu-execution-multicaller.workspace = true
+kabu-node-debug-provider.workspace = true
+kabu-types-blockchain.workspace = true
+kabu-types-entities.workspace = true
+kabu-types-events.workspace = true
 
 chrono.workspace = true
 eyre.workspace = true

@@ -1,7 +1,7 @@
 use alloy::primitives::{b256, Address, Bytes, B256};
 use alloy::sol_types::SolCall;
-use loom_defi_abi::uniswap2::IUniswapV2Pair;
-use loom_defi_address_book::FactoryAddress;
+use kabu_defi_abi::uniswap2::IUniswapV2Pair;
+use kabu_defi_address_book::FactoryAddress;
 
 use crate::protocols::helper::get_uniswap2pool_address;
 use crate::protocols::match_abi;

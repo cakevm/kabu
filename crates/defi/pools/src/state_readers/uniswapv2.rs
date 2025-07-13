@@ -3,8 +3,8 @@ use alloy::primitives::{Address, TxKind, U256};
 use alloy::rpc::types::TransactionRequest;
 use alloy::sol_types::{SolCall, SolInterface};
 use eyre::{eyre, Result};
-use loom_defi_abi::uniswap2::IUniswapV2Pair;
-use loom_evm_utils::{evm_dyn_call, LoomExecuteEvm};
+use kabu_defi_abi::uniswap2::IUniswapV2Pair;
+use kabu_evm_utils::{evm_dyn_call, LoomExecuteEvm};
 use tracing::error;
 
 pub struct UniswapV2EVMStateReader {}

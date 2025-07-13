@@ -2,8 +2,8 @@ use crate::pool_abi_encoder::ProtocolAbiSwapEncoderTrait;
 use alloy_primitives::{Address, Bytes, U256};
 use alloy_sol_types::SolInterface;
 use eyre::eyre;
-use loom_defi_abi::uniswap2::IUniswapV2Pair;
-use loom_types_entities::Pool;
+use kabu_defi_abi::uniswap2::IUniswapV2Pair;
+use kabu_types_entities::Pool;
 
 pub struct UniswapV2ProtocolAbiEncoder;
 

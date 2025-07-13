@@ -8,22 +8,22 @@ use alloy::sol_types::SolInterface;
 use eyre::{eyre, Report, Result};
 use tracing::{debug, error, trace};
 
-use loom_defi_abi::curve::ICurveAddressProvider::ICurveAddressProviderInstance;
-use loom_defi_abi::curve::ICurveCommon::ICurveCommonInstance;
-use loom_defi_abi::curve::ICurveCommonI128::ICurveCommonI128Instance;
-use loom_defi_abi::curve::ICurveFactory::ICurveFactoryInstance;
-use loom_defi_abi::curve::ICurveI128_2::ICurveI128_2Instance;
-use loom_defi_abi::curve::ICurveI128_2_To::{ICurveI128_2_ToCalls, ICurveI128_2_ToInstance};
-use loom_defi_abi::curve::ICurveI128_2_To_Meta::ICurveI128_2_To_MetaInstance;
-use loom_defi_abi::curve::ICurveI128_3::{ICurveI128_3Calls, ICurveI128_3Instance};
-use loom_defi_abi::curve::ICurveI128_4::{ICurveI128_4Calls, ICurveI128_4Instance};
-use loom_defi_abi::curve::ICurveU256_2::{ICurveU256_2Calls, ICurveU256_2Instance};
-use loom_defi_abi::curve::ICurveU256_2_Eth_To::{ICurveU256_2_Eth_ToCalls, ICurveU256_2_Eth_ToInstance};
-use loom_defi_abi::curve::ICurveU256_2_To::{ICurveU256_2_ToCalls, ICurveU256_2_ToInstance};
-use loom_defi_abi::curve::ICurveU256_3_Eth::{ICurveU256_3_EthCalls, ICurveU256_3_EthInstance};
-use loom_defi_abi::curve::ICurveU256_3_Eth_To::{ICurveU256_3_Eth_ToCalls, ICurveU256_3_Eth_ToInstance};
-use loom_defi_abi::curve::ICurveU256_3_Eth_To2::{ICurveU256_3_Eth_To2Calls, ICurveU256_3_Eth_To2Instance};
-use loom_defi_abi::curve::{
+use kabu_defi_abi::curve::ICurveAddressProvider::ICurveAddressProviderInstance;
+use kabu_defi_abi::curve::ICurveCommon::ICurveCommonInstance;
+use kabu_defi_abi::curve::ICurveCommonI128::ICurveCommonI128Instance;
+use kabu_defi_abi::curve::ICurveFactory::ICurveFactoryInstance;
+use kabu_defi_abi::curve::ICurveI128_2::ICurveI128_2Instance;
+use kabu_defi_abi::curve::ICurveI128_2_To::{ICurveI128_2_ToCalls, ICurveI128_2_ToInstance};
+use kabu_defi_abi::curve::ICurveI128_2_To_Meta::ICurveI128_2_To_MetaInstance;
+use kabu_defi_abi::curve::ICurveI128_3::{ICurveI128_3Calls, ICurveI128_3Instance};
+use kabu_defi_abi::curve::ICurveI128_4::{ICurveI128_4Calls, ICurveI128_4Instance};
+use kabu_defi_abi::curve::ICurveU256_2::{ICurveU256_2Calls, ICurveU256_2Instance};
+use kabu_defi_abi::curve::ICurveU256_2_Eth_To::{ICurveU256_2_Eth_ToCalls, ICurveU256_2_Eth_ToInstance};
+use kabu_defi_abi::curve::ICurveU256_2_To::{ICurveU256_2_ToCalls, ICurveU256_2_ToInstance};
+use kabu_defi_abi::curve::ICurveU256_3_Eth::{ICurveU256_3_EthCalls, ICurveU256_3_EthInstance};
+use kabu_defi_abi::curve::ICurveU256_3_Eth_To::{ICurveU256_3_Eth_ToCalls, ICurveU256_3_Eth_ToInstance};
+use kabu_defi_abi::curve::ICurveU256_3_Eth_To2::{ICurveU256_3_Eth_To2Calls, ICurveU256_3_Eth_To2Instance};
+use kabu_defi_abi::curve::{
     ICurveI128_2, ICurveI128_2_To, ICurveI128_2_To_Meta, ICurveI128_3, ICurveI128_4, ICurveU256_2, ICurveU256_2_Eth_To, ICurveU256_2_To,
     ICurveU256_3_Eth, ICurveU256_3_Eth_To, ICurveU256_3_Eth_To2,
 };

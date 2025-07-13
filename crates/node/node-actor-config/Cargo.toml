@@ -1,5 +1,5 @@
 [package]
-name = "loom-node-actor-config"
+name = "kabu-node-actor-config"
 edition.workspace = true
 exclude.workspace = true
 homepage.workspace = true

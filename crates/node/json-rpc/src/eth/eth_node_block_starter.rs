@@ -6,10 +6,10 @@ use alloy_json_rpc::RpcRecv;
 use alloy_network::{BlockResponse, Network};
 use alloy_provider::Provider;
 use alloy_rpc_types::Header;
-use loom_core_actors::{ActorResult, Broadcaster, WorkerResult};
-use loom_node_debug_provider::DebugProviderExt;
-use loom_types_blockchain::LoomDataTypesEVM;
-use loom_types_events::{MessageBlock, MessageBlockHeader, MessageBlockLogs, MessageBlockStateUpdate};
+use kabu_core_actors::{ActorResult, Broadcaster, WorkerResult};
+use kabu_node_debug_provider::DebugProviderExt;
+use kabu_types_blockchain::KabuDataTypesEVM;
+use kabu_types_events::{MessageBlock, MessageBlockHeader, MessageBlockLogs, MessageBlockStateUpdate};
 use tokio::task::JoinHandle;
 
 pub fn new_eth_node_block_workers_starter<P, N, LDT>(
@@ -22,7 +22,7 @@ pub fn new_eth_node_block_workers_starter<P, N, LDT>(
 where
     N: Network<HeaderResponse = LDT::Header, BlockResponse = LDT::Block>,
     P: Provider<N> + DebugProviderExt<N> + Send + Sync + Clone + 'static,
-    LDT: LoomDataTypesEVM,
+    LDT: KabuDataTypesEVM,
     LDT::Block: RpcRecv + BlockResponse,
 {
     let new_header_internal_channel: Broadcaster<Header> = Broadcaster::new(10);

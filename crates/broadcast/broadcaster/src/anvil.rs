@@ -7,12 +7,12 @@ use tokio::sync::broadcast::error::RecvError;
 use tokio::sync::broadcast::Receiver;
 use tracing::{error, info};
 
-use loom_core_actors::{Actor, ActorResult, Broadcaster, Consumer, WorkerResult};
-use loom_core_actors_macros::{Accessor, Consumer};
-use loom_core_blockchain::Blockchain;
-use loom_node_debug_provider::AnvilProviderExt;
-use loom_types_blockchain::{LoomDataTypes, LoomDataTypesEthereum};
-use loom_types_events::{MessageTxCompose, TxComposeData, TxComposeMessageType};
+use kabu_core_actors::{Actor, ActorResult, Broadcaster, Consumer, WorkerResult};
+use kabu_core_actors_macros::{Accessor, Consumer};
+use kabu_core_blockchain::Blockchain;
+use kabu_node_debug_provider::AnvilProviderExt;
+use kabu_types_blockchain::{KabuDataTypes, KabuDataTypesEthereum};
+use kabu_types_events::{MessageTxCompose, TxComposeData, TxComposeMessageType};
 
 async fn broadcast_task<P, N>(client: P, request: TxComposeData) -> Result<()>
 where
@@ -82,7 +82,7 @@ where
 }
 
 #[derive(Accessor, Consumer)]
-pub struct AnvilBroadcastActor<P, LDT: LoomDataTypes + 'static = LoomDataTypesEthereum> {
+pub struct AnvilBroadcastActor<P, LDT: KabuDataTypes + 'static = KabuDataTypesEthereum> {
     client: P,
     #[consumer]
     tx_compose_rx: Option<Broadcaster<MessageTxCompose<LDT>>>,
@@ -96,7 +96,7 @@ where
         Self { client, tx_compose_rx: None }
     }
 
-    pub fn on_bc(self, bc: &Blockchain<LoomDataTypesEthereum>) -> Self {
+    pub fn on_bc(self, bc: &Blockchain<KabuDataTypesEthereum>) -> Self {
         Self { tx_compose_rx: Some(bc.tx_compose_channel()), ..self }
     }
 }

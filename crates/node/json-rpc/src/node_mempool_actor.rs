@@ -4,12 +4,12 @@ use alloy_provider::Provider;
 use futures::StreamExt;
 use tracing::error;
 
-use loom_core_actors::{Actor, ActorResult, Broadcaster, Producer, WorkerResult};
-use loom_core_actors_macros::*;
-use loom_core_blockchain::Blockchain;
-use loom_types_blockchain::LoomDataTypesEthereum;
-use loom_types_blockchain::MempoolTx;
-use loom_types_events::{MessageMempoolDataUpdate, NodeMempoolDataUpdate};
+use kabu_core_actors::{Actor, ActorResult, Broadcaster, Producer, WorkerResult};
+use kabu_core_actors_macros::*;
+use kabu_core_blockchain::Blockchain;
+use kabu_types_blockchain::KabuDataTypesEthereum;
+use kabu_types_blockchain::MempoolTx;
+use kabu_types_events::{MessageMempoolDataUpdate, NodeMempoolDataUpdate};
 
 /// Worker listens for new transactions in the node mempool and broadcasts [`MessageMempoolDataUpdate`].
 pub async fn new_node_mempool_worker<P>(client: P, name: String, mempool_tx: Broadcaster<MessageMempoolDataUpdate>) -> WorkerResult
@@ -57,7 +57,7 @@ where
         self.name
     }
 
-    pub fn on_bc(self, bc: &Blockchain<LoomDataTypesEthereum>) -> Self {
+    pub fn on_bc(self, bc: &Blockchain<KabuDataTypesEthereum>) -> Self {
         Self { mempool_tx: Some(bc.new_mempool_tx_channel()), ..self }
     }
 }

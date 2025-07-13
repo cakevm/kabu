@@ -4,10 +4,10 @@ use crate::pool_opcodes_encoder::swap_opcodes_encoders::MulticallerOpcodesPayloa
 use crate::pool_opcodes_encoder::SwapOpcodesEncoderTrait;
 use alloy_primitives::{Address, Bytes};
 use eyre::{eyre, Result};
-use loom_defi_abi::AbiEncoderHelper;
-use loom_defi_address_book::TokenAddressEth;
-use loom_types_blockchain::{MulticallerCall, MulticallerCalls};
-use loom_types_entities::{Pool, SwapAmountType};
+use kabu_defi_abi::AbiEncoderHelper;
+use kabu_defi_address_book::TokenAddressEth;
+use kabu_types_blockchain::{MulticallerCall, MulticallerCalls};
+use kabu_types_entities::{Pool, SwapAmountType};
 
 pub struct WstEthSwapEncoder {}
 

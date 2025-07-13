@@ -5,12 +5,12 @@ mode = "ws"
 host = "0.0.0.0:3333"
 
 [database]
-url = "postgres://loom:loom@localhost/loom?application_name=loom&options=-c search_path%3Dloom"
+url = "postgres://kabu:kabu@localhost/kabu?application_name=kabu&options=-c search_path%3Dkabu"
 
 # Optional influxdb configuration
 [influxdb]
-database = "loom"
-tags = { bot_name = "loom" }
+database = "kabu"
+tags = { bot_name = "kabu" }
 url = "http://localhost:8086"
 
 # Nodes.

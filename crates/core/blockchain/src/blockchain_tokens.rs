@@ -1,8 +1,8 @@
 use alloy::primitives::ChainId;
 use alloy_chains::{Chain, NamedChain};
 use eyre::{eyre, OptionExt, Result};
-use loom_defi_address_book::{TokenAddressArbitrum, TokenAddressBase, TokenAddressEth};
-use loom_types_entities::{Market, Token};
+use kabu_defi_address_book::{TokenAddressArbitrum, TokenAddressBase, TokenAddressEth};
+use kabu_types_entities::{Market, Token};
 
 pub fn add_default_tokens_to_market(market: &mut Market, chain_id: ChainId) -> Result<()> {
     match Chain::from_id(chain_id).named().ok_or_eyre("NO_NAMED_CHAIN")? {

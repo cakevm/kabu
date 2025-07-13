@@ -1,3 +1,4 @@
+use crate::kabu_data_types::KabuTx;
 use alloy_eips::BlockNumberOrTag;
 use alloy_network::Network;
 use alloy_primitives::{Address, BlockNumber, TxHash, U256};
@@ -15,14 +16,14 @@ use std::sync::Arc;
 use tokio::sync::RwLock;
 use tracing::{debug, error, warn};
 
-use loom_core_actors::{subscribe, Accessor, Actor, ActorResult, Broadcaster, Consumer, Producer, SharedState, WorkerResult};
-use loom_core_actors_macros::{Accessor, Consumer, Producer};
-use loom_core_blockchain::{Blockchain, BlockchainState, Strategy};
-use loom_node_debug_provider::DebugProviderExt;
-use loom_types_blockchain::{debug_trace_call_diff, GethStateUpdateVec, LoomDataTypesEVM, LoomTx, Mempool, TRACING_CALL_OPTS};
-use loom_types_entities::required_state::{accounts_vec_len, storage_vec_len};
-use loom_types_entities::{LatestBlock, Market, MarketState};
-use loom_types_events::{MarketEvents, MempoolEvents, StateUpdateEvent};
+use kabu_core_actors::{subscribe, Accessor, Actor, ActorResult, Broadcaster, Consumer, Producer, SharedState, WorkerResult};
+use kabu_core_actors_macros::{Accessor, Consumer, Producer};
+use kabu_core_blockchain::{Blockchain, BlockchainState, Strategy};
+use kabu_node_debug_provider::DebugProviderExt;
+use kabu_types_blockchain::{debug_trace_call_diff, GethStateUpdateVec, KabuDataTypesEVM, LoomTx, Mempool, TRACING_CALL_OPTS};
+use kabu_types_entities::required_state::{accounts_vec_len, storage_vec_len};
+use kabu_types_entities::{LatestBlock, Market, MarketState};
+use kabu_types_events::{MarketEvents, MempoolEvents, StateUpdateEvent};
 
 use super::affected_pools_code::{get_affected_pools_from_code, is_pool_code};
 use super::affected_pools_state::get_affected_pools_from_state_update;
@@ -51,7 +52,7 @@ where
     N: Network<TransactionRequest = LDT::TransactionRequest>,
     P: Provider<N> + DebugProviderExt<N> + Send + Sync + Clone + 'static,
     DB: DatabaseRef + Database + DatabaseCommit + Clone + Send + Sync + 'static,
-    LDT: LoomDataTypesEVM,
+    LDT: KabuDataTypesEVM,
 {
     let mut state_update_vec: GethStateUpdateVec = Vec::new();
     let mut state_required_vec: GethStateUpdateVec = Vec::new();
@@ -255,7 +256,7 @@ where
     N: Network<TransactionRequest = LDT::TransactionRequest>,
     P: Provider<N> + DebugProviderExt<N> + Send + Sync + Clone + 'static,
     DB: DatabaseRef + Database + DatabaseCommit + Clone + Send + Sync + 'static,
-    LDT: LoomDataTypesEVM,
+    LDT: KabuDataTypesEVM,
 {
     subscribe!(mempool_events_rx);
     subscribe!(market_events_rx);
@@ -322,7 +323,7 @@ where
 }
 
 #[derive(Accessor, Consumer, Producer)]
-pub struct PendingTxStateChangeProcessorActor<P, N, DB: Clone + Send + Sync + 'static, LDT: LoomDataTypesEVM + 'static> {
+pub struct PendingTxStateChangeProcessorActor<P, N, DB: Clone + Send + Sync + 'static, LDT: KabuDataTypesEVM + 'static> {
     client: P,
     #[accessor]
     market: Option<SharedState<Market>>,
@@ -346,7 +347,7 @@ where
     N: Network,
     P: Provider<N> + DebugProviderExt<N> + Send + Sync + Clone + 'static,
     DB: DatabaseRef + Send + Sync + Clone + 'static,
-    LDT: LoomDataTypesEVM + 'static,
+    LDT: KabuDataTypesEVM + 'static,
 {
     pub fn new(client: P) -> PendingTxStateChangeProcessorActor<P, N, DB, LDT> {
         PendingTxStateChangeProcessorActor {
@@ -381,7 +382,7 @@ where
     N: Network<TransactionRequest = LDT::TransactionRequest>,
     P: Provider<N> + DebugProviderExt<N> + Send + Sync + Clone + 'static,
     DB: DatabaseRef + Database + DatabaseCommit + Send + Sync + Clone + 'static,
-    LDT: LoomDataTypesEVM + 'static,
+    LDT: KabuDataTypesEVM + 'static,
 {
     fn start(&self) -> ActorResult {
         let task = tokio::task::spawn(pending_tx_state_change_worker(

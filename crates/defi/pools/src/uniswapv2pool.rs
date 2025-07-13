@@ -4,13 +4,13 @@ use alloy::providers::{Network, Provider};
 use alloy::rpc::types::BlockNumberOrTag;
 use alloy::sol_types::SolInterface;
 use eyre::{eyre, ErrReport, Result};
+use kabu_defi_abi::uniswap2::IUniswapV2Pair;
+use kabu_defi_abi::IERC20;
+use kabu_defi_address_book::FactoryAddress;
+use kabu_evm_utils::LoomExecuteEvm;
+use kabu_types_entities::required_state::RequiredState;
+use kabu_types_entities::{EntityAddress, Pool, PoolAbiEncoder, PoolClass, PoolProtocol, PreswapRequirement, SwapDirection};
 use lazy_static::lazy_static;
-use loom_defi_abi::uniswap2::IUniswapV2Pair;
-use loom_defi_abi::IERC20;
-use loom_defi_address_book::FactoryAddress;
-use loom_evm_utils::LoomExecuteEvm;
-use loom_types_entities::required_state::RequiredState;
-use loom_types_entities::{EntityAddress, Pool, PoolAbiEncoder, PoolClass, PoolProtocol, PreswapRequirement, SwapDirection};
 use std::any::Any;
 use std::ops::Div;
 use tracing::debug;
@@ -370,13 +370,13 @@ mod test {
     use super::*;
     use alloy::primitives::{address, BlockNumber};
     use alloy::rpc::types::BlockId;
-    use loom_defi_abi::uniswap2::IUniswapV2Router;
-    use loom_defi_address_book::PeripheryAddress;
-    use loom_evm_db::LoomDBType;
-    use loom_evm_utils::LoomEVMWrapper;
-    use loom_node_debug_provider::{AnvilDebugProviderFactory, AnvilDebugProviderType};
-    use loom_types_blockchain::LoomDataTypesEthereum;
-    use loom_types_entities::required_state::RequiredStateReader;
+    use kabu_defi_abi::uniswap2::IUniswapV2Router;
+    use kabu_defi_address_book::PeripheryAddress;
+    use kabu_evm_db::KabuDBType;
+    use kabu_evm_utils::KabuEVMWrapper;
+    use kabu_node_debug_provider::{AnvilDebugProviderFactory, AnvilDebugProviderType};
+    use kabu_types_blockchain::KabuDataTypesEthereum;
+    use kabu_types_entities::required_state::RequiredStateReader;
     use rand::Rng;
     use std::env;
 
@@ -390,7 +390,7 @@ mod test {
     #[tokio::test]
     async fn test_fetch_reserves() -> Result<()> {
         let _ = env_logger::try_init_from_env(env_logger::Env::default().default_filter_or(
-            "info,loom_types_entities::required_state=trace,loom_types_blockchain::state_update=off,alloy_rpc_client::call=off,tungstenite=off",
+            "info,kabu_types_entities::required_state=trace,kabu_types_blockchain::state_update=off,alloy_rpc_client::call=off,tungstenite=off",
         ));
 
         let block_number = 20935488u64;
@@ -407,13 +407,13 @@ mod test {
             let pool = UniswapV2Pool::fetch_pool_data(client.clone(), pool_address).await?;
             let state_required = pool.get_state_required()?;
             let state_update =
-                RequiredStateReader::<LoomDataTypesEthereum>::fetch_calls_and_slots(client.clone(), state_required, Some(block_number))
+                RequiredStateReader::<KabuDataTypesEthereum>::fetch_calls_and_slots(client.clone(), state_required, Some(block_number))
                     .await?;
 
-            let mut state_db = LoomDBType::default();
+            let mut state_db = KabuDBType::default();
             state_db.apply_geth_update(state_update);
 
-            let mut evm = LoomEVMWrapper::new(state_db);
+            let mut evm = KabuEVMWrapper::new(state_db);
 
             // under test
             let (reserves_0, reserves_1) = pool.fetch_reserves(evm.get_mut())?;
@@ -469,16 +469,16 @@ mod test {
             let pool = UniswapV2Pool::fetch_pool_data(client.clone(), pool_address).await?;
             let state_required = pool.get_state_required()?;
             let state_update =
-                RequiredStateReader::<LoomDataTypesEthereum>::fetch_calls_and_slots(client.clone(), state_required, Some(block_number))
+                RequiredStateReader::<KabuDataTypesEthereum>::fetch_calls_and_slots(client.clone(), state_required, Some(block_number))
                     .await?;
 
-            let mut state_db = LoomDBType::default();
+            let mut state_db = KabuDBType::default();
             state_db.apply_geth_update(state_update);
 
             // fetch original
             let contract_amount_out = fetch_original_contract_amounts(client.clone(), pool_address, amount_in, block_number, true).await?;
 
-            let mut evm = LoomEVMWrapper::new(state_db);
+            let mut evm = KabuEVMWrapper::new(state_db);
 
             let (amount_out, gas_used) =
                 pool.calculate_out_amount(evm.get_evm_mut(), &pool.token0.into(), &pool.token1.into(), amount_in)?;
@@ -503,16 +503,16 @@ mod test {
             let pool = UniswapV2Pool::fetch_pool_data(client.clone(), pool_address).await?;
             let state_required = pool.get_state_required()?;
             let state_update =
-                RequiredStateReader::<LoomDataTypesEthereum>::fetch_calls_and_slots(client.clone(), state_required, Some(block_number))
+                RequiredStateReader::<KabuDataTypesEthereum>::fetch_calls_and_slots(client.clone(), state_required, Some(block_number))
                     .await?;
 
-            let mut state_db = LoomDBType::default();
+            let mut state_db = KabuDBType::default();
             state_db.apply_geth_update(state_update);
 
             // fetch original
             let contract_amount_in = fetch_original_contract_amounts(client.clone(), pool_address, amount_out, block_number, false).await?;
 
-            let mut evm = LoomEVMWrapper::new(state_db);
+            let mut evm = KabuEVMWrapper::new(state_db);
 
             // under test
             let (amount_in, gas_used) =

@@ -5,10 +5,10 @@ use alloy::primitives::Log as EVMLog;
 use alloy::sol_types::SolEventInterface;
 use eyre::eyre;
 use futures::Stream;
-use loom_defi_abi::uniswap2::IUniswapV2Pair::IUniswapV2PairEvents;
-use loom_evm_utils::LoomExecuteEvm;
-use loom_types_blockchain::{LoomDataTypes, LoomDataTypesEVM, LoomDataTypesEthereum};
-use loom_types_entities::{get_protocol_by_factory, EntityAddress, PoolClass, PoolLoader, PoolProtocol, PoolWrapper};
+use kabu_defi_abi::uniswap2::IUniswapV2Pair::IUniswapV2PairEvents;
+use kabu_evm_utils::LoomExecuteEvm;
+use kabu_types_blockchain::{KabuDataTypes, KabuDataTypesEVM, KabuDataTypesEthereum};
+use kabu_types_entities::{get_protocol_by_factory, EntityAddress, PoolClass, PoolLoader, PoolProtocol, PoolWrapper};
 use std::future::Future;
 use std::pin::Pin;
 use std::sync::Arc;
@@ -19,7 +19,7 @@ impl<P, N, LDT> PoolLoader<P, N, LDT> for UniswapV2PoolLoader<P, N, LDT>
 where
     N: Network,
     P: Provider<N> + Clone + 'static,
-    LDT: LoomDataTypesEVM + 'static,
+    LDT: KabuDataTypesEVM + 'static,
 {
     fn get_pool_class_by_log(&self, log_entry: &LDT::Log) -> Option<(EntityAddress, PoolClass)> {
         let log_entry: Option<EVMLog> = EVMLog::new(log_entry.address(), log_entry.topics().to_vec(), log_entry.data().data.clone());

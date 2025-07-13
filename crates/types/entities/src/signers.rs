@@ -1,3 +1,4 @@
+use crate::kabu_data_types::KabuTx;
 use crate::EntityAddress;
 use alloy_consensus::transaction::Recovered;
 use alloy_consensus::{SignableTransaction, TxEnvelope};
@@ -7,7 +8,7 @@ use alloy_rpc_types::{Transaction, TransactionRequest};
 use alloy_signer_local::PrivateKeySigner;
 use eyre::{eyre, OptionExt, Result};
 use indexmap::IndexMap;
-use loom_types_blockchain::{LoomDataTypes, LoomDataTypesEthereum};
+use kabu_types_blockchain::{KabuDataTypes, KabuDataTypesEthereum};
 use rand::prelude::IteratorRandom;
 use std::fmt;
 use std::fmt::Debug;
@@ -15,7 +16,7 @@ use std::future::Future;
 use std::pin::Pin;
 use std::sync::Arc;
 
-pub trait LoomTxSigner<LDT: LoomDataTypes>: Send + Sync + Debug {
+pub trait LoomTxSigner<LDT: KabuDataTypes>: Send + Sync + Debug {
     fn sign<'a>(&'a self, tx: LDT::TransactionRequest) -> Pin<Box<dyn std::future::Future<Output = Result<LDT::Transaction>> + Send + 'a>>;
     fn sign_sync(&self, tx: LDT::TransactionRequest) -> Result<LDT::Transaction>;
     fn address(&self) -> EntityAddress;
@@ -40,7 +41,7 @@ impl fmt::Debug for TxSignerEth {
     }
 }
 
-impl LoomTxSigner<LoomDataTypesEthereum> for TxSignerEth {
+impl LoomTxSigner<KabuDataTypesEthereum> for TxSignerEth {
     fn address(&self) -> EntityAddress {
         self.address.into()
     }
@@ -98,11 +99,11 @@ impl TxSignerEth {
 }
 
 #[derive(Clone, Default)]
-pub struct TxSigners<LDT: LoomDataTypes = LoomDataTypesEthereum> {
+pub struct TxSigners<LDT: KabuDataTypes = KabuDataTypesEthereum> {
     signers: IndexMap<EntityAddress, Arc<dyn LoomTxSigner<LDT>>>,
 }
 
-impl TxSigners<LoomDataTypesEthereum> {
+impl TxSigners<KabuDataTypesEthereum> {
     pub fn add_privkey(&mut self, priv_key: Bytes) -> TxSignerEth {
         let wallet = PrivateKeySigner::from_bytes(&B256::from_slice(priv_key.as_ref())).unwrap();
         self.signers.insert(wallet.address().into(), Arc::new(TxSignerEth::new(wallet.clone())));
@@ -114,7 +115,7 @@ impl TxSigners<LoomDataTypesEthereum> {
     }
 }
 
-impl<LDT: LoomDataTypes> TxSigners<LDT> {
+impl<LDT: KabuDataTypes> TxSigners<LDT> {
     pub fn new() -> TxSigners<LDT> {
         TxSigners { signers: IndexMap::new() }
     }
@@ -160,7 +161,7 @@ mod tests {
     use alloy_primitives::{address, TxHash};
     use alloy_rpc_types::TransactionRequest;
     use eyre::Result;
-    use loom_types_blockchain::LoomTx;
+    use kabu_types_blockchain::LoomTx;
     // TxSigner tests
 
     #[test]
@@ -217,7 +218,7 @@ mod tests {
 
     #[test]
     fn test_new_signers() {
-        let signers: TxSigners<LoomDataTypesEthereum> = TxSigners::new();
+        let signers: TxSigners<KabuDataTypesEthereum> = TxSigners::new();
         assert!(signers.is_empty());
     }
 

@@ -1,10 +1,11 @@
+use crate::kabu_data_types::KabuTx;
 use eyre::{eyre, Result};
-use loom_core_actors::{Accessor, Actor, ActorResult, Broadcaster, Consumer, Producer, SharedState, WorkerResult};
-use loom_core_actors_macros::{Accessor, Consumer, Producer};
-use loom_core_blockchain::{Blockchain, Strategy};
-use loom_types_blockchain::{LoomDataTypes, LoomDataTypesEthereum};
-use loom_types_entities::{AccountNonceAndBalanceState, TxSigners};
-use loom_types_events::{MessageSwapCompose, MessageTxCompose, SwapComposeData, SwapComposeMessage, TxComposeData};
+use kabu_core_actors::{Accessor, Actor, ActorResult, Broadcaster, Consumer, Producer, SharedState, WorkerResult};
+use kabu_core_actors_macros::{Accessor, Consumer, Producer};
+use kabu_core_blockchain::{Blockchain, Strategy};
+use kabu_types_blockchain::{KabuDataTypes, KabuDataTypesEthereum};
+use kabu_types_entities::{AccountNonceAndBalanceState, TxSigners};
+use kabu_types_events::{MessageSwapCompose, MessageTxCompose, SwapComposeData, SwapComposeMessage, TxComposeData};
 use revm::DatabaseRef;
 use tokio::sync::broadcast::error::RecvError;
 use tokio::sync::broadcast::Receiver;
@@ -19,7 +20,7 @@ async fn router_task_prepare<DB, LDT>(
 ) -> Result<()>
 where
     DB: DatabaseRef + Send + Sync + Clone + 'static,
-    LDT: LoomDataTypes,
+    LDT: KabuDataTypes,
 {
     debug!("router_task_prepare started {}", route_request.swap);
 
@@ -53,7 +54,7 @@ where
     }
 }
 
-async fn router_task_broadcast<DB: DatabaseRef + Send + Sync + Clone + 'static, LDT: LoomDataTypes>(
+async fn router_task_broadcast<DB: DatabaseRef + Send + Sync + Clone + 'static, LDT: KabuDataTypes>(
     route_request: SwapComposeData<DB, LDT>,
     tx_compose_channel_tx: Broadcaster<MessageTxCompose<LDT>>,
 ) -> Result<()> {
@@ -70,7 +71,7 @@ async fn router_task_broadcast<DB: DatabaseRef + Send + Sync + Clone + 'static, 
     }
 }
 
-async fn swap_router_worker<DB: DatabaseRef + Clone + Send + Sync + 'static, LDT: LoomDataTypes>(
+async fn swap_router_worker<DB: DatabaseRef + Clone + Send + Sync + 'static, LDT: KabuDataTypes>(
     signers: SharedState<TxSigners<LDT>>,
     account_monitor: SharedState<AccountNonceAndBalanceState>,
     swap_compose_channel_rx: Broadcaster<MessageSwapCompose<DB, LDT>>,
@@ -120,7 +121,7 @@ async fn swap_router_worker<DB: DatabaseRef + Clone + Send + Sync + 'static, LDT
 }
 
 #[derive(Consumer, Producer, Accessor, Default)]
-pub struct SwapRouterActor<DB: Send + Sync + Clone + 'static, LDT: LoomDataTypes + 'static = LoomDataTypesEthereum> {
+pub struct SwapRouterActor<DB: Send + Sync + Clone + 'static, LDT: KabuDataTypes + 'static = KabuDataTypesEthereum> {
     #[accessor]
     signers: Option<SharedState<TxSigners<LDT>>>,
     #[accessor]
@@ -136,7 +137,7 @@ pub struct SwapRouterActor<DB: Send + Sync + Clone + 'static, LDT: LoomDataTypes
 impl<DB, LDT> SwapRouterActor<DB, LDT>
 where
     DB: DatabaseRef + Send + Sync + Clone + Default + 'static,
-    LDT: LoomDataTypes,
+    LDT: KabuDataTypes,
 {
     pub fn new() -> SwapRouterActor<DB, LDT> {
         SwapRouterActor {
@@ -166,7 +167,7 @@ where
 impl<DB, LDT> Actor for SwapRouterActor<DB, LDT>
 where
     DB: DatabaseRef + Send + Sync + Clone + Default + 'static,
-    LDT: LoomDataTypes,
+    LDT: KabuDataTypes,
 {
     fn start(&self) -> ActorResult {
         let task = tokio::task::spawn(swap_router_worker(

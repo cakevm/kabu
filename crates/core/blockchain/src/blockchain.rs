@@ -2,18 +2,18 @@ use crate::blockchain_tokens::add_default_tokens_to_market;
 use alloy::primitives::BlockHash;
 use alloy::primitives::ChainId;
 use influxdb::WriteQuery;
-use loom_core_actors::{Broadcaster, SharedState};
-use loom_types_blockchain::{ChainParameters, Mempool};
-use loom_types_blockchain::{LoomDataTypes, LoomDataTypesEthereum};
-use loom_types_entities::{AccountNonceAndBalanceState, LatestBlock, Market};
-use loom_types_events::{
+use kabu_core_actors::{Broadcaster, SharedState};
+use kabu_types_blockchain::{ChainParameters, Mempool};
+use kabu_types_blockchain::{KabuDataTypes, KabuDataTypesEthereum};
+use kabu_types_entities::{AccountNonceAndBalanceState, LatestBlock, Market};
+use kabu_types_events::{
     LoomTask, MarketEvents, MempoolEvents, MessageBlock, MessageBlockHeader, MessageBlockLogs, MessageBlockStateUpdate, MessageHealthEvent,
     MessageMempoolDataUpdate, MessageTxCompose,
 };
 use tracing::error;
 
 #[derive(Clone)]
-pub struct Blockchain<LDT: LoomDataTypes + 'static = LoomDataTypesEthereum> {
+pub struct Blockchain<LDT: KabuDataTypes + 'static = KabuDataTypesEthereum> {
     chain_id: ChainId,
     chain_parameters: ChainParameters,
     market: SharedState<Market>,
@@ -35,8 +35,8 @@ pub struct Blockchain<LDT: LoomDataTypes + 'static = LoomDataTypesEthereum> {
     tasks_channel: Broadcaster<LoomTask>,
 }
 
-impl Blockchain<LoomDataTypesEthereum> {
-    pub fn new(chain_id: ChainId) -> Blockchain<LoomDataTypesEthereum> {
+impl Blockchain<KabuDataTypesEthereum> {
+    pub fn new(chain_id: ChainId) -> Blockchain<KabuDataTypesEthereum> {
         let new_block_headers_channel: Broadcaster<MessageBlockHeader> = Broadcaster::new(10);
         let new_block_with_tx_channel: Broadcaster<MessageBlock> = Broadcaster::new(10);
         let new_block_state_update_channel: Broadcaster<MessageBlockStateUpdate> = Broadcaster::new(10);
@@ -62,7 +62,7 @@ impl Blockchain<LoomDataTypesEthereum> {
             chain_id,
             chain_parameters: ChainParameters::ethereum(),
             market: SharedState::new(market_instance),
-            mempool: SharedState::new(Mempool::<LoomDataTypesEthereum>::new()),
+            mempool: SharedState::new(Mempool::<KabuDataTypesEthereum>::new()),
             latest_block: SharedState::new(LatestBlock::new(0, BlockHash::ZERO)),
             account_nonce_and_balance: SharedState::new(AccountNonceAndBalanceState::new()),
             new_block_headers_channel,
@@ -80,7 +80,7 @@ impl Blockchain<LoomDataTypesEthereum> {
     }
 }
 
-impl<LDT: LoomDataTypes> Blockchain<LDT> {
+impl<LDT: KabuDataTypes> Blockchain<LDT> {
     pub fn chain_id(&self) -> u64 {
         self.chain_id
     }

@@ -5,16 +5,16 @@ use alloy_rpc_types::Block;
 use std::marker::PhantomData;
 
 use crate::eth::new_eth_node_block_workers_starter;
-use loom_core_actors::{Actor, ActorResult, Broadcaster, Producer};
-use loom_core_actors_macros::Producer;
-use loom_core_blockchain::Blockchain;
-use loom_node_actor_config::NodeBlockActorConfig;
-use loom_node_debug_provider::DebugProviderExt;
-use loom_types_blockchain::{LoomDataTypes, LoomDataTypesEVM};
-use loom_types_events::{MessageBlock, MessageBlockHeader, MessageBlockLogs, MessageBlockStateUpdate};
+use kabu_core_actors::{Actor, ActorResult, Broadcaster, Producer};
+use kabu_core_actors_macros::Producer;
+use kabu_core_blockchain::Blockchain;
+use kabu_node_actor_config::NodeBlockActorConfig;
+use kabu_node_debug_provider::DebugProviderExt;
+use kabu_types_blockchain::{KabuDataTypes, KabuDataTypesEVM};
+use kabu_types_events::{MessageBlock, MessageBlockHeader, MessageBlockLogs, MessageBlockStateUpdate};
 
 #[derive(Producer)]
-pub struct NodeBlockActor<P, N, LDT: LoomDataTypes + 'static> {
+pub struct NodeBlockActor<P, N, LDT: KabuDataTypes + 'static> {
     client: P,
     config: NodeBlockActorConfig,
     #[producer]
@@ -32,7 +32,7 @@ impl<P, N, LDT> NodeBlockActor<P, N, LDT>
 where
     N: Network<HeaderResponse = LDT::Header, BlockResponse = LDT::Block>,
     P: Provider<N> + DebugProviderExt<N> + Send + Sync + Clone + 'static,
-    LDT: LoomDataTypesEVM<Block = Block>,
+    LDT: KabuDataTypesEVM<Block = Block>,
     LDT::Block: BlockResponse + RpcRecv,
 {
     pub fn new(client: P, config: NodeBlockActorConfig) -> NodeBlockActor<P, N, LDT> {
@@ -62,7 +62,7 @@ impl<P, N, LDT> Actor for NodeBlockActor<P, N, LDT>
 where
     N: Network<HeaderResponse = LDT::Header, BlockResponse = LDT::Block>,
     P: Provider + DebugProviderExt + Send + Sync + Clone + 'static,
-    LDT: LoomDataTypesEVM<Block = Block>,
+    LDT: KabuDataTypesEVM<Block = Block>,
     LDT::Block: BlockResponse + RpcRecv,
 {
     fn start(&self) -> ActorResult {
@@ -80,7 +80,7 @@ where
 }
 
 /*
-impl<P> Actor for NodeBlockActor<P, N, LoomDataTypesOptimism>
+impl<P> Actor for NodeBlockActor<P, N, KabuDataTypesOptimism>
 where
     P: Provider<Optimism> + DebugProviderExt + Send + Sync + Clone + 'static,
 {

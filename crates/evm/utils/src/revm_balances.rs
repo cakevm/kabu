@@ -3,10 +3,10 @@ use crate::{nweth, NWETH};
 use alloy::providers::ext::AnvilApi;
 use alloy::{network::Network, primitives::Address, providers::Provider, sol_types::private::U256};
 use eyre::{eyre, Result};
-use loom_defi_abi::IERC20::IERC20Instance;
-use loom_defi_address_book::TokenAddressEth;
-use loom_evm_db::LoomDBType;
-use loom_node_debug_provider::DebugProviderExt;
+use kabu_defi_abi::IERC20::IERC20Instance;
+use kabu_defi_address_book::TokenAddressEth;
+use kabu_evm_db::KabuDBType;
+use kabu_node_debug_provider::DebugProviderExt;
 use tracing::error;
 
 pub struct BalanceCheater {}
@@ -71,13 +71,13 @@ impl BalanceCheater {
         Self::set_anvil_token_balance(client, token, owner, balance).await
     }
 
-    pub fn set_evm_token_balance(db: &mut LoomDBType, token: Address, owner: Address, balance: U256) -> eyre::Result<()> {
+    pub fn set_evm_token_balance(db: &mut KabuDBType, token: Address, owner: Address, balance: U256) -> eyre::Result<()> {
         let balance_cell = calc_hashmap_cell(U256::from(3), U256::from_be_slice(owner.as_slice()));
 
         db.insert_account_storage(token, balance_cell, balance).map_err(|_| eyre!("ERROR_INSERTING_ACCOUNT_STORAGE"))
     }
 
-    pub fn set_evm_token_balance_float(db: &mut LoomDBType, token: Address, owner: Address, balance: f64) -> eyre::Result<()> {
+    pub fn set_evm_token_balance_float(db: &mut KabuDBType, token: Address, owner: Address, balance: f64) -> eyre::Result<()> {
         Self::set_evm_token_balance(db, token, owner, NWETH::from_float(balance))
     }
 }

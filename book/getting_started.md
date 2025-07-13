@@ -3,7 +3,7 @@
 ## Checkout the repository
 Clone the repository:
 ```sh
-git clone git@github.com:dexloom/loom.git
+git clone git@github.com:cakevm/kabu.git
 ```
 
 ## Setting up topology
@@ -36,35 +36,35 @@ Install postgresql and create database and user.
 Create user and db:
 ```shell
 su - postgres
-createuser loom
-createdb loom
+createuser kabu
+createdb kabu
 ```
 
 Run `psql` and update user and privileges:
 ```psql
-alter user loom with encrypted password 'loom';
-grant all privileges on database loom to loom;
-create schema loom;
-grant usage on schema loom to loom;
-grant create on schema loom to loom;
+alter user kabu with encrypted password 'kabu';
+grant all privileges on database kabu to kabu;
+create schema kabu;
+grant usage on schema kabu to kabu;
+grant create on schema kabu to kabu;
 \q
 ```
 
-## Starting loom
+## Starting kabu
 ```sh
-DATA=<ENCRYPTED_PRIVATE_KEY> cargo run --bin loom
+DATA=<ENCRYPTED_PRIVATE_KEY> cargo run --bin kabu
 ```
 
 ## Makefile
 Makefile is shipped with following important commands:
 
 - build - builds all binaries
-- fmt - formats loom with rustfmt
+- fmt - formats kabu with rustfmt
 - pre-release - check code with rustfmt and clippy
 - clippy - check code with clippy
 
 ## Testing
-Testing Loom requires two environment variables pointing at archive node:
+Testing kabu requires two environment variables pointing at archive node:
 
 - MAINNET_WS - websocket url of archive node
 - MAINNET_HTTP - http url of archive node

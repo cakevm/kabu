@@ -10,9 +10,9 @@ use std::marker::PhantomData;
 use tracing::{error, trace};
 
 use crate::EntityAddress;
-use loom_node_debug_provider::DebugProviderExt;
-use loom_types_blockchain::{debug_trace_call_pre_state, GethStateUpdate, GethStateUpdateVec, LoomDataTypesEVM};
-use loom_types_blockchain::{LoomDataTypes, LoomDataTypesEthereum, LoomTransactionRequest};
+use kabu_node_debug_provider::DebugProviderExt;
+use kabu_types_blockchain::{debug_trace_call_pre_state, GethStateUpdate, GethStateUpdateVec, KabuDataTypesEVM};
+use kabu_types_blockchain::{KabuDataTypes, KabuDataTypesEthereum, KabuTransactionRequest};
 
 #[derive(Clone, Debug, Default)]
 pub struct RequiredState {
@@ -59,13 +59,13 @@ impl RequiredState {
     }
 }
 
-pub struct RequiredStateReader<LDT: LoomDataTypes = LoomDataTypesEthereum> {
+pub struct RequiredStateReader<LDT: KabuDataTypes = KabuDataTypesEthereum> {
     _ldt: PhantomData<LDT>,
 }
 
 impl<LDT> RequiredStateReader<LDT>
 where
-    LDT: LoomDataTypesEVM,
+    LDT: KabuDataTypesEVM,
 {
     pub async fn fetch_calls_and_slots<
         N: Network<TransactionRequest = LDT::TransactionRequest>,

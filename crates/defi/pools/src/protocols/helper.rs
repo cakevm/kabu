@@ -2,8 +2,8 @@ use alloy::primitives::{keccak256, Address, Bytes, B256};
 use alloy::providers::{Network, Provider};
 use eyre::Result;
 
-use loom_defi_abi::uniswap2::IUniswapV2Pair;
-use loom_defi_abi::uniswap3::IUniswapV3Pool;
+use kabu_defi_abi::uniswap2::IUniswapV2Pair;
+use kabu_defi_abi::uniswap3::IUniswapV3Pool;
 
 fn sort_tokens(token0: Address, token1: Address) -> (Address, Address) {
     if token0 < token1 {
@@ -84,7 +84,7 @@ pub fn match_abi(code: &Bytes, selectors: Vec<[u8; 4]>) -> bool {
 #[cfg(test)]
 mod test {
     use super::*;
-    use loom_defi_address_book::{FactoryAddress, TokenAddressEth};
+    use kabu_defi_address_book::{FactoryAddress, TokenAddressEth};
 
     #[test]
     fn test_get_uniswapv2_address() {

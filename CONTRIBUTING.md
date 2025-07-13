@@ -1,5 +1,5 @@
-# Contributing to Loom
-We welcome contributions to Loom! Please read the following guidelines before submitting a pull request.
+# Contributing to kabu
+We welcome contributions to kabu! Please read the following guidelines before submitting a pull request.
 
 ## Run those command before submitting a PR
 Before open a PR, please make sure that all tests are passing and the code is properly formatted.

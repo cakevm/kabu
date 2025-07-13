@@ -1,12 +1,12 @@
-use crate::error::LoomDBError;
+use crate::error::KabuDBError;
 use crate::fast_cache_db::FastDbAccount;
 use alloy::primitives::map::HashMap;
 use alloy::primitives::{Address, U256};
 use revm::state::AccountInfo;
 use revm::DatabaseRef;
 
-pub trait DatabaseLoomExt {
-    fn with_ext_db(&mut self, db: impl DatabaseRef<Error = LoomDBError> + Send + Sync + 'static);
+pub trait DatabaseKabuExt {
+    fn with_ext_db(&mut self, db: impl DatabaseRef<Error = KabuDBError> + Send + Sync + 'static);
     fn is_account(&self, address: &Address) -> bool;
     fn is_slot(&self, address: &Address, slot: &U256) -> bool;
     fn contracts_len(&self) -> usize;

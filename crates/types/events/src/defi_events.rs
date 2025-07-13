@@ -1,9 +1,9 @@
 use alloy_primitives::BlockNumber;
-use loom_types_blockchain::{LoomDataTypes, LoomDataTypesEthereum};
-use loom_types_entities::EntityAddress;
+use kabu_types_blockchain::{KabuDataTypes, KabuDataTypesEthereum};
+use kabu_types_entities::EntityAddress;
 
 #[derive(Clone, Debug)]
-pub enum MarketEvents<LDT: LoomDataTypes = LoomDataTypesEthereum> {
+pub enum MarketEvents<LDT: KabuDataTypes = KabuDataTypesEthereum> {
     BlockHeaderUpdate { block_number: BlockNumber, block_hash: LDT::BlockHash, timestamp: u64, base_fee: u64, next_base_fee: u64 },
     BlockTxUpdate { block_number: BlockNumber, block_hash: LDT::BlockHash },
     BlockLogsUpdate { block_number: BlockNumber, block_hash: LDT::BlockHash },
@@ -12,7 +12,7 @@ pub enum MarketEvents<LDT: LoomDataTypes = LoomDataTypesEthereum> {
 }
 
 #[derive(Clone, Debug)]
-pub enum MempoolEvents<LDT: LoomDataTypes = LoomDataTypesEthereum> {
+pub enum MempoolEvents<LDT: KabuDataTypes = KabuDataTypesEthereum> {
     /// The transaction has a valid nonce and provides enough gas to pay for the base fee of the next block.
     MempoolActualTxUpdate {
         tx_hash: LDT::TxHash,

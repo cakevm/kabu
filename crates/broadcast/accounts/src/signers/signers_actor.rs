@@ -1,16 +1,17 @@
+use crate::kabu_data_types::KabuTx;
 use alloy_primitives::Bytes;
 use eyre::{eyre, Result};
 use tokio::sync::broadcast::error::RecvError;
 use tokio::sync::broadcast::Receiver;
 use tracing::{error, info};
 
-use loom_core_actors::{Actor, ActorResult, Broadcaster, Consumer, Producer, WorkerResult};
-use loom_core_actors_macros::{Accessor, Consumer, Producer};
-use loom_core_blockchain::Blockchain;
-use loom_types_blockchain::{LoomDataTypes, LoomDataTypesEthereum, LoomTx};
-use loom_types_events::{MessageTxCompose, RlpState, TxComposeData, TxComposeMessageType, TxState};
+use kabu_core_actors::{Actor, ActorResult, Broadcaster, Consumer, Producer, WorkerResult};
+use kabu_core_actors_macros::{Accessor, Consumer, Producer};
+use kabu_core_blockchain::Blockchain;
+use kabu_types_blockchain::{KabuDataTypes, KabuDataTypesEthereum, LoomTx};
+use kabu_types_events::{MessageTxCompose, RlpState, TxComposeData, TxComposeMessageType, TxState};
 
-async fn sign_task<LDT: LoomDataTypes>(
+async fn sign_task<LDT: KabuDataTypes>(
     sign_request: TxComposeData<LDT>,
     compose_channel_tx: Broadcaster<MessageTxCompose<LDT>>,
 ) -> Result<()> {
@@ -58,7 +59,7 @@ async fn sign_task<LDT: LoomDataTypes>(
     }
 }
 
-async fn request_listener_worker<LDT: LoomDataTypes>(
+async fn request_listener_worker<LDT: KabuDataTypes>(
     compose_channel_rx: Broadcaster<MessageTxCompose<LDT>>,
     compose_channel_tx: Broadcaster<MessageTxCompose<LDT>>,
 ) -> WorkerResult {
@@ -88,20 +89,20 @@ async fn request_listener_worker<LDT: LoomDataTypes>(
 }
 
 #[derive(Accessor, Consumer, Producer)]
-pub struct TxSignersActor<LDT: LoomDataTypes + 'static = LoomDataTypesEthereum> {
+pub struct TxSignersActor<LDT: KabuDataTypes + 'static = KabuDataTypesEthereum> {
     #[consumer]
     compose_channel_rx: Option<Broadcaster<MessageTxCompose<LDT>>>,
     #[producer]
     compose_channel_tx: Option<Broadcaster<MessageTxCompose<LDT>>>,
 }
 
-impl<LDT: LoomDataTypes + 'static> Default for TxSignersActor<LDT> {
+impl<LDT: KabuDataTypes + 'static> Default for TxSignersActor<LDT> {
     fn default() -> Self {
         Self { compose_channel_rx: None, compose_channel_tx: None }
     }
 }
 
-impl<LDT: LoomDataTypes> TxSignersActor<LDT> {
+impl<LDT: KabuDataTypes> TxSignersActor<LDT> {
     pub fn new() -> TxSignersActor<LDT> {
         TxSignersActor::<LDT>::default()
     }
@@ -111,7 +112,7 @@ impl<LDT: LoomDataTypes> TxSignersActor<LDT> {
     }
 }
 
-impl<LDT: LoomDataTypes> Actor for TxSignersActor<LDT> {
+impl<LDT: KabuDataTypes> Actor for TxSignersActor<LDT> {
     fn start(&self) -> ActorResult {
         let task =
             tokio::task::spawn(request_listener_worker(self.compose_channel_rx.clone().unwrap(), self.compose_channel_tx.clone().unwrap()));

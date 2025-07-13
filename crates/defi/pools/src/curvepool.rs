@@ -5,12 +5,12 @@ use alloy::providers::{Network, Provider};
 use alloy::rpc::types::TransactionRequest;
 use alloy::sol_types::SolCall;
 use eyre::{eyre, OptionExt, Result};
+use kabu_defi_abi::IERC20;
+use kabu_defi_address_book::TokenAddressEth;
+use kabu_evm_utils::{evm_dyn_call, LoomExecuteEvm};
+use kabu_types_entities::required_state::RequiredState;
+use kabu_types_entities::{EntityAddress, Pool, PoolAbiEncoder, PoolClass, PoolProtocol, PreswapRequirement, SwapDirection};
 use lazy_static::lazy_static;
-use loom_defi_abi::IERC20;
-use loom_defi_address_book::TokenAddressEth;
-use loom_evm_utils::{evm_dyn_call, LoomExecuteEvm};
-use loom_types_entities::required_state::RequiredState;
-use loom_types_entities::{EntityAddress, Pool, PoolAbiEncoder, PoolClass, PoolProtocol, PreswapRequirement, SwapDirection};
 use revm::primitives::TxKind;
 use std::any::Any;
 use std::sync::Arc;
@@ -605,12 +605,12 @@ mod tests {
     use alloy::providers::Provider;
     use alloy::rpc::types::BlockNumberOrTag;
     use env_logger::Env as EnvLog;
-    use loom_evm_db::{DatabaseLoomExt, LoomDBType};
-    use loom_evm_utils::LoomEVMWrapper;
-    use loom_node_debug_provider::AnvilDebugProviderFactory;
-    use loom_types_blockchain::LoomDataTypesEthereum;
-    use loom_types_entities::required_state::RequiredStateReader;
-    use loom_types_entities::{MarketState, Pool};
+    use kabu_evm_db::{DatabaseKabuExt, KabuDBType};
+    use kabu_evm_utils::KabuEVMWrapper;
+    use kabu_node_debug_provider::AnvilDebugProviderFactory;
+    use kabu_types_blockchain::KabuDataTypesEthereum;
+    use kabu_types_entities::required_state::RequiredStateReader;
+    use kabu_types_entities::{MarketState, Pool};
     use revm::database::CacheDB;
     use tracing::{debug, error};
 
@@ -623,7 +623,7 @@ mod tests {
 
         let client = AnvilDebugProviderFactory::from_node_on_block(node_url, 20045799).await?;
 
-        let mut market_state = MarketState::new(LoomDBType::new());
+        let mut market_state = MarketState::new(KabuDBType::new());
 
         let curve_contracts = CurveProtocol::get_contracts_vec(client.clone());
 
@@ -633,7 +633,7 @@ mod tests {
             let state_required = pool.get_state_required().unwrap();
 
             let state_required =
-                RequiredStateReader::<LoomDataTypesEthereum>::fetch_calls_and_slots(client.clone(), state_required, Some(20045799))
+                RequiredStateReader::<KabuDataTypesEthereum>::fetch_calls_and_slots(client.clone(), state_required, Some(20045799))
                     .await
                     .unwrap();
             debug!("Pool state fetched {} {}", pool.address, state_required.len());
@@ -649,7 +649,7 @@ mod tests {
             let block_header = client.get_block_by_number(BlockNumberOrTag::Number(20045799)).await.unwrap().unwrap().header;
             debug!("Block {} {}", block_header.number, block_header.timestamp);
 
-            let mut evm = LoomEVMWrapper::new(CacheDB::new(market_state.state_db.clone())).with_header(&block_header);
+            let mut evm = KabuEVMWrapper::new(CacheDB::new(market_state.state_db.clone())).with_header(&block_header);
 
             let tokens = pool.tokens.clone();
             let balances = pool.balances.clone();

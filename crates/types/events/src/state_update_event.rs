@@ -1,13 +1,13 @@
 #![allow(clippy::type_complexity)]
 
 use alloy_consensus::Header;
-use loom_types_blockchain::{LoomDataTypes, LoomDataTypesEVM, LoomDataTypesEthereum};
-use loom_types_entities::{PoolWrapper, SwapDirection};
+use kabu_types_blockchain::{KabuDataTypes, KabuDataTypesEVM, KabuDataTypesEthereum};
+use kabu_types_entities::{PoolWrapper, SwapDirection};
 use revm::DatabaseRef;
 use std::collections::BTreeMap;
 
 #[derive(Clone)]
-pub struct StateUpdateEvent<DB, LDT: LoomDataTypes = LoomDataTypesEthereum> {
+pub struct StateUpdateEvent<DB, LDT: KabuDataTypes = KabuDataTypesEthereum> {
     pub next_block_number: u64,
     pub next_block_timestamp: u64,
     pub next_base_fee: u64,
@@ -22,7 +22,7 @@ pub struct StateUpdateEvent<DB, LDT: LoomDataTypes = LoomDataTypesEthereum> {
 }
 
 #[allow(clippy::too_many_arguments)]
-impl<DB: DatabaseRef, LDT: LoomDataTypes> StateUpdateEvent<DB, LDT> {
+impl<DB: DatabaseRef, LDT: KabuDataTypes> StateUpdateEvent<DB, LDT> {
     pub fn new(
         next_block: u64,
         next_block_timestamp: u64,
@@ -82,7 +82,7 @@ impl<DB: DatabaseRef, LDT: LoomDataTypes> StateUpdateEvent<DB, LDT> {
     }
 }
 
-impl<DB: DatabaseRef, LDT: LoomDataTypesEVM> StateUpdateEvent<DB, LDT> {
+impl<DB: DatabaseRef, LDT: KabuDataTypesEVM> StateUpdateEvent<DB, LDT> {
     pub fn next_header(&self) -> Header {
         Header { number: self.next_block_number, timestamp: self.next_block_timestamp, ..Default::default() }
     }

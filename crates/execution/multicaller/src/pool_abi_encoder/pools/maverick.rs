@@ -1,10 +1,10 @@
 use crate::pool_abi_encoder::ProtocolAbiSwapEncoderTrait;
 use alloy_primitives::{Address, Bytes, U256};
 use alloy_sol_types::SolInterface;
+use kabu_defi_abi::maverick::IMaverickPool;
+use kabu_defi_abi::maverick::IMaverickPool::IMaverickPoolCalls;
+use kabu_types_entities::Pool;
 use lazy_static::lazy_static;
-use loom_defi_abi::maverick::IMaverickPool;
-use loom_defi_abi::maverick::IMaverickPool::IMaverickPoolCalls;
-use loom_types_entities::Pool;
 
 lazy_static! {
     static ref LOWER_LIMIT: U256 = U256::from(4295128740u64);

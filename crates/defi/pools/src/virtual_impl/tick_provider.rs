@@ -1,6 +1,6 @@
 use crate::db_reader::UniswapV3DbReader;
 use alloy::primitives::{Address, U256};
-use loom_defi_uniswap_v3_math::tick_provider::TickProvider;
+use kabu_defi_uniswap_v3_math::tick_provider::TickProvider;
 use revm::DatabaseRef;
 
 pub struct TickProviderEVMDB<DB> {

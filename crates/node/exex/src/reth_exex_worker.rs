@@ -4,12 +4,12 @@ use alloy_primitives::map::HashMap;
 use alloy_primitives::{Address, U256};
 use alloy_rpc_types::{Block, TransactionInfo};
 use futures::TryStreamExt;
-use loom_core_actors::Broadcaster;
-use loom_core_blockchain::Blockchain;
-use loom_evm_utils::reth_types::append_all_matching_block_logs_sealed;
-use loom_node_actor_config::NodeBlockActorConfig;
-use loom_types_blockchain::{GethStateUpdate, LoomDataTypesEthereum, MempoolTx};
-use loom_types_events::{
+use kabu_core_actors::Broadcaster;
+use kabu_core_blockchain::Blockchain;
+use kabu_evm_utils::reth_types::append_all_matching_block_logs_sealed;
+use kabu_node_actor_config::NodeBlockActorConfig;
+use kabu_types_blockchain::{GethStateUpdate, KabuDataTypesEthereum, MempoolTx};
+use kabu_types_events::{
     BlockHeaderEventData, BlockLogs, BlockStateUpdate, BlockUpdate, Message, MessageBlock, MessageBlockHeader, MessageBlockLogs,
     MessageBlockStateUpdate, MessageMempoolDataUpdate, NodeMempoolDataUpdate,
 };
@@ -44,7 +44,7 @@ async fn process_chain(
                 size: None,
             };
             if let Err(e) =
-                block_header_channel.send(MessageBlockHeader::new_with_time(BlockHeaderEventData::<LoomDataTypesEthereum>::new(header)))
+                block_header_channel.send(MessageBlockHeader::new_with_time(BlockHeaderEventData::<KabuDataTypesEthereum>::new(header)))
             {
                 error!(error=?e.to_string(), "block_header_channel.send")
             }
@@ -146,11 +146,11 @@ async fn process_chain(
     Ok(())
 }
 
-pub async fn loom_exex<Node>(mut ctx: ExExContext<Node>, bc: Blockchain, config: NodeBlockActorConfig) -> eyre::Result<()>
+pub async fn kabu_exex<Node>(mut ctx: ExExContext<Node>, bc: Blockchain, config: NodeBlockActorConfig) -> eyre::Result<()>
 where
     Node: FullNodeComponents<Types: NodeTypes<Primitives = EthPrimitives>>,
 {
-    info!("Loom ExEx is started");
+    info!("Kabu ExEx is started");
 
     while let Some(exex_notification) = ctx.notifications.try_next().await? {
         match &exex_notification {
@@ -194,7 +194,7 @@ where
         }
     }
 
-    info!("Loom ExEx is finished");
+    info!("Kabu ExEx is finished");
     Ok(())
 }
 

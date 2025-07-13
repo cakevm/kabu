@@ -1,9 +1,9 @@
 use crate::pool_abi_encoder::ProtocolAbiSwapEncoderTrait;
 use alloy_primitives::{Address, Bytes, I256, U160, U256};
 use alloy_sol_types::SolInterface;
+use kabu_defi_abi::uniswap3::IUniswapV3Pool;
+use kabu_types_entities::Pool;
 use lazy_static::lazy_static;
-use loom_defi_abi::uniswap3::IUniswapV3Pool;
-use loom_types_entities::Pool;
 use std::ops::Sub;
 
 lazy_static! {

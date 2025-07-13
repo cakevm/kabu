@@ -8,11 +8,11 @@ use crate::opcodes_helpers::OpcodesHelpers;
 use crate::pool_abi_encoder::ProtocolAbiSwapEncoderTrait;
 use crate::pool_opcodes_encoder::swap_opcodes_encoders::MulticallerOpcodesPayload;
 use crate::pool_opcodes_encoder::SwapOpcodesEncoderTrait;
-use loom_defi_abi::AbiEncoderHelper;
-use loom_defi_address_book::TokenAddressEth;
-use loom_types_blockchain::{MulticallerCall, MulticallerCalls};
-use loom_types_entities::Pool;
-use loom_types_entities::{PreswapRequirement, SwapAmountType};
+use kabu_defi_abi::AbiEncoderHelper;
+use kabu_defi_address_book::TokenAddressEth;
+use kabu_types_blockchain::{MulticallerCall, MulticallerCalls};
+use kabu_types_entities::Pool;
+use kabu_types_entities::{PreswapRequirement, SwapAmountType};
 
 pub struct CurveSwapOpcodesEncoder;
 

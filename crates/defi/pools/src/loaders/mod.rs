@@ -6,9 +6,9 @@ mod uniswap3;
 use crate::loaders::curve::CurvePoolLoader;
 use alloy::providers::network::Ethereum;
 use alloy::providers::{Network, Provider};
-use loom_types_blockchain::{LoomDataTypes, LoomDataTypesEVM, LoomDataTypesEthereum};
-use loom_types_entities::pool_config::PoolsLoadingConfig;
-use loom_types_entities::{PoolClass, PoolLoader, PoolLoaders};
+use kabu_types_blockchain::{KabuDataTypes, KabuDataTypesEVM, KabuDataTypesEthereum};
+use kabu_types_entities::pool_config::PoolsLoadingConfig;
+use kabu_types_entities::{PoolClass, PoolLoader, PoolLoaders};
 pub use maverick::MaverickPoolLoader;
 pub use uniswap2::UniswapV2PoolLoader;
 pub use uniswap3::UniswapV3PoolLoader;
@@ -23,11 +23,11 @@ macro_rules! pool_loader {
 
         #[derive(Clone)]
 
-        pub struct $name<P, N, LDT = LoomDataTypesEthereum>
+        pub struct $name<P, N, LDT = KabuDataTypesEthereum>
         where
             N: Network,
             P: Provider<N> + Clone,
-            LDT: LoomDataTypes,
+            LDT: KabuDataTypes,
         {
             provider: Option<P>,
             phantom_data: PhantomData<(P, N, LDT)>,
@@ -38,7 +38,7 @@ macro_rules! pool_loader {
         where
             N: Network,
             P: Provider<N> + Clone,
-            LDT: LoomDataTypes,
+            LDT: KabuDataTypes,
         {
             pub fn new() -> Self {
                 Self::default()
@@ -53,7 +53,7 @@ macro_rules! pool_loader {
         where
             N: Network,
             P: Provider<N> + Clone,
-            LDT: LoomDataTypes,
+            LDT: KabuDataTypes,
         {
             fn default() -> Self {
                 Self { provider: None, phantom_data: PhantomData }
@@ -62,11 +62,11 @@ macro_rules! pool_loader {
     };
 }
 
-pub struct PoolLoadersBuilder<P, N = Ethereum, LDT = LoomDataTypesEthereum>
+pub struct PoolLoadersBuilder<P, N = Ethereum, LDT = KabuDataTypesEthereum>
 where
     N: Network,
     P: Provider<N> + 'static,
-    LDT: LoomDataTypes,
+    LDT: KabuDataTypes,
 {
     inner: PoolLoaders<P, N, LDT>,
 }
@@ -75,7 +75,7 @@ impl<P, N, LDT> PoolLoadersBuilder<P, N, LDT>
 where
     N: Network,
     P: Provider<N> + 'static,
-    LDT: LoomDataTypes,
+    LDT: KabuDataTypes,
 {
     pub fn new() -> PoolLoadersBuilder<P, N, LDT> {
         PoolLoadersBuilder { inner: PoolLoaders::<P, N, LDT>::new() }
@@ -102,7 +102,7 @@ impl<P, N, LDT> Default for PoolLoadersBuilder<P, N, LDT>
 where
     N: Network,
     P: Provider<N> + 'static,
-    LDT: LoomDataTypes,
+    LDT: KabuDataTypes,
 {
     fn default() -> Self {
         Self { inner: PoolLoaders::new() }
@@ -113,7 +113,7 @@ impl<P, N, LDT> PoolLoadersBuilder<P, N, LDT>
 where
     N: Network,
     P: Provider<N> + Clone + 'static,
-    LDT: LoomDataTypesEVM + 'static,
+    LDT: KabuDataTypesEVM + 'static,
 {
     pub fn default_pool_loaders(provider: P, config: PoolsLoadingConfig) -> PoolLoaders<P, N, LDT>
     where

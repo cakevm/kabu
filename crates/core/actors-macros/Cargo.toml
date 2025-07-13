@@ -1,5 +1,5 @@
 [package]
-name = "loom-core-actors-macros"
+name = "kabu-core-actors-macros"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true

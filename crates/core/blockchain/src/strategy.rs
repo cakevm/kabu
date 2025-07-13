@@ -1,19 +1,19 @@
-use loom_core_actors::Broadcaster;
-use loom_evm_db::DatabaseLoomExt;
-use loom_types_blockchain::{LoomDataTypes, LoomDataTypesEthereum};
-use loom_types_entities::BlockHistoryState;
-use loom_types_events::{MessageSwapCompose, StateUpdateEvent};
+use kabu_core_actors::Broadcaster;
+use kabu_evm_db::DatabaseKabuExt;
+use kabu_types_blockchain::{KabuDataTypes, KabuDataTypesEthereum};
+use kabu_types_entities::BlockHistoryState;
+use kabu_types_events::{MessageSwapCompose, StateUpdateEvent};
 use revm::{Database, DatabaseCommit, DatabaseRef};
 
 #[derive(Clone)]
-pub struct Strategy<DB: Clone + Send + Sync + 'static, LDT: LoomDataTypes + 'static = LoomDataTypesEthereum> {
+pub struct Strategy<DB: Clone + Send + Sync + 'static, LDT: KabuDataTypes + 'static = KabuDataTypesEthereum> {
     swap_compose_channel: Broadcaster<MessageSwapCompose<DB, LDT>>,
     state_update_channel: Broadcaster<StateUpdateEvent<DB, LDT>>,
 }
 
 impl<
-        DB: DatabaseRef + Database + DatabaseCommit + BlockHistoryState<LDT> + DatabaseLoomExt + Send + Sync + Clone + Default + 'static,
-        LDT: LoomDataTypes,
+        DB: DatabaseRef + Database + DatabaseCommit + BlockHistoryState<LDT> + DatabaseKabuExt + Send + Sync + Clone + Default + 'static,
+        LDT: KabuDataTypes,
     > Default for Strategy<DB, LDT>
 {
     fn default() -> Self {
@@ -22,8 +22,8 @@ impl<
 }
 
 impl<
-        DB: DatabaseRef + Database + DatabaseCommit + BlockHistoryState<LDT> + DatabaseLoomExt + Send + Sync + Clone + Default + 'static,
-        LDT: LoomDataTypes,
+        DB: DatabaseRef + Database + DatabaseCommit + BlockHistoryState<LDT> + DatabaseKabuExt + Send + Sync + Clone + Default + 'static,
+        LDT: KabuDataTypes,
     > Strategy<DB, LDT>
 {
     pub fn new() -> Self {
@@ -33,7 +33,7 @@ impl<
     }
 }
 
-impl<DB: Send + Sync + Clone + 'static, LDT: LoomDataTypes> Strategy<DB, LDT> {
+impl<DB: Send + Sync + Clone + 'static, LDT: KabuDataTypes> Strategy<DB, LDT> {
     pub fn swap_compose_channel(&self) -> Broadcaster<MessageSwapCompose<DB, LDT>> {
         self.swap_compose_channel.clone()
     }

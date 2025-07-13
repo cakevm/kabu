@@ -1,5 +1,5 @@
 [package]
-name = "loom-metrics"
+name = "kabu-metrics"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
@@ -8,10 +8,10 @@ homepage.workspace = true
 repository.workspace = true
 
 [dependencies]
-loom-core-actors.workspace = true
-loom-core-actors-macros.workspace = true
-loom-core-blockchain.workspace = true
-loom-types-events.workspace = true
+kabu-core-actors.workspace = true
+kabu-core-actors-macros.workspace = true
+kabu-core-blockchain.workspace = true
+kabu-types-events.workspace = true
 
 async-trait.workspace = true
 chrono.workspace = true

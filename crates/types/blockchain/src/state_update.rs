@@ -14,7 +14,7 @@ use lazy_static::lazy_static;
 use std::collections::BTreeMap;
 use tracing::{debug, trace};
 
-use loom_node_debug_provider::DebugProviderExt;
+use kabu_node_debug_provider::DebugProviderExt;
 
 pub type GethStateUpdate = BTreeMap<Address, AccountState>;
 

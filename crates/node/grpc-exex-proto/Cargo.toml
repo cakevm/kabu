@@ -1,5 +1,5 @@
 [package]
-name = "loom-node-grpc-exex-proto"
+name = "kabu-node-grpc-exex-proto"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true

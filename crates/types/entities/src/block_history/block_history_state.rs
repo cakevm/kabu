@@ -1,19 +1,19 @@
 use crate::market_state::MarketStateConfig;
 use crate::BlockHistoryEntry;
-use loom_evm_db::{DatabaseLoomExt, LoomDB};
-use loom_types_blockchain::{GethStateUpdate, LoomDataTypes};
+use kabu_evm_db::{DatabaseKabuExt, KabuDB};
+use kabu_types_blockchain::{GethStateUpdate, KabuDataTypes};
 use tracing::{error, trace};
 
 pub trait BlockHistoryState<LDT>
 where
-    LDT: LoomDataTypes,
+    LDT: KabuDataTypes,
 {
     fn apply_update(self, block_history_entry: &BlockHistoryEntry<LDT>, market_state_config: &MarketStateConfig) -> Self;
 }
 
-impl<LDT: LoomDataTypes> BlockHistoryState<LDT> for LoomDB
+impl<LDT: KabuDataTypes> BlockHistoryState<LDT> for KabuDB
 where
-    LDT: LoomDataTypes<StateUpdate = GethStateUpdate>,
+    LDT: KabuDataTypes<StateUpdate = GethStateUpdate>,
 {
     fn apply_update(self, block_history_entry: &BlockHistoryEntry<LDT>, market_state_config: &MarketStateConfig) -> Self {
         let mut db = self;

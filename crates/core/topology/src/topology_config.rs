@@ -1,5 +1,5 @@
 use eyre::Result;
-use loom_broadcast_flashbots::client::RelayConfig;
+use kabu_broadcast_flashbots::client::RelayConfig;
 use serde::Deserialize;
 use std::collections::HashMap;
 use std::fs;

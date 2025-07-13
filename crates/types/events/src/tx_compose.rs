@@ -1,7 +1,7 @@
 use crate::{Message, TxState};
 use alloy_primitives::{BlockNumber, Bytes, U256};
-use loom_types_blockchain::{LoomDataTypes, LoomDataTypesEthereum};
-use loom_types_entities::{EntityAddress, LoomTxSigner, Swap};
+use kabu_types_blockchain::{KabuDataTypes, KabuDataTypesEthereum};
+use kabu_types_entities::{EntityAddress, LoomTxSigner, Swap};
 use std::sync::Arc;
 
 #[derive(Debug, Clone)]
@@ -25,13 +25,13 @@ impl RlpState {
 }
 
 #[derive(Clone, Debug)]
-pub enum TxComposeMessageType<LDT: LoomDataTypes = LoomDataTypesEthereum> {
+pub enum TxComposeMessageType<LDT: KabuDataTypes = KabuDataTypesEthereum> {
     Sign(TxComposeData<LDT>),
     Broadcast(TxComposeData<LDT>),
 }
 
 #[derive(Clone, Debug)]
-pub struct TxComposeData<LDT: LoomDataTypes = LoomDataTypesEthereum> {
+pub struct TxComposeData<LDT: KabuDataTypes = KabuDataTypesEthereum> {
     /// The EOA address that will be used to sign the transaction.
     /// If this is None, the transaction will be signed by a random signer.
     pub eoa: Option<EntityAddress>,
@@ -53,7 +53,7 @@ pub struct TxComposeData<LDT: LoomDataTypes = LoomDataTypesEthereum> {
     pub tips: Option<U256>,
 }
 
-impl<LDT: LoomDataTypes> Default for TxComposeData<LDT> {
+impl<LDT: KabuDataTypes> Default for TxComposeData<LDT> {
     fn default() -> Self {
         Self {
             eoa: None,
@@ -77,9 +77,9 @@ impl<LDT: LoomDataTypes> Default for TxComposeData<LDT> {
     }
 }
 
-pub type MessageTxCompose<LDT = LoomDataTypesEthereum> = Message<TxComposeMessageType<LDT>>;
+pub type MessageTxCompose<LDT = KabuDataTypesEthereum> = Message<TxComposeMessageType<LDT>>;
 
-impl<LDT: LoomDataTypes> MessageTxCompose<LDT> {
+impl<LDT: KabuDataTypes> MessageTxCompose<LDT> {
     pub fn sign(data: TxComposeData<LDT>) -> Self {
         Message::new(TxComposeMessageType::Sign(data))
     }

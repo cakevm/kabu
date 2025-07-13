@@ -6,16 +6,16 @@ use alloy::providers::{Network, Provider};
 use alloy::rpc::types::TransactionRequest;
 use alloy::sol_types::{SolCall, SolInterface};
 use eyre::{eyre, ErrReport, OptionExt, Result};
-use loom_defi_abi::pancake::IPancakeQuoterV2::IPancakeQuoterV2Calls;
-use loom_defi_abi::pancake::IPancakeV3Pool::slot0Return;
-use loom_defi_abi::pancake::{IPancakeQuoterV2, IPancakeV3Pool};
-use loom_defi_abi::uniswap3::IUniswapV3Pool;
-use loom_defi_abi::uniswap_periphery::ITickLens;
-use loom_defi_abi::IERC20;
-use loom_defi_address_book::PeripheryAddress;
-use loom_evm_utils::{evm_dyn_call, LoomExecuteEvm};
-use loom_types_entities::required_state::RequiredState;
-use loom_types_entities::{EntityAddress, Pool, PoolAbiEncoder, PoolClass, PoolProtocol, PreswapRequirement, SwapDirection};
+use kabu_defi_abi::pancake::IPancakeQuoterV2::IPancakeQuoterV2Calls;
+use kabu_defi_abi::pancake::IPancakeV3Pool::slot0Return;
+use kabu_defi_abi::pancake::{IPancakeQuoterV2, IPancakeV3Pool};
+use kabu_defi_abi::uniswap3::IUniswapV3Pool;
+use kabu_defi_abi::uniswap_periphery::ITickLens;
+use kabu_defi_abi::IERC20;
+use kabu_defi_address_book::PeripheryAddress;
+use kabu_evm_utils::{evm_dyn_call, LoomExecuteEvm};
+use kabu_types_entities::required_state::RequiredState;
+use kabu_types_entities::{EntityAddress, Pool, PoolAbiEncoder, PoolClass, PoolProtocol, PreswapRequirement, SwapDirection};
 use std::any::Any;
 use std::fmt::Debug;
 use std::ops::Sub;
@@ -504,12 +504,12 @@ impl PoolAbiEncoder for PancakeV3AbiSwapEncoder {
 #[cfg(test)]
 mod tests {
     use env_logger::Env as EnvLog;
-    use loom_evm_db::LoomDBType;
-    use loom_evm_utils::LoomEVMWrapper;
-    use loom_node_debug_provider::AnvilDebugProviderFactory;
-    use loom_types_blockchain::LoomDataTypesEthereum;
-    use loom_types_entities::required_state::RequiredStateReader;
-    use loom_types_entities::MarketState;
+    use kabu_evm_db::KabuDBType;
+    use kabu_evm_utils::KabuEVMWrapper;
+    use kabu_node_debug_provider::AnvilDebugProviderFactory;
+    use kabu_types_blockchain::KabuDataTypesEthereum;
+    use kabu_types_entities::required_state::RequiredStateReader;
+    use kabu_types_entities::MarketState;
     use revm::database::CacheDB;
     use std::env;
     use tracing::debug;
@@ -538,13 +538,13 @@ mod tests {
         debug!("{:?}", state_required);
 
         let state_update =
-            RequiredStateReader::<LoomDataTypesEthereum>::fetch_calls_and_slots(client.clone(), state_required, None).await.unwrap();
+            RequiredStateReader::<KabuDataTypesEthereum>::fetch_calls_and_slots(client.clone(), state_required, None).await.unwrap();
 
-        let mut market_state = MarketState::new(LoomDBType::default());
+        let mut market_state = MarketState::new(KabuDBType::default());
 
         market_state.state_db.apply_geth_update(state_update);
 
-        let mut evm = LoomEVMWrapper::new(CacheDB::new(market_state.state_db));
+        let mut evm = KabuEVMWrapper::new(CacheDB::new(market_state.state_db));
 
         let (out_amount, gas_used) = pool
             .calculate_out_amount(evm.get_mut(), &pool.token0.into(), &pool.token1.into(), U256::from(pool.liquidity0 / U256::from(100)))

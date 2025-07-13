@@ -10,9 +10,9 @@ use revm::database::{AccountState, CacheDB, EmptyDB};
 use revm::state::{Account, AccountInfo, Bytecode};
 use revm::{DatabaseCommit, DatabaseRef};
 
-use loom_evm_db::fast_cache_db::FastDbAccount;
-use loom_evm_db::fast_hasher::{HashedAddress, HashedAddressCell, SimpleBuildHasher, SimpleHasher};
-use loom_evm_db::{DatabaseHelpers, LoomDB, LoomDBType};
+use kabu_evm_db::fast_cache_db::FastDbAccount;
+use kabu_evm_db::fast_hasher::{HashedAddress, HashedAddressCell, SimpleBuildHasher, SimpleHasher};
+use kabu_evm_db::{DatabaseHelpers, KabuDB, KabuDBType};
 
 const N: usize = 100000;
 const N_ACC: usize = 10000;
@@ -51,7 +51,7 @@ fn fill_cache_db(db: &mut CacheDB<EmptyDB>, addr: &[Address], accs: &[FastDbAcco
     }
 }
 
-fn fill_loom_db(db: &mut LoomDBType, addr: &[Address], accs: &[FastDbAccount]) {
+fn fill_kabu_db(db: &mut KabuDBType, addr: &[Address], accs: &[FastDbAccount]) {
     for a in 0..addr.len() {
         db.insert_account_info(addr[a], accs[a].info.clone());
         for (k, v) in accs[a].storage.iter() {
@@ -89,9 +89,9 @@ fn test_insert_cache_db(addr: &[Address], accs: &[FastDbAccount]) {
     fill_cache_db(&mut db, addr, accs);
 }
 
-fn test_insert_loom_db(addr: &[Address], accs: &[FastDbAccount]) {
-    let mut db = LoomDBType::default();
-    fill_loom_db(&mut db, addr, accs);
+fn test_insert_kabu_db(addr: &[Address], accs: &[FastDbAccount]) {
+    let mut db = KabuDBType::default();
+    fill_kabu_db(&mut db, addr, accs);
 }
 
 fn test_read_cache_db(db: &CacheDB<EmptyDB>, addr: &[Address], accs: &[FastDbAccount]) {
@@ -104,7 +104,7 @@ fn test_read_cache_db(db: &CacheDB<EmptyDB>, addr: &[Address], accs: &[FastDbAcc
     }
 }
 
-fn test_read_loom_db(db: &LoomDBType, addr: &[Address], accs: &[FastDbAccount]) {
+fn test_read_kabu_db(db: &KabuDBType, addr: &[Address], accs: &[FastDbAccount]) {
     for (i, a) in addr.iter().enumerate() {
         for (k, v) in accs[i].storage.iter() {
             if db.storage_ref(*a, *k).unwrap() != *v {
@@ -263,17 +263,17 @@ fn benchmark_test_group_hashmap(c: &mut Criterion) {
     let many_hm = build_many(&addr, &accs);
 
     let mut cache_db = CacheDB::new(EmptyDB::new());
-    let mut loom_db = LoomDBType::default();
+    let mut kabu_db = KabuDBType::default();
 
     fill_cache_db(&mut cache_db, &addr, &accs);
-    fill_loom_db(&mut loom_db, &addr, &accs);
+    fill_kabu_db(&mut kabu_db, &addr, &accs);
 
     let mut group = c.benchmark_group("hashmap_speed");
     group.sample_size(10);
     group.bench_function("test_insert_cache_db", |b| b.iter(|| test_insert_cache_db(&addr, &accs)));
-    group.bench_function("test_insert_loom_db", |b| b.iter(|| test_insert_loom_db(&addr, &accs)));
+    group.bench_function("test_insert_kabu_db", |b| b.iter(|| test_insert_kabu_db(&addr, &accs)));
     group.bench_function("test_read_cache_db", |b| b.iter(|| test_read_cache_db(&cache_db, &addr, &accs)));
-    group.bench_function("test_read_loom_db", |b| b.iter(|| test_read_loom_db(&loom_db, &addr, &accs)));
+    group.bench_function("test_read_kabu_db", |b| b.iter(|| test_read_kabu_db(&kabu_db, &addr, &accs)));
     group.bench_function("test_insert_one_hashmap", |b| b.iter(|| test_build_one(&addr, &accs)));
     group.bench_function("test_insert_many_hashmap", |b| b.iter(|| test_build_many(&addr, &accs)));
     group.bench_function("test_read_one_hashmap", |b| b.iter(|| test_read_one(&addr, &accs, &one_hm)));
@@ -300,23 +300,23 @@ fn benchmark_test_group_trait(c: &mut Criterion) {
     let accs = generate_accounts(N_ACC, N_MEM);
 
     let cache_db = CacheDB::new(EmptyDB::new());
-    let loom_db = LoomDB::default();
+    let kabu_db = KabuDB::default();
 
     //group.bench_function("test_hash_speed", |b| b.iter(|| fill_trait(&mut cache_db, &addr, &accs)));
     group.bench_function("test_fill_trait_cache_db", |b| b.iter(|| fill_trait(&mut cache_db.clone(), &addr, &accs)));
-    group.bench_function("test_fill_trait_loom_db", |b| b.iter(|| fill_trait(&mut loom_db.clone(), &addr, &accs)));
+    group.bench_function("test_fill_trait_kabu_db", |b| b.iter(|| fill_trait(&mut kabu_db.clone(), &addr, &accs)));
 
     let mut cache_db = CacheDB::new(EmptyDB::new());
-    let mut loom_db = LoomDB::default();
+    let mut kabu_db = KabuDB::default();
 
-    fill_trait(&mut loom_db, &addr, &accs);
+    fill_trait(&mut kabu_db, &addr, &accs);
     fill_trait(&mut cache_db, &addr, &accs);
 
     group.bench_function("test_read_trait_cache_db", |b| b.iter(|| read_trait(&cache_db, &addr, &accs)));
-    group.bench_function("test_read_trait_loom_db", |b| b.iter(|| read_trait(&loom_db, &addr, &accs)));
+    group.bench_function("test_read_trait_kabu_db", |b| b.iter(|| read_trait(&kabu_db, &addr, &accs)));
 
     group.bench_function("test_fill_trait_cache_db_filled", |b| b.iter(|| fill_trait(&mut cache_db, &addr, &accs)));
-    group.bench_function("test_fill_trait_loom_db_filled", |b| b.iter(|| fill_trait(&mut loom_db, &addr, &accs)));
+    group.bench_function("test_fill_trait_kabu_db_filled", |b| b.iter(|| fill_trait(&mut kabu_db, &addr, &accs)));
 
     group.finish();
 }

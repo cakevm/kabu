@@ -6,7 +6,7 @@ use crate::swap_path::SwapPath;
 use crate::{CalculationResult, EntityAddress, PoolWrapper, SwapError, SwapStep, Token};
 use alloy_primitives::{I256, U256};
 use eyre::{eyre, Result};
-use loom_evm_utils::LoomExecuteEvm;
+use kabu_evm_utils::LoomExecuteEvm;
 use tracing::debug;
 
 #[derive(Debug, Clone, Default)]
@@ -515,7 +515,7 @@ mod tests {
     use crate::mock_pool::MockPool;
     use alloy_primitives::utils::parse_units;
     use alloy_primitives::Address;
-    use loom_defi_address_book::{TokenAddressEth, UniswapV2PoolAddress, UniswapV3PoolAddress};
+    use kabu_defi_address_book::{TokenAddressEth, UniswapV2PoolAddress, UniswapV3PoolAddress};
     use std::sync::Arc;
 
     fn default_swap_line() -> (MockPool, MockPool, SwapLine) {

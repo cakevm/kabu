@@ -2,10 +2,10 @@ use alloy_primitives::{BlockNumber, TxHash};
 use chrono::{DateTime, Utc};
 
 use crate::FetchState;
-use crate::{LoomDataTypes, LoomDataTypesEthereum};
+use crate::{KabuDataTypes, KabuDataTypesEthereum};
 
 #[derive(Clone, Debug)]
-pub struct MempoolTx<D: LoomDataTypes> {
+pub struct MempoolTx<D: KabuDataTypes> {
     pub source: String,
     pub tx_hash: D::TxHash,
     pub time: DateTime<Utc>,
@@ -17,16 +17,16 @@ pub struct MempoolTx<D: LoomDataTypes> {
     pub pre_state: Option<FetchState<D::StateUpdate>>,
 }
 
-impl MempoolTx<LoomDataTypesEthereum> {
-    pub fn new() -> MempoolTx<LoomDataTypesEthereum> {
+impl MempoolTx<KabuDataTypesEthereum> {
+    pub fn new() -> MempoolTx<KabuDataTypesEthereum> {
         MempoolTx { ..MempoolTx::default() }
     }
-    pub fn new_with_hash(tx_hash: TxHash) -> MempoolTx<LoomDataTypesEthereum> {
+    pub fn new_with_hash(tx_hash: TxHash) -> MempoolTx<KabuDataTypesEthereum> {
         MempoolTx { tx_hash, ..MempoolTx::default() }
     }
 }
 
-impl<LDT: LoomDataTypes> Default for MempoolTx<LDT> {
+impl<LDT: KabuDataTypes> Default for MempoolTx<LDT> {
     fn default() -> Self {
         MempoolTx {
             source: "unknown".to_string(),

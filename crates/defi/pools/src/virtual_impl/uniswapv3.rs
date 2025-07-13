@@ -3,9 +3,9 @@ use crate::virtual_impl::tick_provider::TickProviderEVMDB;
 use crate::UniswapV3Pool;
 use alloy::primitives::{I256, U256};
 use eyre::eyre;
-use loom_defi_uniswap_v3_math::tick_math::{MAX_SQRT_RATIO, MAX_TICK, MIN_SQRT_RATIO, MIN_TICK};
-use loom_evm_db::LoomDBError;
-use loom_types_entities::{EntityAddress, Pool};
+use kabu_defi_uniswap_v3_math::tick_math::{MAX_SQRT_RATIO, MAX_TICK, MIN_SQRT_RATIO, MIN_TICK};
+use kabu_evm_db::KabuDBError;
+use kabu_types_entities::{EntityAddress, Pool};
 use revm::DatabaseRef;
 
 pub struct UniswapV3PoolVirtual;
@@ -82,7 +82,7 @@ pub struct Tick {
 
 impl UniswapV3PoolVirtual {
     pub fn simulate_swap_in_amount_provider(
-        db: &dyn DatabaseRef<Error = LoomDBError>,
+        db: &dyn DatabaseRef<Error = KabuDBError>,
         pool: &UniswapV3Pool,
         token_in: &EntityAddress,
         amount_in: U256,
@@ -123,7 +123,7 @@ impl UniswapV3PoolVirtual {
             };
 
             // Get the next tick from the current tick
-            (step.tick_next, step.initialized) = loom_defi_uniswap_v3_math::tick_bitmap::next_initialized_tick_within_one_word(
+            (step.tick_next, step.initialized) = kabu_defi_uniswap_v3_math::tick_bitmap::next_initialized_tick_within_one_word(
                 &tick_provider,
                 current_state.tick,
                 tick_spacing as i32,
@@ -135,7 +135,7 @@ impl UniswapV3PoolVirtual {
             step.tick_next = step.tick_next.clamp(MIN_TICK, MAX_TICK);
 
             // Get the next sqrt price from the input amount
-            step.sqrt_price_next_x96 = loom_defi_uniswap_v3_math::tick_math::get_sqrt_ratio_at_tick(step.tick_next)?;
+            step.sqrt_price_next_x96 = kabu_defi_uniswap_v3_math::tick_math::get_sqrt_ratio_at_tick(step.tick_next)?;
 
             // Target spot price
             let swap_target_sqrt_ratio = if zero_for_one {
@@ -152,7 +152,7 @@ impl UniswapV3PoolVirtual {
 
             // Compute swap step and update the current state
             (current_state.sqrt_price_x_96, step.amount_in, step.amount_out, step.fee_amount) =
-                loom_defi_uniswap_v3_math::swap_math::compute_swap_step(
+                kabu_defi_uniswap_v3_math::swap_math::compute_swap_step(
                     current_state.sqrt_price_x_96,
                     swap_target_sqrt_ratio,
                     current_state.liquidity,
@@ -194,7 +194,7 @@ impl UniswapV3PoolVirtual {
                 // If the current_state sqrt price is not equal to the step sqrt price, then we are not on the same tick.
                 // Update the current_state.tick to the tick at the current_state.sqrt_price_x_96
             } else if current_state.sqrt_price_x_96 != step.sqrt_price_start_x_96 {
-                current_state.tick = loom_defi_uniswap_v3_math::tick_math::get_tick_at_sqrt_ratio(current_state.sqrt_price_x_96)?;
+                current_state.tick = kabu_defi_uniswap_v3_math::tick_math::get_tick_at_sqrt_ratio(current_state.sqrt_price_x_96)?;
             }
         }
 
@@ -208,7 +208,7 @@ impl UniswapV3PoolVirtual {
     }
 
     pub fn simulate_swap_out_amount_provided(
-        db: &dyn DatabaseRef<Error = LoomDBError>,
+        db: &dyn DatabaseRef<Error = KabuDBError>,
         pool: &UniswapV3Pool,
         token_in: &EntityAddress,
         amount_out: U256,
@@ -249,7 +249,7 @@ impl UniswapV3PoolVirtual {
             let tick_provider = TickProviderEVMDB::new(&db, pool_address);
 
             // Get the next tick from the current tick
-            (step.tick_next, step.initialized) = loom_defi_uniswap_v3_math::tick_bitmap::next_initialized_tick_within_one_word(
+            (step.tick_next, step.initialized) = kabu_defi_uniswap_v3_math::tick_bitmap::next_initialized_tick_within_one_word(
                 &tick_provider,
                 current_state.tick,
                 tick_spacing as i32,
@@ -261,7 +261,7 @@ impl UniswapV3PoolVirtual {
             step.tick_next = step.tick_next.clamp(MIN_TICK, MAX_TICK);
 
             // Get the next sqrt price from the input amount
-            step.sqrt_price_next_x96 = loom_defi_uniswap_v3_math::tick_math::get_sqrt_ratio_at_tick(step.tick_next)?;
+            step.sqrt_price_next_x96 = kabu_defi_uniswap_v3_math::tick_math::get_sqrt_ratio_at_tick(step.tick_next)?;
 
             // Target spot price
             let swap_target_sqrt_ratio = if zero_for_one {
@@ -278,7 +278,7 @@ impl UniswapV3PoolVirtual {
 
             // Compute swap step and update the current state
             (current_state.sqrt_price_x_96, step.amount_in, step.amount_out, step.fee_amount) =
-                loom_defi_uniswap_v3_math::swap_math::compute_swap_step(
+                kabu_defi_uniswap_v3_math::swap_math::compute_swap_step(
                     current_state.sqrt_price_x_96,
                     swap_target_sqrt_ratio,
                     current_state.liquidity,
@@ -319,7 +319,7 @@ impl UniswapV3PoolVirtual {
                 // If the current_state sqrt price is not equal to the step sqrt price, then we are not on the same tick.
                 // Update the current_state.tick to the tick at the current_state.sqrt_price_x_96
             } else if current_state.sqrt_price_x_96 != step.sqrt_price_start_x_96 {
-                current_state.tick = loom_defi_uniswap_v3_math::tick_math::get_tick_at_sqrt_ratio(current_state.sqrt_price_x_96)?;
+                current_state.tick = kabu_defi_uniswap_v3_math::tick_math::get_tick_at_sqrt_ratio(current_state.sqrt_price_x_96)?;
             }
         }
 
@@ -338,7 +338,7 @@ impl UniswapV3PoolVirtual {
 #[cfg(test)]
 mod test {
     use alloy::primitives::U256;
-    use loom_defi_uniswap_v3_math::full_math::mul_div_rounding_up;
+    use kabu_defi_uniswap_v3_math::full_math::mul_div_rounding_up;
 
     #[test]
     fn test_mul_rounding_up() {

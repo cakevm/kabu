@@ -1,5 +1,5 @@
 [package]
-name = "loom-types-entities"
+name = "kabu-types-entities"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
@@ -8,11 +8,11 @@ homepage.workspace = true
 repository.workspace = true
 
 [dependencies]
-loom-defi-address-book.workspace = true
-loom-evm-db.workspace = true
-loom-evm-utils.workspace = true
-loom-node-debug-provider.workspace = true
-loom-types-blockchain.workspace = true
+kabu-defi-address-book.workspace = true
+kabu-evm-db.workspace = true
+kabu-evm-utils.workspace = true
+kabu-node-debug-provider.workspace = true
+kabu-types-blockchain.workspace = true
 
 aes.workspace = true
 async-stream.workspace = true

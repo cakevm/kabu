@@ -10,9 +10,9 @@ use crate::swap_direction::SwapDirection;
 use crate::EntityAddress;
 use alloy_primitives::{Address, Bytes, U256};
 use eyre::{eyre, ErrReport, Result};
-use loom_defi_address_book::FactoryAddress;
-use loom_evm_utils::LoomExecuteEvm;
-use loom_types_blockchain::{LoomDataTypes, LoomDataTypesEthereum};
+use kabu_defi_address_book::FactoryAddress;
+use kabu_evm_utils::LoomExecuteEvm;
+use kabu_types_blockchain::{KabuDataTypes, KabuDataTypesEthereum};
 use serde::{Deserialize, Serialize};
 use strum_macros::{Display, EnumIter, EnumString, VariantNames};
 
@@ -296,7 +296,7 @@ pub struct DefaultAbiSwapEncoder {}
 impl PoolAbiEncoder for DefaultAbiSwapEncoder {}
 
 #[derive(Clone, Debug)]
-pub enum PreswapRequirement<LDT: LoomDataTypes = LoomDataTypesEthereum> {
+pub enum PreswapRequirement<LDT: KabuDataTypes = KabuDataTypesEthereum> {
     Unknown,
     Transfer(LDT::Address),
     Allowance,
@@ -306,7 +306,7 @@ pub enum PreswapRequirement<LDT: LoomDataTypes = LoomDataTypesEthereum> {
 
 impl<LDT> PartialEq for PreswapRequirement<LDT>
 where
-    LDT: LoomDataTypes,
+    LDT: KabuDataTypes,
 {
     fn eq(&self, other: &Self) -> bool {
         match (self, other) {
@@ -320,7 +320,7 @@ where
     }
 }
 
-impl<LDT: LoomDataTypes> PreswapRequirement<LDT> {
+impl<LDT: KabuDataTypes> PreswapRequirement<LDT> {
     pub fn address_or(&self, default_address: LDT::Address) -> LDT::Address {
         match self {
             PreswapRequirement::Transfer(address) => *address,

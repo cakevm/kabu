@@ -1,5 +1,5 @@
 [package]
-name = "loom-node-debug-provider"
+name = "kabu-node-debug-provider"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
@@ -26,7 +26,7 @@ alloy.workspace = true
 
 [dev-dependencies]
 env_logger.workspace = true
-loom-defi-abi.workspace = true
+kabu-defi-abi.workspace = true
 url.workspace = true
 
 alloy-provider.workspace = true

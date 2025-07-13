@@ -1,5 +1,5 @@
 [package]
-name = "loom-types-blockchain"
+name = "kabu-types-blockchain"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
@@ -8,7 +8,7 @@ homepage.workspace = true
 repository.workspace = true
 
 [dependencies]
-loom-node-debug-provider.workspace = true
+kabu-node-debug-provider.workspace = true
 
 chrono.workspace = true
 eyre.workspace = true

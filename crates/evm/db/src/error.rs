@@ -3,7 +3,7 @@ use std::error::Error;
 use std::fmt::{Debug, Display, Formatter};
 
 #[derive(Clone, Default, Debug)]
-pub enum LoomDBError {
+pub enum KabuDBError {
     #[default]
     Nonimportant,
     TransportError,
@@ -11,12 +11,12 @@ pub enum LoomDBError {
     DatabaseError(String),
 }
 
-impl DBErrorMarker for LoomDBError {}
+impl DBErrorMarker for KabuDBError {}
 
-impl Display for LoomDBError {
+impl Display for KabuDBError {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         write!(f, "{self:?}")
     }
 }
 
-impl Error for LoomDBError {}
+impl Error for KabuDBError {}

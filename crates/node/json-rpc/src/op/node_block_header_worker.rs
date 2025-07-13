@@ -8,16 +8,16 @@ use alloy_rpc_types::Header;
 use chrono::Utc;
 use eyre::Result;
 use futures::StreamExt;
-use loom_core_actors::{run_sync, Broadcaster, WorkerResult};
-use loom_types_blockchain::LoomDataTypesOptimism;
-use loom_types_events::{BlockHeaderEventData, MessageBlockHeader};
+use kabu_core_actors::{run_sync, Broadcaster, WorkerResult};
+use kabu_types_blockchain::KabuDataTypesOptimism;
+use kabu_types_events::{BlockHeaderEventData, MessageBlockHeader};
 use op_alloy::network::Optimism;
 use tracing::{error, info};
 
 pub async fn new_op_node_block_header_worker<P>(
     client: P,
     new_block_header_channel: Broadcaster<Header>,
-    block_header_channel: Broadcaster<MessageBlockHeader<LoomDataTypesOptimism>>,
+    block_header_channel: Broadcaster<MessageBlockHeader<KabuDataTypesOptimism>>,
 ) -> WorkerResult
 where
     P: Provider<Optimism> + Send + Sync + Clone + 'static,
@@ -39,7 +39,7 @@ where
                         if let Err(e) =  new_block_header_channel.send(block_header.clone()) {
                             error!("Block hash broadcaster error  {}", e);
                         }
-                        if let Err(e) = block_header_channel.send(MessageBlockHeader::new_with_time(BlockHeaderEventData::<LoomDataTypesOptimism>::new(block_header))) {
+                        if let Err(e) = block_header_channel.send(MessageBlockHeader::new_with_time(BlockHeaderEventData::<KabuDataTypesOptimism>::new(block_header))) {
                             error!("Block header broadcaster error {}", e);
                         }
                     }

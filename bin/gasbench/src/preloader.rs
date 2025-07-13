@@ -1,16 +1,16 @@
 use alloy_network::Ethereum;
 use alloy_provider::Provider;
-use loom_core_actors::SharedState;
-use loom_defi_address_book::{
+use kabu_core_actors::SharedState;
+use kabu_defi_address_book::{
     CurveMetapoolAddress, CurvePoolAddress, PancakeV2PoolAddress, PancakeV3PoolAddress, TokenAddressEth, UniswapV2PoolAddress,
     UniswapV3PoolAddress,
 };
-use loom_defi_market::fetch_and_add_pool_by_pool_id;
-use loom_defi_pools::PoolLoadersBuilder;
-use loom_node_debug_provider::DebugProviderExt;
-use loom_types_blockchain::LoomDataTypesEthereum;
-use loom_types_entities::pool_config::PoolsLoadingConfig;
-use loom_types_entities::{Market, MarketState, PoolClass, Token};
+use kabu_defi_market::fetch_and_add_pool_by_pool_id;
+use kabu_defi_pools::PoolLoadersBuilder;
+use kabu_node_debug_provider::DebugProviderExt;
+use kabu_types_blockchain::KabuDataTypesEthereum;
+use kabu_types_entities::pool_config::PoolsLoadingConfig;
+use kabu_types_entities::{Market, MarketState, PoolClass, Token};
 use revm::{Database, DatabaseCommit, DatabaseRef};
 use std::sync::Arc;
 
@@ -32,7 +32,7 @@ where
 
     drop(market_instance);
 
-    let pool_loaders = Arc::new(PoolLoadersBuilder::<P, Ethereum, LoomDataTypesEthereum>::default_pool_loaders(
+    let pool_loaders = Arc::new(PoolLoadersBuilder::<P, Ethereum, KabuDataTypesEthereum>::default_pool_loaders(
         client.clone(),
         PoolsLoadingConfig::default(),
     ));

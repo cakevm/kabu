@@ -6,6 +6,6 @@ It should be:
 
 - Fast. Caches node request to speed up testing, especially for heavy debug_ requests.
 - Consistent. Works with virtual state, applies operations on it.
-- Convenient. Works with Loom algorithms.
+- Convenient. Works with kabu algorithms.
 
 to be continued...

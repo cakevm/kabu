@@ -5,11 +5,11 @@ use alloy_network::Network;
 use alloy_provider::Provider;
 use tracing::{error, info};
 
-use loom_core_actors::{Actor, ActorResult, Broadcaster, Producer, WorkerResult};
-use loom_core_actors_macros::Producer;
-use loom_core_blockchain::Blockchain;
-use loom_types_entities::PoolLoaders;
-use loom_types_events::LoomTask;
+use kabu_core_actors::{Actor, ActorResult, Broadcaster, Producer, WorkerResult};
+use kabu_core_actors_macros::Producer;
+use kabu_core_blockchain::Blockchain;
+use kabu_types_entities::PoolLoaders;
+use kabu_types_events::LoomTask;
 use tokio_stream::StreamExt;
 
 async fn protocol_pool_loader_worker<P, PL, N>(

@@ -3,9 +3,9 @@ mod test {
     use crate::BlockHistoryActor;
     use alloy_network::Ethereum;
     use alloy_provider::Provider;
-    use loom_core_blockchain::{Blockchain, BlockchainState};
-    use loom_types_blockchain::LoomDataTypesEthereum;
-    use loom_types_events::{BlockLogs, BlockStateUpdate, BlockUpdate, MessageBlockHeader};
+    use kabu_core_blockchain::{Blockchain, BlockchainState};
+    use kabu_types_blockchain::KabuDataTypesEthereum;
+    use kabu_types_events::{BlockLogs, BlockStateUpdate, BlockUpdate, MessageBlockHeader};
     use revm::DatabaseRef;
     use tracing::error;
 
@@ -17,14 +17,14 @@ mod test {
     use alloy_rpc_client::ClientBuilder;
     use alloy_rpc_types::{Block, Filter, Header, Log};
     use eyre::eyre;
-    use loom_core_actors::Actor;
-    use loom_evm_db::{DatabaseLoomExt, LoomDB, LoomDBType};
-    use loom_evm_utils::geth_state_update::{
+    use kabu_core_actors::Actor;
+    use kabu_evm_db::{DatabaseKabuExt, KabuDB, KabuDBType};
+    use kabu_evm_utils::geth_state_update::{
         account_state_add_storage, account_state_with_nonce_and_balance, geth_state_update_add_account,
     };
-    use loom_types_blockchain::{GethStateUpdate, GethStateUpdateVec};
-    use loom_types_entities::MarketState;
-    use loom_types_events::{BlockHeaderEventData, Message};
+    use kabu_types_blockchain::{GethStateUpdate, GethStateUpdateVec};
+    use kabu_types_entities::MarketState;
+    use kabu_types_events::{BlockHeaderEventData, Message};
     use std::time::Duration;
     use tracing::info;
 
@@ -87,7 +87,7 @@ mod test {
     async fn test_actor_block_history_actor_chain_head_worker<P>(
         provider: P,
         bc: Blockchain,
-        state: BlockchainState<LoomDB, LoomDataTypesEthereum>,
+        state: BlockchainState<KabuDB, KabuDataTypesEthereum>,
     ) -> eyre::Result<()>
     where
         P: Provider<Ethereum> + Send + Sync + Clone + 'static,
@@ -103,7 +103,7 @@ mod test {
 
         let state_update_0 = vec![state_0];
 
-        let mut db = LoomDBType::default();
+        let mut db = KabuDBType::default();
         db.apply_geth_update_vec(state_update_0);
 
         state.market_state().write().await.state_db = db;
@@ -191,7 +191,7 @@ mod test {
     #[tokio::test]
     async fn test_actor_block_history_actor_chain_head() -> eyre::Result<()> {
         let _ = env_logger::try_init_from_env(env_logger::Env::default().default_filter_or(
-            "debug,loom_types_entities::block_history=trace,tokio_tungstenite=off,tungstenite=off,hyper_util=off,alloy_transport_http=off",
+            "debug,kabu_types_entities::block_history=trace,tokio_tungstenite=off,tungstenite=off,hyper_util=off,alloy_transport_http=off",
         ));
 
         let anvil = Anvil::new().try_spawn()?;
@@ -200,9 +200,9 @@ mod test {
 
         let blockchain = Blockchain::new(1);
 
-        let market_state = MarketState::new(LoomDB::empty());
+        let market_state = MarketState::new(KabuDB::empty());
 
-        let bc_state = BlockchainState::<LoomDB, LoomDataTypesEthereum>::new_with_market_state(market_state);
+        let bc_state = BlockchainState::<KabuDB, KabuDataTypesEthereum>::new_with_market_state(market_state);
 
         BlockHistoryActor::new(provider.clone()).on_bc(&blockchain, &bc_state).start()?;
 
@@ -272,9 +272,9 @@ mod test {
 
         let blockchain = Blockchain::new(1);
 
-        let market_state = MarketState::new(LoomDB::empty());
+        let market_state = MarketState::new(KabuDB::empty());
 
-        let bc_state = BlockchainState::<LoomDB, LoomDataTypesEthereum>::new_with_market_state(market_state);
+        let bc_state = BlockchainState::<KabuDB, KabuDataTypesEthereum>::new_with_market_state(market_state);
 
         BlockHistoryActor::new(provider.clone()).on_bc(&blockchain, &bc_state).start()?;
 

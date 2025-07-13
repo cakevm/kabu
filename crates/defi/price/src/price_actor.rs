@@ -6,13 +6,13 @@ use std::time::Duration;
 use alloy_network::Network;
 use alloy_primitives::{address, Address, U256};
 use alloy_provider::Provider;
-use loom_core_actors::{Accessor, Actor, ActorResult, SharedState, WorkerResult};
-use loom_core_actors_macros::Accessor;
-use loom_core_blockchain::Blockchain;
-use loom_defi_address_book::TokenAddressEth;
-use loom_defi_pools::protocols::CurveProtocol;
-use loom_defi_pools::CurvePool;
-use loom_types_entities::{Market, Pool};
+use kabu_core_actors::{Accessor, Actor, ActorResult, SharedState, WorkerResult};
+use kabu_core_actors_macros::Accessor;
+use kabu_core_blockchain::Blockchain;
+use kabu_defi_address_book::TokenAddressEth;
+use kabu_defi_pools::protocols::CurveProtocol;
+use kabu_defi_pools::CurvePool;
+use kabu_types_entities::{Market, Pool};
 use tracing::{debug, error, info};
 
 async fn price_worker<N: Network, P: Provider<N> + Clone + 'static>(client: P, market: SharedState<Market>, once: bool) -> WorkerResult {

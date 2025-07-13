@@ -3,9 +3,9 @@ use alloy::primitives::aliases::U24;
 use alloy::primitives::{Address, TxKind};
 use alloy::rpc::types::TransactionRequest;
 use alloy::sol_types::{SolCall, SolInterface};
-use loom_defi_abi::uniswap3::IUniswapV3Pool;
-use loom_defi_abi::uniswap3::IUniswapV3Pool::slot0Return;
-use loom_evm_utils::{evm_dyn_call, LoomExecuteEvm};
+use kabu_defi_abi::uniswap3::IUniswapV3Pool;
+use kabu_defi_abi::uniswap3::IUniswapV3Pool::slot0Return;
+use kabu_evm_utils::{evm_dyn_call, LoomExecuteEvm};
 
 pub struct UniswapV3EvmStateReader {}
 

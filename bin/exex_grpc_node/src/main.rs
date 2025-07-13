@@ -9,7 +9,7 @@ use tokio::sync::{broadcast, mpsc};
 use tokio_stream::{wrappers::ReceiverStream, StreamExt};
 use tonic::{transport::Server, Request, Response, Status};
 
-use loom_node_grpc_exex_proto::proto::{
+use kabu_node_grpc_exex_proto::proto::{
     ex_ex_notification,
     remote_ex_ex_server::{RemoteExEx, RemoteExExServer},
     Block as ProtoBlock, Chain, ExExNotification as ProtoExExNotification, ReceiptsNotification as ProtoReceiptNotification,

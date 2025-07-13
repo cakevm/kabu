@@ -1,9 +1,9 @@
 use async_trait::async_trait;
 use eyre::eyre;
 use influxdb::{Client, ReadQuery, WriteQuery};
-use loom_core_actors::{Actor, ActorResult, Broadcaster, Consumer, WorkerResult};
-use loom_core_actors_macros::Consumer;
-use loom_core_blockchain::Blockchain;
+use kabu_core_actors::{Actor, ActorResult, Broadcaster, Consumer, WorkerResult};
+use kabu_core_actors_macros::Consumer;
+use kabu_core_blockchain::Blockchain;
 use std::collections::HashMap;
 use std::time::Duration;
 use tokio::time::timeout;

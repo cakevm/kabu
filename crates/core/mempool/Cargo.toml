@@ -1,5 +1,5 @@
 [package]
-name = "loom-core-mempool"
+name = "kabu-core-mempool"
 edition.workspace = true
 exclude.workspace = true
 homepage.workspace = true
@@ -9,11 +9,11 @@ rust-version.workspace = true
 version.workspace = true
 
 [dependencies]
-loom-core-actors.workspace = true
-loom-core-actors-macros.workspace = true
-loom-core-blockchain.workspace = true
-loom-types-blockchain.workspace = true
-loom-types-events.workspace = true
+kabu-core-actors.workspace = true
+kabu-core-actors-macros.workspace = true
+kabu-core-blockchain.workspace = true
+kabu-types-blockchain.workspace = true
+kabu-types-events.workspace = true
 
 chrono.workspace = true
 eyre.workspace = true

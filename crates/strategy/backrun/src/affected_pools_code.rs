@@ -6,14 +6,14 @@ use std::collections::BTreeMap;
 use std::sync::Arc;
 use tracing::{debug, error};
 
-use loom_core_actors::SharedState;
-use loom_defi_pools::protocols::{UniswapV2Protocol, UniswapV3Protocol};
-use loom_defi_pools::state_readers::UniswapV3EvmStateReader;
-use loom_defi_pools::{MaverickPool, PancakeV3Pool, UniswapV2Pool, UniswapV3Pool};
-use loom_evm_db::{AlloyDB, LoomDB};
-use loom_evm_utils::LoomEVMWrapper;
-use loom_types_blockchain::GethStateUpdateVec;
-use loom_types_entities::{get_protocol_by_factory, EntityAddress, Market, MarketState, Pool, PoolProtocol, PoolWrapper, SwapDirection};
+use kabu_core_actors::SharedState;
+use kabu_defi_pools::protocols::{UniswapV2Protocol, UniswapV3Protocol};
+use kabu_defi_pools::state_readers::UniswapV3EvmStateReader;
+use kabu_defi_pools::{MaverickPool, PancakeV3Pool, UniswapV2Pool, UniswapV3Pool};
+use kabu_evm_db::{AlloyDB, KabuDB};
+use kabu_evm_utils::KabuEVMWrapper;
+use kabu_types_blockchain::GethStateUpdateVec;
+use kabu_types_entities::{get_protocol_by_factory, EntityAddress, Market, MarketState, Pool, PoolProtocol, PoolWrapper, SwapDirection};
 
 pub async fn get_affected_pools_from_code<P, N>(
     client: P,
@@ -24,7 +24,7 @@ where
     N: Network,
     P: Provider<N> + Send + Sync + Clone + 'static,
 {
-    let mut market_state = MarketState::new(LoomDB::new());
+    let mut market_state = MarketState::new(KabuDB::new());
 
     market_state.state_db.apply_geth_state_update(state_update, true, false);
 
@@ -47,7 +47,7 @@ where
 
                             let state_db = market_state.state_db.clone().with_ext_db(ext_db);
 
-                            let mut evm = LoomEVMWrapper::new(state_db);
+                            let mut evm = KabuEVMWrapper::new(state_db);
 
                             match UniswapV3EvmStateReader::factory(evm.get_mut(), *address) {
                                 Ok(_factory_address) => match UniswapV2Pool::fetch_pool_data_evm(evm.get_mut(), *address) {
@@ -88,7 +88,7 @@ where
 
                             let state_db = market_state.state_db.clone().with_ext_db(ext_db);
 
-                            let mut evm = LoomEVMWrapper::new(state_db);
+                            let mut evm = KabuEVMWrapper::new(state_db);
 
                             match UniswapV3EvmStateReader::factory(evm.get_mut(), *address) {
                                 Ok(factory_address) => {

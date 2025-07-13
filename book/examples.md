@@ -14,8 +14,8 @@ use alloy::{
 use alloy_provider::RootProvider;
 use alloy_rpc_types::BlockId;
 use dotenv::dotenv;
-use loom_defi_abi::uniswap2::IUniswapV2Pair;
-use loom_node_debug_provider::{AnvilDebugProvider, AnvilDebugProviderFactory};
+use kabu_defi_abi::uniswap2::IUniswapV2Pair;
+use kabu_node_debug_provider::{AnvilDebugProvider, AnvilDebugProviderFactory};
 use std::result::Result;
 
 async fn fetch_pools(

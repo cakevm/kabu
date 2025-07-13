@@ -1,4 +1,4 @@
-use loom_evm_db::LoomDB;
+use kabu_evm_db::KabuDB;
 use std::env;
 use std::process::exit;
 use std::time::Duration;
@@ -13,20 +13,20 @@ use eyre::Result;
 use tokio::select;
 use url::Url;
 
-use loom_node_debug_provider::HttpCachedTransport;
+use kabu_node_debug_provider::HttpCachedTransport;
 
-use loom_core_blockchain::{Blockchain, BlockchainState, Strategy};
-use loom_core_blockchain_actors::BlockchainActors;
-use loom_defi_abi::AbiEncoderHelper;
-use loom_defi_address_book::{TokenAddressEth, UniswapV3PoolAddress};
-use loom_defi_pools::state_readers::ERC20StateReader;
-use loom_evm_db::DatabaseLoomExt;
-use loom_evm_utils::{LoomEVMWrapper, NWETH};
-use loom_execution_multicaller::MulticallerSwapEncoder;
-use loom_node_player::NodeBlockPlayerActor;
-use loom_types_entities::required_state::RequiredState;
-use loom_types_entities::{EntityAddress, MarketState, PoolClass, Swap, SwapAmountType, SwapLine};
-use loom_types_events::{MessageSwapCompose, SwapComposeData, TxComposeData};
+use kabu_core_blockchain::{Blockchain, BlockchainState, Strategy};
+use kabu_core_blockchain_actors::BlockchainActors;
+use kabu_defi_abi::AbiEncoderHelper;
+use kabu_defi_address_book::{TokenAddressEth, UniswapV3PoolAddress};
+use kabu_defi_pools::state_readers::ERC20StateReader;
+use kabu_evm_db::DatabaseKabuExt;
+use kabu_evm_utils::{KabuEVMWrapper, NWETH};
+use kabu_execution_multicaller::MulticallerSwapEncoder;
+use kabu_node_player::NodeBlockPlayerActor;
+use kabu_types_entities::required_state::RequiredState;
+use kabu_types_entities::{EntityAddress, MarketState, PoolClass, Swap, SwapAmountType, SwapLine};
+use kabu_types_events::{MessageSwapCompose, SwapComposeData, TxComposeData};
 use tracing::{debug, error, info};
 use tracing_subscriber::layer::SubscriberExt;
 use tracing_subscriber::util::SubscriberInitExt;
@@ -44,7 +44,7 @@ async fn main() -> Result<()> {
     let start_block_number = 20179184;
 
     let env_filter = EnvFilter::try_from_default_env().unwrap_or_else(|_| {
-        "debug,alloy_rpc_client=off,loom_node_debug_provider=info,alloy_transport_http=off,hyper_util=off,loom_core_block_history=trace"
+        "debug,alloy_rpc_client=off,kabu_node_debug_provider=info,alloy_transport_http=off,hyper_util=off,kabu_core_block_history=trace"
             .into()
     });
     let fmt_layer = fmt::Layer::default().with_thread_ids(true).with_file(false).with_line_number(true).with_filter(env_filter);
@@ -69,11 +69,11 @@ async fn main() -> Result<()> {
     // new blockchain
     let bc = Blockchain::new(1);
 
-    let bc_state = BlockchainState::new_with_market_state(MarketState::new(LoomDB::empty()));
+    let bc_state = BlockchainState::new_with_market_state(MarketState::new(KabuDB::empty()));
 
     let market_state = bc_state.market_state();
 
-    let strategy = Strategy::<LoomDB>::new();
+    let strategy = Strategy::<KabuDB>::new();
 
     let swap_encoder = MulticallerSwapEncoder::default();
 
@@ -194,7 +194,7 @@ async fn main() -> Result<()> {
                         state_db.apply_geth_update_vec(state_update.state_update);
 
 
-                        let mut evm = LoomEVMWrapper::new(state_db.clone());
+                        let mut evm = KabuEVMWrapper::new(state_db.clone());
                         if let Ok(balance) = ERC20StateReader::balance_of(evm.get_mut(), TokenAddressEth::WETH, TARGET_ADDRESS ) {
                             info!("------WETH Balance of {} : {}", TARGET_ADDRESS, balance);
                             let fetched_balance = CallBuilder::<(), RootProvider, ()>::new_raw(node_provider.clone(), AbiEncoderHelper::encode_erc20_balance_of(TARGET_ADDRESS)).to(TokenAddressEth::WETH).block(cur_header.number.into()).call().await?;

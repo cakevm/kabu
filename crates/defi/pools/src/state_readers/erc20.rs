@@ -3,8 +3,8 @@ use alloy::primitives::{Address, TxKind, U256};
 use alloy::rpc::types::TransactionRequest;
 use alloy::sol_types::{SolCall, SolInterface};
 use eyre::Result;
-use loom_defi_abi::IERC20;
-use loom_evm_utils::{evm_call, LoomExecuteEvm};
+use kabu_defi_abi::IERC20;
+use kabu_evm_utils::{evm_call, LoomExecuteEvm};
 
 pub struct ERC20StateReader {}
 

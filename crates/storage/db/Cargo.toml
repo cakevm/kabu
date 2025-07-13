@@ -1,5 +1,5 @@
 [package]
-name = "loom-storage-db"
+name = "kabu-storage-db"
 edition.workspace = true
 exclude.workspace = true
 homepage.workspace = true

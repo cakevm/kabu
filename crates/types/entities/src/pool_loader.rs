@@ -4,8 +4,8 @@ use alloy_network::{Ethereum, Network};
 use alloy_primitives::Bytes;
 use alloy_provider::Provider;
 use eyre::{eyre, Result};
-use loom_evm_utils::LoomExecuteEvm;
-use loom_types_blockchain::{LoomDataTypes, LoomDataTypesEVM, LoomDataTypesEthereum};
+use kabu_evm_utils::LoomExecuteEvm;
+use kabu_types_blockchain::{KabuDataTypes, KabuDataTypesEVM, KabuDataTypesEthereum};
 use std::collections::HashMap;
 use std::future::Future;
 use std::pin::Pin;
@@ -13,11 +13,11 @@ use std::sync::Arc;
 use tokio_stream::Stream;
 
 #[allow(clippy::type_complexity)]
-pub trait PoolLoader<P, N, LDT = LoomDataTypesEthereum>: Send + Sync + 'static
+pub trait PoolLoader<P, N, LDT = KabuDataTypesEthereum>: Send + Sync + 'static
 where
     N: Network,
     P: Provider<N>,
-    LDT: Send + Sync + LoomDataTypes,
+    LDT: Send + Sync + KabuDataTypes,
 {
     fn get_pool_class_by_log(&self, log_entry: &LDT::Log) -> Option<(EntityAddress, PoolClass)>;
     fn fetch_pool_by_id<'a>(&'a self, pool_id: EntityAddress) -> Pin<Box<dyn Future<Output = Result<PoolWrapper>> + Send + 'a>>;
@@ -31,11 +31,11 @@ where
     fn protocol_loader(&self) -> Result<Pin<Box<dyn Stream<Item = (EntityAddress, PoolClass)> + Send>>>;
 }
 
-pub struct PoolLoaders<P, N = Ethereum, LDT = LoomDataTypesEthereum>
+pub struct PoolLoaders<P, N = Ethereum, LDT = KabuDataTypesEthereum>
 where
     N: Network,
     P: Provider<N> + 'static,
-    LDT: LoomDataTypes,
+    LDT: KabuDataTypes,
 {
     provider: Option<P>,
     config: Option<PoolsLoadingConfig>,
@@ -46,7 +46,7 @@ impl<P, N, LDT> PoolLoaders<P, N, LDT>
 where
     N: Network,
     P: Provider<N> + 'static,
-    LDT: LoomDataTypes,
+    LDT: KabuDataTypes,
 {
     pub fn new() -> Self {
         Self::default()
@@ -71,7 +71,7 @@ impl<P, N, LDT> Default for PoolLoaders<P, N, LDT>
 where
     N: Network,
     P: Provider<N> + 'static,
-    LDT: LoomDataTypes,
+    LDT: KabuDataTypes,
 {
     fn default() -> Self {
         Self { provider: None, map: Default::default(), config: None }
@@ -82,9 +82,9 @@ impl<P, N, LDT> PoolLoaders<P, N, LDT>
 where
     N: Network,
     P: Provider<N> + 'static,
-    LDT: LoomDataTypesEVM + 'static,
+    LDT: KabuDataTypesEVM + 'static,
 {
-    pub fn determine_pool_class(&self, log_entry: &<LoomDataTypesEthereum as LoomDataTypes>::Log) -> Option<(EntityAddress, PoolClass)> {
+    pub fn determine_pool_class(&self, log_entry: &<KabuDataTypesEthereum as KabuDataTypes>::Log) -> Option<(EntityAddress, PoolClass)> {
         for (pool_class, pool_loader) in self.map.iter() {
             if let Some((pool_id, pool_class)) = pool_loader.get_pool_class_by_log(log_entry) {
                 return Some((pool_id, pool_class));
@@ -96,7 +96,7 @@ where
     /*pub fn load_pool_with_provider<'a>(
         &'a self,
         provider: P,
-        pool_id: PoolId<LoomDataTypesEthereum>,
+        pool_id: PoolId<KabuDataTypesEthereum>,
         pool_class: &'a PoolClass,
     ) -> Pin<Box<dyn Future<Output = Result<PoolWrapper>> + Send + 'a>>
     where

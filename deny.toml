@@ -28,10 +28,11 @@ name = "ring"
 
 [advisories]
 ignore = [
-  # fast-float used in revm-inspectors - https://rustsec.org/advisories/RUSTSEC-2024-0379
-  "RUSTSEC-2024-0379",
-  # rustls used in alloy-transport-ws - https://rustsec.org/advisories/RUSTSEC-2024-0399
-  "RUSTSEC-2024-0399",
+  # Temporary accept those until all crates are updated
+  "RUSTSEC-2024-0436",
+  "RUSTSEC-2025-0022",
+  "RUSTSEC-2025-0023",
+  "RUSTSEC-2025-0024",
 ]
 yanked = "warn"
 
@@ -39,4 +40,4 @@ yanked = "warn"
 multiple-versions = "allow"
 
 [sources]
-allow-git = ["https://github.com/paradigmxyz/reth"]
+allow-git = ["https://github.com/alloy-rs/evm", "https://github.com/paradigmxyz/reth"]

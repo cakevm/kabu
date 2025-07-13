@@ -1,5 +1,5 @@
 # Custom messages
-If you like to add new messages without modifying Loom you can easily add a custom struct like `Blockchain` to keep the references for states and channels.
+If you like to add new messages without modifying kabu you can easily add a custom struct like `Blockchain` to keep the references for states and channels.
 
 ## Custom Blockchain
 ```rust,ignore

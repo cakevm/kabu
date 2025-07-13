@@ -5,16 +5,16 @@ use revm::{Database, DatabaseCommit, DatabaseRef};
 use tokio::sync::broadcast::error::RecvError;
 use tracing::{debug, error, info};
 
-use loom_core_actors::{subscribe, Accessor, Actor, ActorResult, Broadcaster, Consumer, Producer, SharedState, WorkerResult};
-use loom_core_actors_macros::{Accessor, Consumer, Producer};
-use loom_core_blockchain::{Blockchain, Strategy};
-use loom_evm_db::LoomDBError;
-use loom_evm_utils::LoomEVMWrapper;
-use loom_types_entities::{LatestBlock, Swap, SwapStep};
-use loom_types_events::{MarketEvents, MessageSwapCompose, SwapComposeData, SwapComposeMessage};
+use kabu_core_actors::{subscribe, Accessor, Actor, ActorResult, Broadcaster, Consumer, Producer, SharedState, WorkerResult};
+use kabu_core_actors_macros::{Accessor, Consumer, Producer};
+use kabu_core_blockchain::{Blockchain, Strategy};
+use kabu_evm_db::KabuDBError;
+use kabu_evm_utils::KabuEVMWrapper;
+use kabu_types_entities::{LatestBlock, Swap, SwapStep};
+use kabu_types_events::{MarketEvents, MessageSwapCompose, SwapComposeData, SwapComposeMessage};
 
 async fn arb_swap_steps_optimizer_task<
-    DB: DatabaseRef<Error = LoomDBError> + Database<Error = LoomDBError> + DatabaseCommit + Send + Sync + Clone,
+    DB: DatabaseRef<Error = KabuDBError> + Database<Error = KabuDBError> + DatabaseCommit + Send + Sync + Clone,
 >(
     compose_channel_tx: Broadcaster<MessageSwapCompose<DB>>,
     state_db: DB,
@@ -26,7 +26,7 @@ async fn arb_swap_steps_optimizer_task<
     if let Swap::BackrunSwapSteps((sp0, sp1)) = request.swap {
         let start_time = chrono::Local::now();
 
-        let mut evm = LoomEVMWrapper::new(state_db).with_header(&header);
+        let mut evm = KabuEVMWrapper::new(state_db).with_header(&header);
         evm.get_mut().modify_block(|block| {
             block.number += 1;
             block.timestamp += 12;
@@ -57,7 +57,7 @@ async fn arb_swap_steps_optimizer_task<
 }
 
 async fn arb_swap_path_merger_worker<
-    DB: DatabaseRef<Error = LoomDBError> + Database<Error = LoomDBError> + DatabaseCommit + Send + Sync + Clone + 'static,
+    DB: DatabaseRef<Error = KabuDBError> + Database<Error = KabuDBError> + DatabaseCommit + Send + Sync + Clone + 'static,
 >(
     multicaller_address: Address,
     latest_block: SharedState<LatestBlock>,
@@ -207,7 +207,7 @@ where
 
 impl<DB> Actor for ArbSwapPathMergerActor<DB>
 where
-    DB: DatabaseRef<Error = LoomDBError> + Database<Error = LoomDBError> + DatabaseCommit + Send + Sync + Clone + 'static,
+    DB: DatabaseRef<Error = KabuDBError> + Database<Error = KabuDBError> + DatabaseCommit + Send + Sync + Clone + 'static,
 {
     fn start(&self) -> ActorResult {
         let task = tokio::task::spawn(arb_swap_path_merger_worker(
@@ -228,14 +228,14 @@ where
 #[cfg(test)]
 mod test {
     use alloy_primitives::{Address, U256};
-    use loom_evm_db::LoomDB;
-    use loom_types_entities::{Swap, SwapAmountType, SwapLine, SwapPath, Token};
-    use loom_types_events::SwapComposeData;
+    use kabu_evm_db::KabuDB;
+    use kabu_types_entities::{Swap, SwapAmountType, SwapLine, SwapPath, Token};
+    use kabu_types_events::SwapComposeData;
     use std::sync::Arc;
 
     #[test]
     pub fn test_sort() {
-        let mut ready_requests: Vec<SwapComposeData<LoomDB>> = Vec::new();
+        let mut ready_requests: Vec<SwapComposeData<KabuDB>> = Vec::new();
         let token = Arc::new(Token::new(Address::random()));
 
         let sp0 = SwapLine {

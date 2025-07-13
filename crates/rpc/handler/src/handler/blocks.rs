@@ -2,7 +2,7 @@ use crate::dto::block::BlockHeader;
 use axum::extract::State;
 use axum::http::StatusCode;
 use axum::Json;
-use loom_rpc_state::AppState;
+use kabu_rpc_state::AppState;
 use revm::{DatabaseCommit, DatabaseRef};
 
 /// Get latest block

@@ -1,5 +1,5 @@
 use alloy_primitives::{Address, Bytes, U256};
-use loom_types_entities::Pool;
+use kabu_types_entities::Pool;
 
 pub use abi_encoder::*;
 mod abi_encoder;

@@ -10,13 +10,13 @@ use chrono::{DateTime, Duration, Local, TimeDelta};
 use clap::Parser;
 use eyre::{eyre, Result};
 use futures::future::join_all;
-use loom_core_blockchain::{Blockchain, BlockchainState, Strategy};
-use loom_core_blockchain_actors::BlockchainActors;
-use loom_evm_db::LoomDB;
-use loom_execution_multicaller::MulticallerSwapEncoder;
-use loom_node_actor_config::NodeBlockActorConfig;
-use loom_types_blockchain::LoomDataTypesEthereum;
-use loom_types_events::MempoolEvents;
+use kabu_core_blockchain::{Blockchain, BlockchainState, Strategy};
+use kabu_core_blockchain_actors::BlockchainActors;
+use kabu_evm_db::KabuDB;
+use kabu_execution_multicaller::MulticallerSwapEncoder;
+use kabu_node_actor_config::NodeBlockActorConfig;
+use kabu_types_blockchain::KabuDataTypesEthereum;
+use kabu_types_events::MempoolEvents;
 use std::fmt::Formatter;
 use std::{collections::HashMap, fmt::Display, sync::Arc};
 use tokio::{select, sync::RwLock, task::JoinHandle};
@@ -231,8 +231,8 @@ async fn collect_stat_task(
 ) -> Result<()> {
     let bc = Blockchain::new(1);
 
-    let bc_state = BlockchainState::<LoomDB, LoomDataTypesEthereum>::new();
-    let strategy = Strategy::<LoomDB>::new();
+    let bc_state = BlockchainState::<KabuDB, KabuDataTypesEthereum>::new();
+    let strategy = Strategy::<KabuDB>::new();
 
     let encoder = MulticallerSwapEncoder::default();
 

@@ -1,21 +1,21 @@
 use eyre::eyre;
 use influxdb::{Timestamp, WriteQuery};
-use loom_core_actors::Producer;
-use loom_core_actors::{subscribe, Actor, ActorResult, Broadcaster, WorkerResult};
-use loom_core_actors::{Accessor, Consumer, SharedState};
-use loom_core_actors_macros::{Accessor, Consumer, Producer};
-use loom_core_blockchain::{Blockchain, BlockchainState};
-use loom_evm_db::DatabaseLoomExt;
-use loom_types_blockchain::{LoomDataTypes, LoomHeader};
-use loom_types_entities::{Market, MarketState};
-use loom_types_events::MessageBlockHeader;
+use kabu_core_actors::Producer;
+use kabu_core_actors::{subscribe, Actor, ActorResult, Broadcaster, WorkerResult};
+use kabu_core_actors::{Accessor, Consumer, SharedState};
+use kabu_core_actors_macros::{Accessor, Consumer, Producer};
+use kabu_core_blockchain::{Blockchain, BlockchainState};
+use kabu_evm_db::DatabaseKabuExt;
+use kabu_types_blockchain::{KabuDataTypes, KabuHeader};
+use kabu_types_entities::{Market, MarketState};
+use kabu_types_events::MessageBlockHeader;
 use revm::DatabaseRef;
 use std::time::Duration;
 use tikv_jemalloc_ctl::stats;
 use tokio::sync::broadcast::error::RecvError;
 use tracing::{error, info};
 
-async fn metrics_recorder_worker<DB: DatabaseLoomExt + DatabaseRef + Send + Sync + 'static, LDT: LoomDataTypes>(
+async fn metrics_recorder_worker<DB: DatabaseKabuExt + DatabaseRef + Send + Sync + 'static, LDT: KabuDataTypes>(
     market: SharedState<Market>,
     market_state: SharedState<MarketState<DB>>,
     block_header_update_rx: Broadcaster<MessageBlockHeader<LDT>>,
@@ -125,7 +125,7 @@ async fn metrics_recorder_worker<DB: DatabaseLoomExt + DatabaseRef + Send + Sync
 }
 
 #[derive(Accessor, Consumer, Producer, Default)]
-pub struct MetricsRecorderActor<DB: Clone + Send + Sync + 'static, LDT: LoomDataTypes + 'static> {
+pub struct MetricsRecorderActor<DB: Clone + Send + Sync + 'static, LDT: KabuDataTypes + 'static> {
     #[accessor]
     market: Option<SharedState<Market>>,
     #[accessor]
@@ -138,8 +138,8 @@ pub struct MetricsRecorderActor<DB: Clone + Send + Sync + 'static, LDT: LoomData
 
 impl<DB, LDT> MetricsRecorderActor<DB, LDT>
 where
-    DB: DatabaseRef + DatabaseLoomExt + Clone + Send + Sync + 'static,
-    LDT: LoomDataTypes + 'static,
+    DB: DatabaseRef + DatabaseKabuExt + Clone + Send + Sync + 'static,
+    LDT: KabuDataTypes + 'static,
 {
     pub fn new() -> Self {
         Self { market: None, market_state: None, block_header_rx: None, influxdb_write_channel_tx: None }
@@ -157,8 +157,8 @@ where
 
 impl<DB, LDT> Actor for MetricsRecorderActor<DB, LDT>
 where
-    DB: DatabaseRef + DatabaseLoomExt + Clone + Send + Sync + 'static,
-    LDT: LoomDataTypes + 'static,
+    DB: DatabaseRef + DatabaseKabuExt + Clone + Send + Sync + 'static,
+    LDT: KabuDataTypes + 'static,
 {
     fn start(&self) -> ActorResult {
         let task = tokio::task::spawn(metrics_recorder_worker(

@@ -4,15 +4,15 @@ use alloy_primitives::{BlockHash, BlockNumber};
 use alloy_provider::Provider;
 use alloy_rpc_types::Header;
 use eyre::{eyre, Result};
-use loom_core_actors::{run_sync, subscribe, Accessor, Actor, ActorResult, Broadcaster, Consumer, Producer, SharedState, WorkerResult};
-use loom_core_actors_macros::{Accessor, Consumer, Producer};
-use loom_core_blockchain::{Blockchain, BlockchainState};
-use loom_evm_db::DatabaseLoomExt;
-use loom_node_debug_provider::DebugProviderExt;
-use loom_types_blockchain::LoomHeader;
-use loom_types_blockchain::{ChainParameters, LoomBlock, LoomDataTypes, LoomDataTypesEVM};
-use loom_types_entities::{BlockHistory, BlockHistoryManager, BlockHistoryState, LatestBlock, MarketState};
-use loom_types_events::{MarketEvents, MessageBlock, MessageBlockHeader, MessageBlockLogs, MessageBlockStateUpdate};
+use kabu_core_actors::{run_sync, subscribe, Accessor, Actor, ActorResult, Broadcaster, Consumer, Producer, SharedState, WorkerResult};
+use kabu_core_actors_macros::{Accessor, Consumer, Producer};
+use kabu_core_blockchain::{Blockchain, BlockchainState};
+use kabu_evm_db::DatabaseKabuExt;
+use kabu_node_debug_provider::DebugProviderExt;
+use kabu_types_blockchain::KabuHeader;
+use kabu_types_blockchain::{ChainParameters, KabuBlock, KabuDataTypes, KabuDataTypesEVM};
+use kabu_types_entities::{BlockHistory, BlockHistoryManager, BlockHistoryState, LatestBlock, MarketState};
+use kabu_types_events::{MarketEvents, MessageBlock, MessageBlockHeader, MessageBlockLogs, MessageBlockStateUpdate};
 use revm::{Database, DatabaseCommit, DatabaseRef};
 use std::borrow::BorrowMut;
 use std::marker::PhantomData;
@@ -32,7 +32,7 @@ where
     N: Network<BlockResponse = LDT::Block>,
     P: Provider<N> + DebugProviderExt<N> + Send + Sync + Clone + 'static,
     DB: BlockHistoryState<LDT> + Clone,
-    LDT: LoomDataTypesEVM,
+    LDT: KabuDataTypesEVM,
     LDT::Block: RpcRecv + BlockResponse,
 {
     let block_number = header.number;
@@ -86,8 +86,8 @@ pub async fn new_block_history_worker<P, N, DB, LDT>(
 where
     N: Network<BlockResponse = LDT::Block>,
     P: Provider<N> + DebugProviderExt<N> + Send + Sync + Clone + 'static,
-    DB: BlockHistoryState<LDT> + DatabaseRef + DatabaseCommit + DatabaseLoomExt + Send + Sync + Clone + 'static,
-    LDT: LoomDataTypesEVM,
+    DB: BlockHistoryState<LDT> + DatabaseRef + DatabaseCommit + DatabaseKabuExt + Send + Sync + Clone + 'static,
+    LDT: KabuDataTypesEVM,
     LDT::Block: RpcRecv + BlockResponse,
 {
     subscribe!(block_header_update_rx);
@@ -110,7 +110,7 @@ where
 
                         let header = block_header.inner.header.clone();
 
-                        debug!("Block Header, Update {} {}", <alloy_rpc_types::Header as LoomHeader<LDT>>::get_number(&header), <alloy_rpc_types::Header as LoomHeader<LDT>>::get_hash(&header));
+                        debug!("Block Header, Update {} {}", <alloy_rpc_types::Header as KabuHeader<LDT>>::get_number(&header), <alloy_rpc_types::Header as KabuHeader<LDT>>::get_hash(&header));
 
 
                         set_chain_head(
@@ -354,7 +354,7 @@ where
 }
 
 #[derive(Accessor, Consumer, Producer)]
-pub struct BlockHistoryActor<P, N, DB, LDT: LoomDataTypes + 'static> {
+pub struct BlockHistoryActor<P, N, DB, LDT: KabuDataTypes + 'static> {
     client: P,
     chain_parameters: ChainParameters,
     #[accessor]
@@ -380,8 +380,8 @@ impl<P, N, DB, LDT> BlockHistoryActor<P, N, DB, LDT>
 where
     N: Network,
     P: Provider<N> + DebugProviderExt<N> + Sync + Send + Clone + 'static,
-    DB: DatabaseRef + BlockHistoryState<LDT> + DatabaseLoomExt + DatabaseCommit + Database + Send + Sync + Clone + Default + 'static,
-    LDT: LoomDataTypes + 'static,
+    DB: DatabaseRef + BlockHistoryState<LDT> + DatabaseKabuExt + DatabaseCommit + Database + Send + Sync + Clone + Default + 'static,
+    LDT: KabuDataTypes + 'static,
     LDT::Block: BlockResponse,
 {
     pub fn new(client: P) -> Self {
@@ -420,8 +420,8 @@ impl<P, N, DB, LDT> Actor for BlockHistoryActor<P, N, DB, LDT>
 where
     N: Network<BlockResponse = LDT::Block>,
     P: Provider<N> + DebugProviderExt<N> + Sync + Send + Clone + 'static,
-    DB: BlockHistoryState<LDT> + DatabaseRef + DatabaseCommit + DatabaseLoomExt + Send + Sync + Clone + 'static,
-    LDT: LoomDataTypesEVM,
+    DB: BlockHistoryState<LDT> + DatabaseRef + DatabaseCommit + DatabaseKabuExt + Send + Sync + Clone + 'static,
+    LDT: KabuDataTypesEVM,
     LDT::Block: BlockResponse + RpcRecv,
 {
     fn start(&self) -> ActorResult {

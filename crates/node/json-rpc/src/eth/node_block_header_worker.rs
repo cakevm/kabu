@@ -6,9 +6,9 @@ use alloy_provider::Provider;
 use alloy_rpc_types::Header;
 use chrono::Utc;
 use futures::StreamExt;
-use loom_core_actors::{Broadcaster, WorkerResult};
-use loom_types_blockchain::LoomDataTypesEVM;
-use loom_types_events::{BlockHeaderEventData, MessageBlockHeader};
+use kabu_core_actors::{Broadcaster, WorkerResult};
+use kabu_types_blockchain::KabuDataTypesEVM;
+use kabu_types_events::{BlockHeaderEventData, MessageBlockHeader};
 use tracing::{error, info};
 
 pub async fn new_node_block_header_worker<P, N, LDT>(
@@ -19,7 +19,7 @@ pub async fn new_node_block_header_worker<P, N, LDT>(
 where
     N: Network<HeaderResponse = LDT::Header>,
     P: Provider<N> + Send + Sync + Clone + 'static,
-    LDT: LoomDataTypesEVM,
+    LDT: KabuDataTypesEVM,
 {
     info!("Starting node block header worker");
     let sub = client.subscribe_blocks().await?;

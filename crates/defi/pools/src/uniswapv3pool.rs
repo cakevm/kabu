@@ -9,15 +9,15 @@ use alloy::primitives::{Address, Bytes, I256, U160, U256};
 use alloy::providers::{Network, Provider};
 use alloy::sol_types::{SolCall, SolInterface};
 use eyre::{eyre, ErrReport, OptionExt, Result};
+use kabu_defi_abi::uniswap3::IUniswapV3Pool;
+use kabu_defi_abi::uniswap3::IUniswapV3Pool::slot0Return;
+use kabu_defi_abi::uniswap_periphery::ITickLens;
+use kabu_defi_abi::IERC20;
+use kabu_defi_address_book::{FactoryAddress, PeripheryAddress};
+use kabu_evm_utils::LoomExecuteEvm;
+use kabu_types_entities::required_state::RequiredState;
+use kabu_types_entities::{EntityAddress, Pool, PoolAbiEncoder, PoolClass, PoolProtocol, PreswapRequirement, SwapDirection};
 use lazy_static::lazy_static;
-use loom_defi_abi::uniswap3::IUniswapV3Pool;
-use loom_defi_abi::uniswap3::IUniswapV3Pool::slot0Return;
-use loom_defi_abi::uniswap_periphery::ITickLens;
-use loom_defi_abi::IERC20;
-use loom_defi_address_book::{FactoryAddress, PeripheryAddress};
-use loom_evm_utils::LoomExecuteEvm;
-use loom_types_entities::required_state::RequiredState;
-use loom_types_entities::{EntityAddress, Pool, PoolAbiEncoder, PoolClass, PoolProtocol, PreswapRequirement, SwapDirection};
 use tracing::debug;
 #[cfg(feature = "debug-calculation")]
 use tracing::error;
@@ -517,15 +517,15 @@ mod test {
     use super::*;
     use alloy::primitives::{address, BlockNumber};
     use alloy::rpc::types::{BlockId, BlockNumberOrTag};
-    use loom_defi_abi::uniswap_periphery::IQuoterV2;
-    use loom_defi_abi::uniswap_periphery::IQuoterV2::{QuoteExactInputSingleParams, QuoteExactOutputSingleParams};
-    use loom_defi_address_book::{PeripheryAddress, UniswapV3PoolAddress};
-    use loom_evm_db::{AlloyDB, LoomDB};
-    use loom_evm_db::{LoomDBError, LoomDBType};
-    use loom_evm_utils::LoomEVMWrapper;
-    use loom_node_debug_provider::{AnvilDebugProviderFactory, AnvilDebugProviderType};
-    use loom_types_blockchain::LoomDataTypesEthereum;
-    use loom_types_entities::required_state::RequiredStateReader;
+    use kabu_defi_abi::uniswap_periphery::IQuoterV2;
+    use kabu_defi_abi::uniswap_periphery::IQuoterV2::{QuoteExactInputSingleParams, QuoteExactOutputSingleParams};
+    use kabu_defi_address_book::{PeripheryAddress, UniswapV3PoolAddress};
+    use kabu_evm_db::{AlloyDB, KabuDB};
+    use kabu_evm_db::{KabuDBError, KabuDBType};
+    use kabu_evm_utils::KabuEVMWrapper;
+    use kabu_node_debug_provider::{AnvilDebugProviderFactory, AnvilDebugProviderType};
+    use kabu_types_blockchain::KabuDataTypesEthereum;
+    use kabu_types_entities::required_state::RequiredStateReader;
     use revm::database::EmptyDBTyped;
     use std::env;
     use std::ops::Add;
@@ -610,10 +610,10 @@ mod test {
             let pool = UniswapV3Pool::fetch_pool_data(client.clone(), pool_address).await?;
             let state_required = pool.get_state_required()?;
             let state_update =
-                RequiredStateReader::<LoomDataTypesEthereum>::fetch_calls_and_slots(client.clone(), state_required, Some(BLOCK_NUMBER))
+                RequiredStateReader::<KabuDataTypesEthereum>::fetch_calls_and_slots(client.clone(), state_required, Some(BLOCK_NUMBER))
                     .await?;
 
-            let mut state_db = LoomDBType::default();
+            let mut state_db = KabuDBType::default();
             state_db.apply_geth_update(state_update);
 
             let token0_decimals = IERC20::new(pool.token0, client.clone()).decimals().call().block(BlockId::from(BLOCK_NUMBER)).await?._0;
@@ -625,7 +625,7 @@ mod test {
                 fetch_original_contract_amounts(client.clone(), pool_address, pool.token0, pool.token1, amount_in, BLOCK_NUMBER, true)
                     .await?;
 
-            let mut evm = LoomEVMWrapper::new(state_db.clone());
+            let mut evm = KabuEVMWrapper::new(state_db.clone());
 
             // under test
             let (amount_out, gas_used) = match pool.calculate_out_amount(evm.get_mut(), &pool.token0.into(), &pool.token1.into(), amount_in)
@@ -678,10 +678,10 @@ mod test {
             let pool = UniswapV3Pool::fetch_pool_data(client.clone(), pool_address).await?;
             let state_required = pool.get_state_required()?;
             let state_update =
-                RequiredStateReader::<LoomDataTypesEthereum>::fetch_calls_and_slots(client.clone(), state_required, Some(BLOCK_NUMBER))
+                RequiredStateReader::<KabuDataTypesEthereum>::fetch_calls_and_slots(client.clone(), state_required, Some(BLOCK_NUMBER))
                     .await?;
 
-            let mut state_db = LoomDBType::default().with_ext_db(EmptyDBTyped::<LoomDBError>::new());
+            let mut state_db = KabuDBType::default().with_ext_db(EmptyDBTyped::<KabuDBError>::new());
             state_db.apply_geth_update(state_update);
 
             let token0_decimals = IERC20::new(pool.token0, client.clone()).decimals().call().block(BlockId::from(BLOCK_NUMBER)).await?._0;
@@ -693,7 +693,7 @@ mod test {
                 fetch_original_contract_amounts(client.clone(), pool_address, pool.token0, pool.token1, amount_out, BLOCK_NUMBER, false)
                     .await?;
 
-            let mut evm = LoomEVMWrapper::new(state_db.clone());
+            let mut evm = KabuEVMWrapper::new(state_db.clone());
 
             // under test
             let (amount_in, gas_used) = match pool.calculate_in_amount(evm.get_mut(), &pool.token0.into(), &pool.token1.into(), amount_out)
@@ -747,7 +747,7 @@ mod test {
 
             let alloy_db = AlloyDB::new(client.clone(), BlockNumberOrTag::Number(BLOCK_NUMBER).into()).unwrap();
 
-            let state_db = LoomDB::new().with_ext_db(alloy_db);
+            let state_db = KabuDB::new().with_ext_db(alloy_db);
 
             let token0_decimals = IERC20::new(pool.token0, client.clone()).decimals().call().block(BlockId::from(BLOCK_NUMBER)).await?._0;
             let token1_decimals = IERC20::new(pool.token1, client.clone()).decimals().call().block(BlockId::from(BLOCK_NUMBER)).await?._0;
@@ -758,7 +758,7 @@ mod test {
                 fetch_original_contract_amounts(client.clone(), pool_address, pool.token0, pool.token1, amount_out, BLOCK_NUMBER, false)
                     .await?;
 
-            let mut evm = LoomEVMWrapper::new(state_db);
+            let mut evm = KabuEVMWrapper::new(state_db);
 
             // under test
             let (amount_in, gas_used) = match pool.calculate_in_amount(evm.get_mut(), &pool.token0.into(), &pool.token1.into(), amount_out)

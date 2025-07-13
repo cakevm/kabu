@@ -1,5 +1,5 @@
 [package]
-name = "loom-rpc-handler"
+name = "kabu-rpc-handler"
 edition.workspace = true
 exclude.workspace = true
 homepage.workspace = true
@@ -9,15 +9,15 @@ rust-version.workspace = true
 version.workspace = true
 
 [dependencies]
-loom-core-actors.workspace = true
-loom-core-actors-macros.workspace = true
-loom-core-blockchain.workspace = true
-loom-evm-db.workspace = true
-loom-evm-utils.workspace = true
-loom-rpc-state.workspace = true
-loom-storage-db.workspace = true
-loom-types-blockchain.workspace = true
-loom-types-entities.workspace = true
+kabu-core-actors.workspace = true
+kabu-core-actors-macros.workspace = true
+kabu-core-blockchain.workspace = true
+kabu-evm-db.workspace = true
+kabu-evm-utils.workspace = true
+kabu-rpc-state.workspace = true
+kabu-storage-db.workspace = true
+kabu-types-blockchain.workspace = true
+kabu-types-entities.workspace = true
 
 hex.workspace = true
 serde.workspace = true

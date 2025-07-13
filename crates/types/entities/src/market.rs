@@ -292,7 +292,7 @@ mod tests {
     use crate::mock_pool::MockPool;
     use alloy_primitives::Address;
     use eyre::Result;
-    use loom_defi_address_book::TokenAddressEth;
+    use kabu_defi_address_book::TokenAddressEth;
 
     #[test]
     fn test_add_pool() {

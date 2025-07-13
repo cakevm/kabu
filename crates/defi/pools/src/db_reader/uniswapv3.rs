@@ -7,9 +7,9 @@ use lazy_static::lazy_static;
 use revm::DatabaseRef;
 use tracing::trace;
 
-use loom_defi_abi::uniswap3::IUniswapV3Pool::slot0Return;
-use loom_evm_db::LoomDBType;
-use loom_evm_utils::remv_db_direct_access::{try_read_cell, try_read_hashmap_cell};
+use kabu_defi_abi::uniswap3::IUniswapV3Pool::slot0Return;
+use kabu_evm_db::KabuDBType;
+use kabu_evm_utils::remv_db_direct_access::{try_read_cell, try_read_hashmap_cell};
 
 pub struct UniswapV3DbReader {}
 
@@ -22,17 +22,17 @@ lazy_static! {
     static ref BITS1MASK: U256 = U256::from(1);
 }
 impl UniswapV3DbReader {
-    pub fn fee_growth_global0_x128(db: &LoomDBType, address: Address) -> Result<U256> {
+    pub fn fee_growth_global0_x128(db: &KabuDBType, address: Address) -> Result<U256> {
         let cell = try_read_cell(db, &address, &U256::from(1))?;
         Ok(cell)
     }
 
-    pub fn fee_growth_global1_x128(db: &LoomDBType, address: Address) -> Result<U256> {
+    pub fn fee_growth_global1_x128(db: &KabuDBType, address: Address) -> Result<U256> {
         let cell = try_read_cell(db, &address, &U256::from(2))?;
         Ok(cell)
     }
 
-    pub fn protocol_fees(db: &LoomDBType, address: Address) -> Result<U256> {
+    pub fn protocol_fees(db: &KabuDBType, address: Address) -> Result<U256> {
         let cell = try_read_cell(db, &address, &U256::from(3))?;
         Ok(cell)
     }
@@ -102,13 +102,13 @@ mod test {
     use std::env;
     use tracing::debug;
 
-    use loom_defi_address_book::UniswapV3PoolAddress;
-    use loom_evm_db::LoomDBType;
-    use loom_evm_utils::LoomEVMWrapper;
-    use loom_node_debug_provider::AnvilDebugProviderFactory;
-    use loom_types_blockchain::LoomDataTypesEthereum;
-    use loom_types_entities::required_state::RequiredStateReader;
-    use loom_types_entities::{MarketState, Pool};
+    use kabu_defi_address_book::UniswapV3PoolAddress;
+    use kabu_evm_db::KabuDBType;
+    use kabu_evm_utils::KabuEVMWrapper;
+    use kabu_node_debug_provider::AnvilDebugProviderFactory;
+    use kabu_types_blockchain::KabuDataTypesEthereum;
+    use kabu_types_entities::required_state::RequiredStateReader;
+    use kabu_types_entities::{MarketState, Pool};
 
     use crate::db_reader::UniswapV3DbReader;
     use crate::state_readers::UniswapV3EvmStateReader;
@@ -118,14 +118,14 @@ mod test {
     #[tokio::test]
     async fn test_reader() -> Result<()> {
         let _ = env_logger::try_init_from_env(env_logger::Env::default().default_filter_or(
-            "info,loom_types_entities::required_state=off,loom_types_blockchain::state_update=off,alloy_rpc_client::call=off,tungstenite=off",
+            "info,kabu_types_entities::required_state=off,kabu_types_blockchain::state_update=off,alloy_rpc_client::call=off,tungstenite=off",
         ));
 
         let node_url = env::var("MAINNET_WS")?;
 
         let client = AnvilDebugProviderFactory::from_node_on_block(node_url, 20038285).await?;
 
-        let mut market_state = MarketState::new(LoomDBType::default());
+        let mut market_state = MarketState::new(KabuDBType::default());
 
         let pool_address: Address = UniswapV3PoolAddress::USDC_WETH_500;
 
@@ -134,11 +134,11 @@ mod test {
         let state_required = pool.get_state_required()?;
 
         let state_required =
-            RequiredStateReader::<LoomDataTypesEthereum>::fetch_calls_and_slots(client.clone(), state_required, None).await?;
+            RequiredStateReader::<KabuDataTypesEthereum>::fetch_calls_and_slots(client.clone(), state_required, None).await?;
 
         market_state.state_db.apply_geth_update(state_required);
 
-        let mut evm = LoomEVMWrapper::new(CacheDB::new(market_state.state_db.clone()));
+        let mut evm = KabuEVMWrapper::new(CacheDB::new(market_state.state_db.clone()));
 
         let factory_evm = UniswapV3EvmStateReader::factory(evm.get_mut(), pool_address)?;
         let token0_evm = UniswapV3EvmStateReader::token0(evm.get_mut(), pool_address)?;

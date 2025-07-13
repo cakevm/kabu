@@ -1,17 +1,17 @@
 use super::affected_pools_state::get_affected_pools_from_state_update;
 use eyre::eyre;
-use loom_core_actors::{run_sync, subscribe, Accessor, Actor, ActorResult, Broadcaster, Consumer, Producer, SharedState, WorkerResult};
-use loom_core_actors_macros::{Accessor, Consumer, Producer};
-use loom_core_blockchain::{Blockchain, BlockchainState, Strategy};
-use loom_types_blockchain::ChainParameters;
-use loom_types_blockchain::LoomDataTypesEVM;
-use loom_types_entities::{BlockHistory, Market};
-use loom_types_events::{MarketEvents, StateUpdateEvent};
+use kabu_core_actors::{run_sync, subscribe, Accessor, Actor, ActorResult, Broadcaster, Consumer, Producer, SharedState, WorkerResult};
+use kabu_core_actors_macros::{Accessor, Consumer, Producer};
+use kabu_core_blockchain::{Blockchain, BlockchainState, Strategy};
+use kabu_types_blockchain::ChainParameters;
+use kabu_types_blockchain::KabuDataTypesEVM;
+use kabu_types_entities::{BlockHistory, Market};
+use kabu_types_events::{MarketEvents, StateUpdateEvent};
 use revm::DatabaseRef;
 use tokio::sync::broadcast::error::RecvError;
 use tracing::error;
 
-pub async fn block_state_change_worker<DB: DatabaseRef + Send + Sync + Clone + 'static, LDT: LoomDataTypesEVM>(
+pub async fn block_state_change_worker<DB: DatabaseRef + Send + Sync + Clone + 'static, LDT: KabuDataTypesEVM>(
     chain_parameters: ChainParameters,
     market: SharedState<Market>,
     block_history: SharedState<BlockHistory<DB, LDT>>,
@@ -83,7 +83,7 @@ pub async fn block_state_change_worker<DB: DatabaseRef + Send + Sync + Clone + '
 }
 
 #[derive(Accessor, Consumer, Producer)]
-pub struct BlockStateChangeProcessorActor<DB: Clone + Send + Sync + 'static, LDT: LoomDataTypesEVM + 'static> {
+pub struct BlockStateChangeProcessorActor<DB: Clone + Send + Sync + 'static, LDT: KabuDataTypesEVM + 'static> {
     chain_parameters: ChainParameters,
     #[accessor]
     market: Option<SharedState<Market>>,
@@ -95,7 +95,7 @@ pub struct BlockStateChangeProcessorActor<DB: Clone + Send + Sync + 'static, LDT
     state_updates_tx: Option<Broadcaster<StateUpdateEvent<DB, LDT>>>,
 }
 
-impl<DB: DatabaseRef + Send + Sync + Clone + 'static, LDT: LoomDataTypesEVM> BlockStateChangeProcessorActor<DB, LDT> {
+impl<DB: DatabaseRef + Send + Sync + Clone + 'static, LDT: KabuDataTypesEVM> BlockStateChangeProcessorActor<DB, LDT> {
     pub fn new() -> BlockStateChangeProcessorActor<DB, LDT> {
         BlockStateChangeProcessorActor {
             chain_parameters: ChainParameters::ethereum(),
@@ -117,13 +117,13 @@ impl<DB: DatabaseRef + Send + Sync + Clone + 'static, LDT: LoomDataTypesEVM> Blo
     }
 }
 
-impl<DB: DatabaseRef + Send + Sync + Clone + 'static, LDT: LoomDataTypesEVM> Default for BlockStateChangeProcessorActor<DB, LDT> {
+impl<DB: DatabaseRef + Send + Sync + Clone + 'static, LDT: KabuDataTypesEVM> Default for BlockStateChangeProcessorActor<DB, LDT> {
     fn default() -> Self {
         Self::new()
     }
 }
 
-impl<DB: DatabaseRef + Send + Sync + Clone + 'static, LDT: LoomDataTypesEVM> Actor for BlockStateChangeProcessorActor<DB, LDT> {
+impl<DB: DatabaseRef + Send + Sync + Clone + 'static, LDT: KabuDataTypesEVM> Actor for BlockStateChangeProcessorActor<DB, LDT> {
     fn start(&self) -> ActorResult {
         let task = tokio::task::spawn(block_state_change_worker(
             self.chain_parameters.clone(),

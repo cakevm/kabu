@@ -4,7 +4,7 @@ use std::hash::{Hash, Hasher};
 
 use serde::{Deserialize, Serialize};
 
-use loom_types_entities::{EntityAddress, PoolProtocol, SwapPath};
+use kabu_types_entities::{EntityAddress, PoolProtocol, SwapPath};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SwapLineDTO {

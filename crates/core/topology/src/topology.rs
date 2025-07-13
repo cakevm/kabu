@@ -10,29 +10,29 @@ use alloy_rpc_client::ClientBuilder;
 use alloy_transport_ipc::IpcConnect;
 use alloy_transport_ws::WsConnect;
 use eyre::{eyre, Result};
-use loom_broadcast_accounts::{InitializeSignersOneShotBlockingActor, NonceAndBalanceMonitorActor, TxSignersActor};
-use loom_broadcast_broadcaster::FlashbotsBroadcastActor;
-use loom_broadcast_flashbots::Flashbots;
-use loom_core_actors::{Accessor, Actor, Consumer, Producer, SharedState, WorkerResult};
-use loom_core_block_history::BlockHistoryActor;
-use loom_core_blockchain::{Blockchain, BlockchainState, Strategy};
-use loom_core_mempool::MempoolActor;
-use loom_defi_health_monitor::PoolHealthMonitorActor;
-use loom_defi_market::{HistoryPoolLoaderOneShotActor, NewPoolLoaderActor, PoolLoaderActor, ProtocolPoolLoaderOneShotActor};
-use loom_defi_pools::PoolLoadersBuilder;
-use loom_defi_preloader::MarketStatePreloadedOneShotActor;
-use loom_defi_price::PriceActor;
-use loom_evm_db::{DatabaseLoomExt, LoomDBError};
-use loom_execution_estimator::{EvmEstimatorActor, GethEstimatorActor};
-use loom_execution_multicaller::MulticallerSwapEncoder;
-use loom_node_actor_config::NodeBlockActorConfig;
+use kabu_broadcast_accounts::{InitializeSignersOneShotBlockingActor, NonceAndBalanceMonitorActor, TxSignersActor};
+use kabu_broadcast_broadcaster::FlashbotsBroadcastActor;
+use kabu_broadcast_flashbots::Flashbots;
+use kabu_core_actors::{Accessor, Actor, Consumer, Producer, SharedState, WorkerResult};
+use kabu_core_block_history::BlockHistoryActor;
+use kabu_core_blockchain::{Blockchain, BlockchainState, Strategy};
+use kabu_core_mempool::MempoolActor;
+use kabu_defi_health_monitor::PoolHealthMonitorActor;
+use kabu_defi_market::{HistoryPoolLoaderOneShotActor, NewPoolLoaderActor, PoolLoaderActor, ProtocolPoolLoaderOneShotActor};
+use kabu_defi_pools::PoolLoadersBuilder;
+use kabu_defi_preloader::MarketStatePreloadedOneShotActor;
+use kabu_defi_price::PriceActor;
+use kabu_evm_db::{DatabaseKabuExt, KabuDBError};
+use kabu_execution_estimator::{EvmEstimatorActor, GethEstimatorActor};
+use kabu_execution_multicaller::MulticallerSwapEncoder;
+use kabu_node_actor_config::NodeBlockActorConfig;
 #[cfg(feature = "db-access")]
-use loom_node_db_access::RethDbAccessBlockActor;
-use loom_node_grpc::NodeExExGrpcActor;
-use loom_node_json_rpc::{NodeBlockActor, NodeMempoolActor};
-use loom_types_blockchain::{LoomDataTypes, LoomDataTypesEthereum};
-use loom_types_entities::pool_config::PoolsLoadingConfig;
-use loom_types_entities::{BlockHistoryState, MarketState, PoolLoaders, SwapEncoder, TxSigners};
+use kabu_node_db_access::RethDbAccessBlockActor;
+use kabu_node_grpc::NodeExExGrpcActor;
+use kabu_node_json_rpc::{NodeBlockActor, NodeMempoolActor};
+use kabu_types_blockchain::{KabuDataTypes, KabuDataTypesEthereum};
+use kabu_types_entities::pool_config::PoolsLoadingConfig;
+use kabu_types_entities::{BlockHistoryState, MarketState, PoolLoaders, SwapEncoder, TxSigners};
 use revm::{Database, DatabaseCommit, DatabaseRef};
 use tokio::task::JoinHandle;
 use tracing::{error, info, warn};
@@ -42,7 +42,7 @@ pub struct Topology<
     E: Send + Sync + Clone + 'static = MulticallerSwapEncoder,
     P: Provider<N> + Send + Sync + Clone + 'static = RootProvider,
     N: Network = Ethereum,
-    LDT: LoomDataTypes = LoomDataTypesEthereum,
+    LDT: KabuDataTypes = KabuDataTypesEthereum,
 > {
     config: TopologyConfig,
     clients: HashMap<String, RootProvider<N>>,
@@ -59,11 +59,11 @@ pub struct Topology<
 }
 
 impl<
-        DB: Database<Error = LoomDBError>
-            + DatabaseRef<Error = LoomDBError>
+        DB: Database<Error = KabuDBError>
+            + DatabaseRef<Error = KabuDBError>
             + DatabaseCommit
-            + DatabaseLoomExt
-            + BlockHistoryState<LoomDataTypesEthereum>
+            + DatabaseKabuExt
+            + BlockHistoryState<KabuDataTypesEthereum>
             + Default
             + Send
             + Sync
@@ -71,7 +71,7 @@ impl<
             + 'static,
         E: SwapEncoder + Send + Sync + Clone + 'static,
         P: Provider<Ethereum> + Send + Sync + Clone + 'static,
-    > Topology<DB, E, P, Ethereum, LoomDataTypesEthereum>
+    > Topology<DB, E, P, Ethereum, KabuDataTypesEthereum>
 {
     pub fn from_config(config: TopologyConfig) -> Topology<DB, MulticallerSwapEncoder> {
         let encoder = MulticallerSwapEncoder::default();
@@ -96,7 +96,7 @@ impl<
     pub fn with_swap_encoder<NE: SwapEncoder + Send + Sync + Clone + 'static>(
         self,
         swap_encoder: NE,
-    ) -> Topology<DB, NE, P, Ethereum, LoomDataTypesEthereum> {
+    ) -> Topology<DB, NE, P, Ethereum, KabuDataTypesEthereum> {
         //let swap_encoder = Arc::new(swap_encoder);
         Topology {
             config: self.config,
@@ -116,8 +116,8 @@ impl<
 
     pub fn with_pool_loaders<NP: Provider + Send + Sync + Clone + 'static>(
         self,
-        pool_loaders: PoolLoaders<NP, Ethereum, LoomDataTypesEthereum>,
-    ) -> Topology<DB, E, NP, Ethereum, LoomDataTypesEthereum> {
+        pool_loaders: PoolLoaders<NP, Ethereum, KabuDataTypesEthereum>,
+    ) -> Topology<DB, E, NP, Ethereum, KabuDataTypesEthereum> {
         Topology {
             config: self.config,
             clients: self.clients,
@@ -195,7 +195,7 @@ impl<
         for (k, params) in self.config.blockchains.iter() {
             let blockchain = Blockchain::new(params.chain_id.unwrap_or(1) as u64);
             let market_state = MarketState::new(DB::default());
-            let blockchain_state = BlockchainState::<DB, LoomDataTypesEthereum>::new_with_market_state(market_state);
+            let blockchain_state = BlockchainState::<DB, KabuDataTypesEthereum>::new_with_market_state(market_state);
             let strategy = Strategy::<DB>::new();
 
             blockchains.insert(k.clone(), blockchain);
@@ -689,7 +689,7 @@ impl<
         }
     }
 
-    pub fn get_blockchain_state(&self, name: Option<&String>) -> Result<&BlockchainState<DB, LoomDataTypesEthereum>> {
+    pub fn get_blockchain_state(&self, name: Option<&String>) -> Result<&BlockchainState<DB, KabuDataTypesEthereum>> {
         match self.blockchain_states.get(name.unwrap_or(&self.default_blockchain_name.clone().unwrap())) {
             Some(a) => Ok(a),
             None => Err(eyre!("BLOCKCHAIN_NOT_FOUND")),

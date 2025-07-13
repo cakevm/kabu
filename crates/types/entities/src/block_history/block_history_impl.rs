@@ -6,22 +6,22 @@ use alloy_primitives::{BlockHash, BlockNumber};
 use alloy_provider::Provider;
 use alloy_rpc_types::{BlockId, Filter};
 use eyre::{eyre, ErrReport, OptionExt, Result};
-use loom_node_debug_provider::DebugProviderExt;
-use loom_types_blockchain::{debug_trace_block, LoomBlock, LoomDataTypes, LoomDataTypesEVM, LoomHeader};
+use kabu_node_debug_provider::DebugProviderExt;
+use kabu_types_blockchain::{debug_trace_block, KabuBlock, KabuDataTypes, KabuDataTypesEVM, KabuHeader};
 use std::collections::HashMap;
 use std::fmt::Debug;
 use std::marker::PhantomData;
 use tracing::{debug, error};
 
 #[derive(Clone, Debug)]
-pub struct BlockHistoryEntry<LDT: LoomDataTypes> {
+pub struct BlockHistoryEntry<LDT: KabuDataTypes> {
     pub header: LDT::Header,
     pub block: Option<LDT::Block>,
     pub logs: Option<Vec<LDT::Log>>,
     pub state_update: Option<Vec<LDT::StateUpdate>>,
 }
 
-impl<LDT: LoomDataTypes> Default for BlockHistoryEntry<LDT> {
+impl<LDT: KabuDataTypes> Default for BlockHistoryEntry<LDT> {
     fn default() -> Self {
         Self { header: LDT::Header::default(), block: None, logs: None, state_update: None }
     }
@@ -29,7 +29,7 @@ impl<LDT: LoomDataTypes> Default for BlockHistoryEntry<LDT> {
 
 impl<LDT> BlockHistoryEntry<LDT>
 where
-    LDT: LoomDataTypes,
+    LDT: KabuDataTypes,
 {
     pub fn new(
         header: LDT::Header,
@@ -62,7 +62,7 @@ where
 }
 
 #[derive(Debug, Clone)]
-pub struct BlockHistory<S, LDT: LoomDataTypes> {
+pub struct BlockHistory<S, LDT: KabuDataTypes> {
     depth: usize,
     pub latest_block_number: u64,
     block_states: HashMap<LDT::BlockHash, S>,
@@ -72,7 +72,7 @@ pub struct BlockHistory<S, LDT: LoomDataTypes> {
 
 impl<S, LDT> BlockHistory<S, LDT>
 where
-    LDT: LoomDataTypes,
+    LDT: KabuDataTypes,
     S: BlockHistoryState<LDT>,
 {
     pub fn new(depth: usize) -> BlockHistory<S, LDT> {
@@ -91,7 +91,7 @@ where
     }
 }
 
-impl<S, LDT: LoomDataTypes> BlockHistory<S, LDT> {
+impl<S, LDT: KabuDataTypes> BlockHistory<S, LDT> {
     pub fn len(&self) -> usize {
         self.block_entries.len()
     }
@@ -265,7 +265,7 @@ pub struct BlockHistoryManager<P, N, DB, LDT> {
 // where
 //     P: Provider<Ethereum> + DebugProviderExt<Ethereum> + Send + Sync + Clone + 'static,
 //     S: BlockHistoryState<LDT> + Clone,
-//     LDT: LoomDataTypesEVM,
+//     LDT: KabuDataTypesEVM,
 // {
 //     pub async fn fetch_entry_data(&self, entry: &mut BlockHistoryEntry<LDT>) -> Result<()> {
 //         if entry.logs.is_none() {
@@ -303,15 +303,15 @@ where
     N: Network<BlockResponse = LDT::Block>,
     P: Provider<N> + DebugProviderExt<N> + Send + Sync + Clone + 'static,
     S: BlockHistoryState<LDT> + Clone,
-    LDT: LoomDataTypesEVM,
+    LDT: KabuDataTypesEVM,
     LDT::Block: BlockResponse + RpcRecv,
 {
     pub fn init(&self, current_state: S, depth: usize, block: LDT::Block) -> BlockHistory<S, LDT>
     where
         P: Provider<N> + Send + Sync + Clone + 'static,
     {
-        let latest_block_number = <alloy_rpc_types::Header as LoomHeader<LDT>>::get_number(&block.get_header());
-        let block_hash = <alloy_rpc_types::Header as LoomHeader<LDT>>::get_hash(&block.get_header());
+        let latest_block_number = <alloy_rpc_types::Header as KabuHeader<LDT>>::get_number(&block.get_header());
+        let block_hash = <alloy_rpc_types::Header as KabuHeader<LDT>>::get_hash(&block.get_header());
 
         let block_entry = BlockHistoryEntry::new(block.get_header().clone(), Some(block), None, None);
 
@@ -439,7 +439,7 @@ where
     pub async fn set_chain_head(&self, block_history: &mut BlockHistory<S, LDT>, header: LDT::Header) -> Result<(bool, usize)> {
         let mut reorg_depth = 0;
         let mut is_new_block = false;
-        let parent_hash = LoomHeader::<LDT>::get_parent_hash(&header);
+        let parent_hash = KabuHeader::<LDT>::get_parent_hash(&header);
         let first_block_number = block_history.get_first_block_number();
 
         if let Ok(is_new) = block_history.add_block_header(header) {
@@ -511,10 +511,10 @@ mod test {
     use alloy_provider::ProviderBuilder;
     use alloy_rpc_client::ClientBuilder;
     use alloy_rpc_types::{BlockNumberOrTag, Header};
-    use loom_evm_db::LoomDBType;
-    use loom_evm_utils::geth_state_update::*;
-    use loom_node_debug_provider::AnvilProviderExt;
-    use loom_types_blockchain::{GethStateUpdate, LoomDataTypesEthereum};
+    use kabu_evm_db::KabuDBType;
+    use kabu_evm_utils::geth_state_update::*;
+    use kabu_node_debug_provider::AnvilProviderExt;
+    use kabu_types_blockchain::{GethStateUpdate, KabuDataTypesEthereum};
     use std::sync::Arc;
     use tokio::sync::RwLock;
 
@@ -536,7 +536,7 @@ mod test {
 
     #[test]
     fn test_add_block_header() {
-        let mut block_history = BlockHistory::<LoomDBType, LoomDataTypesEthereum>::new(10);
+        let mut block_history = BlockHistory::<KabuDBType, KabuDataTypesEthereum>::new(10);
 
         let header_1_0 = create_header(1, U256::from(1).into());
         let header_2_0 = create_next_header(&header_1_0, 0);
@@ -553,7 +553,7 @@ mod test {
 
     #[test]
     fn test_add_missed_header() {
-        let mut block_history = BlockHistory::<LoomDBType, LoomDataTypesEthereum>::new(10);
+        let mut block_history = BlockHistory::<KabuDBType, KabuDataTypesEthereum>::new(10);
 
         let header_1_0 = create_header(1, U256::from(1).into());
         let header_2_0 = create_next_header(&header_1_0, 0);
@@ -572,7 +572,7 @@ mod test {
 
     #[test]
     fn test_add_reorged_header() {
-        let mut block_history = BlockHistory::<LoomDBType, LoomDataTypesEthereum>::new(10);
+        let mut block_history = BlockHistory::<KabuDBType, KabuDataTypesEthereum>::new(10);
 
         let header_1_0 = create_header(1, U256::from(1).into());
         let header_2_0 = create_next_header(&header_1_0, 0);
@@ -607,11 +607,11 @@ mod test {
 
         let block_0 = provider.get_block_by_number(BlockNumberOrTag::Latest).full().await?.unwrap();
 
-        let market_state = Arc::new(RwLock::new(MarketState::new(LoomDBType::default())));
+        let market_state = Arc::new(RwLock::new(MarketState::new(KabuDBType::default())));
 
         let block_history_manager = BlockHistoryManager::new(provider.clone());
 
-        let mut block_history = block_history_manager.init(LoomDBType::default(), 10, block_0.clone());
+        let mut block_history = block_history_manager.init(KabuDBType::default(), 10, block_0.clone());
 
         let snap = provider.anvil_snapshot().await?;
 
@@ -625,7 +625,7 @@ mod test {
 
         block_history.add_block_header(block_2.header.clone())?;
 
-        let mut entry_2: BlockHistoryEntry<LoomDataTypesEthereum> =
+        let mut entry_2: BlockHistoryEntry<KabuDataTypesEthereum> =
             block_history_manager.get_or_fetch_entry_cloned(&mut block_history, block_2.header.hash).await?;
         block_history_manager.fetch_entry_data(&mut entry_2).await;
         entry_2.state_update = Some(vec![geth_state_update_add_account(

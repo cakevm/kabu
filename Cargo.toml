@@ -2,21 +2,21 @@
 default-members = [
   "bin/exex_grpc_node",
   "bin/gasbench",
+  "bin/kabu_anvil",
+  "bin/kabu_backrun",
+  "bin/kabu_exex",
   "bin/keys",
-  "bin/loom_anvil",
-  "bin/loom_backrun",
-  "bin/loom_exex",
   "bin/nodebench",
   "bin/replayer",
 ]
 members = [
-  "bin/exex_grpc_loom",
+  "bin/exex_grpc_kabu",
   "bin/exex_grpc_node",
   "bin/gasbench",
+  "bin/kabu_anvil",
+  "bin/kabu_backrun",
+  "bin/kabu_exex",
   "bin/keys",
-  "bin/loom_anvil",
-  "bin/loom_backrun",
-  "bin/loom_exex",
   "bin/nodebench",
   "bin/replayer",
   "crates/broadcast/accounts",
@@ -40,7 +40,7 @@ members = [
   "crates/evm/utils",
   "crates/execution/estimator",
   "crates/execution/multicaller",
-  "crates/loom",
+  "crates/kabu",
   "crates/metrics",
   "crates/node/db-access",
   "crates/node/debug-provider",
@@ -64,66 +64,66 @@ resolver = "2"
 [workspace.package]
 edition = "2021"
 exclude = [".github/"]
-homepage = "https://github.com/dexloom/loom"
+homepage = "https://github.com/dexloom/kabu"
 license = "MIT OR Apache-2.0"
-repository = "https://github.com/dexloom/loom"
+repository = "https://github.com/dexloom/kabu"
 rust-version = "1.84"
 version = "0.6.0"
 
 [workspace.dependencies]
 # broadcast
-loom-broadcast-accounts = { path = "crates/broadcast/accounts" }
-loom-broadcast-broadcaster = { path = "crates/broadcast/broadcaster" }
-loom-broadcast-flashbots = { path = "crates/broadcast/flashbots" }
+kabu-broadcast-accounts = { path = "crates/broadcast/accounts" }
+kabu-broadcast-broadcaster = { path = "crates/broadcast/broadcaster" }
+kabu-broadcast-flashbots = { path = "crates/broadcast/flashbots" }
 # core
-loom-core-actors = { path = "crates/core/actors" }
-loom-core-actors-macros = { path = "crates/core/actors-macros" }
-loom-core-block-history = { path = "crates/core/block-history-actor" }
-loom-core-blockchain = { path = "crates/core/blockchain" }
-loom-core-blockchain-actors = { path = "crates/core/blockchain-actors" }
-loom-core-mempool = { path = "crates/core/mempool" }
-loom-core-router = { path = "crates/core/router" }
-loom-core-topology = { path = "crates/core/topology" }
+kabu-core-actors = { path = "crates/core/actors" }
+kabu-core-actors-macros = { path = "crates/core/actors-macros" }
+kabu-core-block-history = { path = "crates/core/block-history-actor" }
+kabu-core-blockchain = { path = "crates/core/blockchain" }
+kabu-core-blockchain-actors = { path = "crates/core/blockchain-actors" }
+kabu-core-mempool = { path = "crates/core/mempool" }
+kabu-core-router = { path = "crates/core/router" }
+kabu-core-topology = { path = "crates/core/topology" }
 # defi
-loom-defi-abi = { path = "crates/defi/abi" }
-loom-defi-address-book = { path = "crates/defi/address-book" }
-loom-defi-health-monitor = { path = "crates/defi/health-monitor" }
-loom-defi-market = { path = "crates/defi/market" }
-loom-defi-pools = { path = "crates/defi/pools" }
-loom-defi-preloader = { path = "crates/defi/preloader" }
-loom-defi-price = { path = "crates/defi/price" }
-loom-defi-uniswap-v3-math = { path = "crates/defi/uniswap-v3-math" }
+kabu-defi-abi = { path = "crates/defi/abi" }
+kabu-defi-address-book = { path = "crates/defi/address-book" }
+kabu-defi-health-monitor = { path = "crates/defi/health-monitor" }
+kabu-defi-market = { path = "crates/defi/market" }
+kabu-defi-pools = { path = "crates/defi/pools" }
+kabu-defi-preloader = { path = "crates/defi/preloader" }
+kabu-defi-price = { path = "crates/defi/price" }
+kabu-defi-uniswap-v3-math = { path = "crates/defi/uniswap-v3-math" }
 # evm
-loom-evm-db = { path = "crates/evm/db" }
-loom-evm-utils = { path = "crates/evm/utils" }
+kabu-evm-db = { path = "crates/evm/db" }
+kabu-evm-utils = { path = "crates/evm/utils" }
 # execution
-loom-execution-estimator = { path = "crates/execution/estimator" }
-loom-execution-multicaller = { path = "crates/execution/multicaller" }
+kabu-execution-estimator = { path = "crates/execution/estimator" }
+kabu-execution-multicaller = { path = "crates/execution/multicaller" }
 # loom
-loom = { path = "crates/loom" }
+kabu = { path = "crates/kabu" }
 # metrics
-loom-metrics = { path = "crates/metrics" }
+kabu-metrics = { path = "crates/metrics" }
 # node
-loom-node-actor-config = { path = "crates/node/node-actor-config" }
-loom-node-db-access = { path = "crates/node/db-access" }
-loom-node-debug-provider = { path = "crates/node/debug-provider" }
-loom-node-exex = { path = "crates/node/exex" }
-loom-node-grpc = { path = "crates/node/grpc" }
-loom-node-grpc-exex-proto = { path = "crates/node/grpc-exex-proto" }
-loom-node-json-rpc = { path = "crates/node/json-rpc" }
-loom-node-player = { path = "crates/node/node-player" }
+kabu-node-actor-config = { path = "crates/node/node-actor-config" }
+kabu-node-db-access = { path = "crates/node/db-access" }
+kabu-node-debug-provider = { path = "crates/node/debug-provider" }
+kabu-node-exex = { path = "crates/node/exex" }
+kabu-node-grpc = { path = "crates/node/grpc" }
+kabu-node-grpc-exex-proto = { path = "crates/node/grpc-exex-proto" }
+kabu-node-json-rpc = { path = "crates/node/json-rpc" }
+kabu-node-player = { path = "crates/node/node-player" }
 # rpc
-loom-rpc-handler = { path = "crates/rpc/handler" }
-loom-rpc-state = { path = "crates/rpc/state" }
+kabu-rpc-handler = { path = "crates/rpc/handler" }
+kabu-rpc-state = { path = "crates/rpc/state" }
 # storage
-loom-storage-db = { path = "crates/storage/db" }
+kabu-storage-db = { path = "crates/storage/db" }
 # strategy
-loom-strategy-backrun = { path = "crates/strategy/backrun" }
-loom-strategy-merger = { path = "crates/strategy/merger" }
+kabu-strategy-backrun = { path = "crates/strategy/backrun" }
+kabu-strategy-merger = { path = "crates/strategy/merger" }
 # types
-loom-types-blockchain = { path = "crates/types/blockchain" }
-loom-types-entities = { path = "crates/types/entities" }
-loom-types-events = { path = "crates/types/events" }
+kabu-types-blockchain = { path = "crates/types/blockchain" }
+kabu-types-entities = { path = "crates/types/entities" }
+kabu-types-events = { path = "crates/types/events" }
 
 # logging
 env_logger = "0.11.5"

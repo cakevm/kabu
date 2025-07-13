@@ -5,9 +5,9 @@ use alloy_primitives::Address;
 use axum::extract::{Path, Query, State};
 use axum::http::StatusCode;
 use axum::Json;
-use loom_evm_utils::error_handler::internal_error;
-use loom_rpc_state::AppState;
-use loom_types_entities::{EntityAddress, PoolWrapper};
+use kabu_evm_utils::error_handler::internal_error;
+use kabu_rpc_state::AppState;
+use kabu_types_entities::{EntityAddress, PoolWrapper};
 use revm::{DatabaseCommit, DatabaseRef};
 use std::str::FromStr;
 
@@ -145,7 +145,7 @@ pub async fn market_stats<DB: DatabaseRef + DatabaseCommit + Send + Sync + Clone
         (status = 200, description = "Market stats", body = QuoteResponse),
     )
 )]
-pub async fn pool_quote<DB: DatabaseRef<Error = loom_evm_db::LoomDBError> + DatabaseCommit + Send + Sync + Clone + 'static>(
+pub async fn pool_quote<DB: DatabaseRef<Error = kabu_evm_db::KabuDBError> + DatabaseCommit + Send + Sync + Clone + 'static>(
     State(app_state): State<AppState<DB>>,
     Path(address): Path<String>,
     Json(_quote_request): Json<QuoteRequest>,

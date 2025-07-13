@@ -6,16 +6,16 @@ use std::sync::Arc;
 use tracing::{debug, error, info};
 
 use crate::logs_parser::process_log_entries;
-use loom_core_actors::{Actor, ActorResult, Broadcaster, Producer, WorkerResult};
-use loom_core_actors_macros::Producer;
-use loom_core_blockchain::Blockchain;
-use loom_types_blockchain::LoomDataTypesEthereum;
-use loom_types_entities::PoolLoaders;
-use loom_types_events::LoomTask;
+use kabu_core_actors::{Actor, ActorResult, Broadcaster, Producer, WorkerResult};
+use kabu_core_actors_macros::Producer;
+use kabu_core_blockchain::Blockchain;
+use kabu_types_blockchain::KabuDataTypesEthereum;
+use kabu_types_entities::PoolLoaders;
+use kabu_types_events::LoomTask;
 
 async fn history_pool_loader_one_shot_worker<P, PL, N>(
     client: P,
-    pool_loaders: Arc<PoolLoaders<PL, N, LoomDataTypesEthereum>>,
+    pool_loaders: Arc<PoolLoaders<PL, N, KabuDataTypesEthereum>>,
     tasks_tx: Broadcaster<LoomTask>,
 ) -> WorkerResult
 where

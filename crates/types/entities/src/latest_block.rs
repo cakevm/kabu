@@ -3,10 +3,10 @@ use alloy_primitives::{Address, BlockHash, BlockNumber, B256};
 use alloy_rpc_types::state::{AccountOverride, StateOverride};
 use alloy_rpc_types::Header;
 
-use loom_types_blockchain::{GethStateUpdate, LoomBlock, LoomHeader};
-use loom_types_blockchain::{LoomDataTypes, LoomDataTypesEthereum};
+use kabu_types_blockchain::{GethStateUpdate, KabuBlock, KabuHeader};
+use kabu_types_blockchain::{KabuDataTypes, KabuDataTypesEthereum};
 
-pub struct LatestBlock<LDT: LoomDataTypes = LoomDataTypesEthereum> {
+pub struct LatestBlock<LDT: KabuDataTypes = KabuDataTypesEthereum> {
     pub block_number: BlockNumber,
     pub block_hash: LDT::BlockHash,
     pub block_header: Option<LDT::Header>,
@@ -15,13 +15,13 @@ pub struct LatestBlock<LDT: LoomDataTypes = LoomDataTypesEthereum> {
     pub diff: Option<Vec<LDT::StateUpdate>>,
 }
 
-impl<LDT: LoomDataTypes<Address = Address, Header = Header, BlockHash = BlockHash, StateUpdate = GethStateUpdate>> LatestBlock<LDT> {
+impl<LDT: KabuDataTypes<Address = Address, Header = Header, BlockHash = BlockHash, StateUpdate = GethStateUpdate>> LatestBlock<LDT> {
     pub fn hash(&self) -> LDT::BlockHash {
         self.block_hash
     }
 
     pub fn parent_hash(&self) -> Option<LDT::BlockHash> {
-        self.block_header.as_ref().map(|x| <Header as LoomHeader<LDT>>::get_parent_hash(x))
+        self.block_header.as_ref().map(|x| <Header as KabuHeader<LDT>>::get_parent_hash(x))
     }
     pub fn number(&self) -> BlockNumber {
         self.block_number
@@ -59,7 +59,7 @@ impl<LDT: LoomDataTypes<Address = Address, Header = Header, BlockHash = BlockHas
 
     pub fn coinbase(&self) -> Option<LDT::Address> {
         if let Some(block) = &self.block_with_txs {
-            return Some(<alloy_rpc_types::Header as LoomHeader<LDT>>::get_beneficiary(&block.get_header()));
+            return Some(<alloy_rpc_types::Header as KabuHeader<LDT>>::get_beneficiary(&block.get_header()));
         }
         None
     }

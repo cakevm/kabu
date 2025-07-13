@@ -8,13 +8,13 @@ use alloy_primitives::{Address, Bytes, U256};
 use alloy_provider::Provider;
 use alloy_rpc_types_trace::geth::AccountState;
 use eyre::{eyre, Result};
-use loom_core_actors::{Accessor, Actor, ActorResult, SharedState, WorkerResult};
-use loom_core_actors_macros::Accessor;
-use loom_core_blockchain::{Blockchain, BlockchainState};
-use loom_defi_address_book::TokenAddressEth;
-use loom_evm_utils::{BalanceCheater, NWETH};
-use loom_types_blockchain::{GethStateUpdate, LoomDataTypes};
-use loom_types_entities::{AccountNonceAndBalanceState, EntityAddress, MarketState, TxSigners};
+use kabu_core_actors::{Accessor, Actor, ActorResult, SharedState, WorkerResult};
+use kabu_core_actors_macros::Accessor;
+use kabu_core_blockchain::{Blockchain, BlockchainState};
+use kabu_defi_address_book::TokenAddressEth;
+use kabu_evm_utils::{BalanceCheater, NWETH};
+use kabu_types_blockchain::{GethStateUpdate, KabuDataTypes};
+use kabu_types_entities::{AccountNonceAndBalanceState, EntityAddress, MarketState, TxSigners};
 use revm::{Database, DatabaseCommit, DatabaseRef};
 use tracing::{debug, error, trace};
 
@@ -174,7 +174,7 @@ where
         Self { name, ..self }
     }
 
-    pub fn on_bc<LDT: LoomDataTypes>(self, bc: &Blockchain<LDT>, state: &BlockchainState<DB, LDT>) -> Self {
+    pub fn on_bc<LDT: KabuDataTypes>(self, bc: &Blockchain<LDT>, state: &BlockchainState<DB, LDT>) -> Self {
         Self { account_nonce_balance_state: Some(bc.nonce_and_balance()), market_state: Some(state.market_state_commit()), ..self }
     }
 

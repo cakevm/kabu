@@ -9,16 +9,16 @@ use tokio::sync::broadcast::error::RecvError;
 use tokio::sync::broadcast::Receiver;
 use tracing::{error, info, warn};
 
-use loom_core_actors::{Accessor, Actor, ActorResult, Broadcaster, Consumer, SharedState, WorkerResult};
-use loom_core_actors_macros::{Accessor, Consumer};
-use loom_core_blockchain::{Blockchain, BlockchainState};
-use loom_evm_db::DatabaseLoomExt;
-use loom_types_blockchain::LoomDataTypes;
-use loom_types_entities::{EntityAddress, MarketState};
-use loom_types_events::{MarketEvents, MessageTxCompose, TxComposeMessageType};
+use kabu_core_actors::{Accessor, Actor, ActorResult, Broadcaster, Consumer, SharedState, WorkerResult};
+use kabu_core_actors_macros::{Accessor, Consumer};
+use kabu_core_blockchain::{Blockchain, BlockchainState};
+use kabu_evm_db::DatabaseKabuExt;
+use kabu_types_blockchain::KabuDataTypes;
+use kabu_types_entities::{EntityAddress, MarketState};
+use kabu_types_events::{MarketEvents, MessageTxCompose, TxComposeMessageType};
 use revm::DatabaseRef;
 
-async fn verify_pool_state_task<P: Provider<Ethereum> + 'static, DB: DatabaseLoomExt>(
+async fn verify_pool_state_task<P: Provider<Ethereum> + 'static, DB: DatabaseKabuExt>(
     client: P,
     address: EntityAddress,
     market_state: SharedState<MarketState<DB>>,
@@ -55,7 +55,7 @@ async fn verify_pool_state_task<P: Provider<Ethereum> + 'static, DB: DatabaseLoo
 
 pub async fn state_health_monitor_worker<
     P: Provider<Ethereum> + Clone + 'static,
-    DB: DatabaseRef + DatabaseLoomExt + Send + Sync + Clone + 'static,
+    DB: DatabaseRef + DatabaseKabuExt + Send + Sync + Clone + 'static,
 >(
     client: P,
     market_state: SharedState<MarketState<DB>>,
@@ -137,13 +137,13 @@ pub struct StateHealthMonitorActor<P, DB: Clone + Send + Sync + 'static> {
 impl<P, DB> StateHealthMonitorActor<P, DB>
 where
     P: Provider<Ethereum> + Send + Sync + Clone + 'static,
-    DB: DatabaseRef + DatabaseLoomExt + Send + Sync + Clone + Default + 'static,
+    DB: DatabaseRef + DatabaseKabuExt + Send + Sync + Clone + Default + 'static,
 {
     pub fn new(client: P) -> Self {
         StateHealthMonitorActor { client, market_state: None, tx_compose_channel_rx: None, market_events_rx: None }
     }
 
-    pub fn on_bc<LDT: LoomDataTypes>(self, bc: &Blockchain, state: &BlockchainState<DB, LDT>) -> Self {
+    pub fn on_bc<LDT: KabuDataTypes>(self, bc: &Blockchain, state: &BlockchainState<DB, LDT>) -> Self {
         Self {
             market_state: Some(state.market_state()),
             tx_compose_channel_rx: Some(bc.tx_compose_channel()),
@@ -156,7 +156,7 @@ where
 impl<P, DB> Actor for StateHealthMonitorActor<P, DB>
 where
     P: Provider<Ethereum> + Send + Sync + Clone + 'static,
-    DB: DatabaseRef + DatabaseLoomExt + Send + Sync + Clone + 'static,
+    DB: DatabaseRef + DatabaseKabuExt + Send + Sync + Clone + 'static,
 {
     fn start(&self) -> ActorResult {
         let task = tokio::task::spawn(state_health_monitor_worker(

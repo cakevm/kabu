@@ -6,8 +6,8 @@ use crate::{OpcodesEncoder, OpcodesEncoderV2};
 use alloy_primitives::{Address, Bytes};
 use eyre::OptionExt;
 use eyre::Result;
-use loom_types_blockchain::MulticallerCalls;
-use loom_types_entities::{Pool, PoolClass, SwapAmountType};
+use kabu_types_blockchain::MulticallerCalls;
+use kabu_types_entities::{Pool, PoolClass, SwapAmountType};
 use std::collections::HashMap;
 use std::sync::Arc;
 

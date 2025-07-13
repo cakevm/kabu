@@ -4,9 +4,9 @@ use alloy_rpc_types::Log;
 use eyre::Result;
 use std::collections::HashMap;
 
-use loom_core_actors::{run_sync, Broadcaster};
-use loom_types_entities::PoolLoaders;
-use loom_types_events::LoomTask;
+use kabu_core_actors::{run_sync, Broadcaster};
+use kabu_types_entities::PoolLoaders;
+use kabu_types_events::LoomTask;
 
 pub async fn process_log_entries<P, N>(
     log_entries: Vec<Log>,

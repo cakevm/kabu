@@ -6,7 +6,7 @@ use eyre::{eyre, Result};
 use tracing::error;
 
 use crate::{EntityAddress, PoolWrapper, SwapAmountType, SwapLine, Token};
-use loom_evm_utils::LoomExecuteEvm;
+use kabu_evm_utils::LoomExecuteEvm;
 
 #[derive(Clone, Debug)]
 pub struct SwapStep {

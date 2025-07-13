@@ -6,8 +6,8 @@ use crate::{EntityAddress, Swap, Token};
 use alloy_primitives::utils::format_units;
 use alloy_primitives::U256;
 use eyre::{eyre, OptionExt, Result};
+use kabu_evm_utils::NWETH;
 use lazy_static::lazy_static;
-use loom_evm_utils::NWETH;
 use rand::random;
 use tracing::{error, info};
 

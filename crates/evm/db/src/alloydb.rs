@@ -1,4 +1,4 @@
-use crate::error::LoomDBError;
+use crate::error::KabuDBError;
 use alloy::eips::BlockId;
 use alloy::network::primitives::HeaderResponse;
 use alloy::providers::{network::BlockResponse, Network, Provider};
@@ -106,7 +106,7 @@ impl<N: Network, P: Provider<N>> AlloyDB<N, P> {
 }
 
 impl<N: Network, P: Provider<N>> DatabaseRef for AlloyDB<N, P> {
-    type Error = LoomDBError;
+    type Error = KabuDBError;
 
     fn basic_ref(&self, address: Address) -> Result<Option<AccountInfo>, Self::Error> {
         let f = async {
@@ -118,10 +118,10 @@ impl<N: Network, P: Provider<N>> DatabaseRef for AlloyDB<N, P> {
 
         let (nonce, balance, code) = self.block_on(f);
 
-        let balance = balance.map_err(|_| LoomDBError::TransportError)?;
-        let code = Bytecode::new_raw(code.map_err(|_| LoomDBError::TransportError)?.0.into());
+        let balance = balance.map_err(|_| KabuDBError::TransportError)?;
+        let code = Bytecode::new_raw(code.map_err(|_| KabuDBError::TransportError)?.0.into());
         let code_hash = code.hash_slow();
-        let nonce = nonce.map_err(|_| LoomDBError::TransportError)?;
+        let nonce = nonce.map_err(|_| KabuDBError::TransportError)?;
 
         Ok(Some(AccountInfo::new(balance, nonce, code_hash, code)))
     }
@@ -133,7 +133,7 @@ impl<N: Network, P: Provider<N>> DatabaseRef for AlloyDB<N, P> {
 
     fn storage_ref(&self, address: Address, index: U256) -> Result<U256, Self::Error> {
         let f = self.provider.get_storage_at(address, index).block_id(self.block_number);
-        let slot_val = self.block_on(f.into_future()).map_err(|_| LoomDBError::TransportError)?;
+        let slot_val = self.block_on(f.into_future()).map_err(|_| KabuDBError::TransportError)?;
         Ok(slot_val)
     }
 
@@ -145,14 +145,14 @@ impl<N: Network, P: Provider<N>> DatabaseRef for AlloyDB<N, P> {
                     .get_block_by_number(number.into())
                     .into_future(),
             )
-            .map_err(|_| LoomDBError::TransportError)?;
+            .map_err(|_| KabuDBError::TransportError)?;
         // SAFETY: If the number is given, the block is supposed to be finalized, so unwrapping is safe.
         Ok(B256::new(*block.unwrap().header().hash()))
     }
 }
 
 impl<N: Network, P: Provider<N>> Database for AlloyDB<N, P> {
-    type Error = LoomDBError;
+    type Error = KabuDBError;
 
     #[inline]
     fn basic(&mut self, address: Address) -> Result<Option<AccountInfo>, Self::Error> {

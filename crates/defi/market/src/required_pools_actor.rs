@@ -8,14 +8,14 @@ use std::sync::Arc;
 use tracing::{debug, error, info};
 
 use crate::pool_loader_actor::fetch_and_add_pool_by_pool_id;
-use loom_core_actors::{Accessor, Actor, ActorResult, SharedState, WorkerResult};
-use loom_core_actors_macros::{Accessor, Consumer};
-use loom_core_blockchain::{Blockchain, BlockchainState};
-use loom_evm_db::LoomDBError;
-use loom_node_debug_provider::DebugProviderExt;
-use loom_types_blockchain::LoomDataTypesEVM;
-use loom_types_entities::required_state::{RequiredState, RequiredStateReader};
-use loom_types_entities::{EntityAddress, Market, MarketState, PoolClass, PoolLoaders};
+use kabu_core_actors::{Accessor, Actor, ActorResult, SharedState, WorkerResult};
+use kabu_core_actors_macros::{Accessor, Consumer};
+use kabu_core_blockchain::{Blockchain, BlockchainState};
+use kabu_evm_db::KabuDBError;
+use kabu_node_debug_provider::DebugProviderExt;
+use kabu_types_blockchain::KabuDataTypesEVM;
+use kabu_types_entities::required_state::{RequiredState, RequiredStateReader};
+use kabu_types_entities::{EntityAddress, Market, MarketState, PoolClass, PoolLoaders};
 
 async fn required_pools_loader_worker<P, N, DB, LDT>(
     client: P,
@@ -28,8 +28,8 @@ async fn required_pools_loader_worker<P, N, DB, LDT>(
 where
     N: Network<TransactionRequest = LDT::TransactionRequest>,
     P: Provider<N> + DebugProviderExt<N> + Send + Sync + Clone + 'static,
-    DB: Database<Error = LoomDBError> + DatabaseRef<Error = LoomDBError> + DatabaseCommit + Send + Sync + Clone + 'static,
-    LDT: LoomDataTypesEVM + 'static,
+    DB: Database<Error = KabuDBError> + DatabaseRef<Error = KabuDBError> + DatabaseCommit + Send + Sync + Clone + 'static,
+    LDT: KabuDataTypesEVM + 'static,
 {
     for (pool_id, pool_class) in pools {
         debug!(class=%pool_class, %pool_id, "Loading pool");
@@ -83,7 +83,7 @@ where
     N: Network,
     P: Provider<N> + DebugProviderExt<N> + Send + Sync + Clone + 'static,
     DB: Database + DatabaseRef + DatabaseCommit + Clone + Send + Sync + 'static,
-    LDT: LoomDataTypesEVM + 'static,
+    LDT: KabuDataTypesEVM + 'static,
 {
     client: P,
     pool_loaders: Arc<PoolLoaders<P, N, LDT>>,
@@ -101,7 +101,7 @@ where
     N: Network,
     P: Provider<N> + DebugProviderExt<N> + Send + Sync + Clone + 'static,
     DB: Database + DatabaseRef + DatabaseCommit + Clone + Send + Sync + 'static,
-    LDT: LoomDataTypesEVM + 'static,
+    LDT: KabuDataTypesEVM + 'static,
 {
     pub fn new(client: P, pool_loaders: Arc<PoolLoaders<P, N, LDT>>) -> Self {
         Self { client, pools: Vec::new(), pool_loaders, required_state: None, market: None, market_state: None, _n: PhantomData }
@@ -126,8 +126,8 @@ impl<P, N, DB, LDT> Actor for RequiredPoolLoaderActor<P, N, DB, LDT>
 where
     N: Network<TransactionRequest = LDT::TransactionRequest>,
     P: Provider<N> + DebugProviderExt<N> + Send + Sync + Clone + 'static,
-    DB: Database<Error = LoomDBError> + DatabaseRef<Error = LoomDBError> + DatabaseCommit + Send + Sync + Clone + 'static,
-    LDT: LoomDataTypesEVM + 'static,
+    DB: Database<Error = KabuDBError> + DatabaseRef<Error = KabuDBError> + DatabaseCommit + Send + Sync + Clone + 'static,
+    LDT: KabuDataTypesEVM + 'static,
 {
     fn start(&self) -> ActorResult {
         let task = tokio::task::spawn(required_pools_loader_worker(

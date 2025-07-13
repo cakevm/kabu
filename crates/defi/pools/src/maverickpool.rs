@@ -5,15 +5,15 @@ use alloy::providers::{Network, Provider};
 use alloy::rpc::types::TransactionRequest;
 use alloy::sol_types::{SolCall, SolInterface};
 use eyre::{eyre, ErrReport, OptionExt, Result};
+use kabu_defi_abi::maverick::IMaverickPool::{getStateCall, IMaverickPoolCalls, IMaverickPoolInstance};
+use kabu_defi_abi::maverick::IMaverickQuoter::{calculateSwapCall, IMaverickQuoterCalls};
+use kabu_defi_abi::maverick::{IMaverickPool, IMaverickQuoter, State};
+use kabu_defi_abi::IERC20;
+use kabu_defi_address_book::PeripheryAddress;
+use kabu_evm_utils::{evm_dyn_call, LoomExecuteEvm};
+use kabu_types_entities::required_state::RequiredState;
+use kabu_types_entities::{EntityAddress, Pool, PoolAbiEncoder, PoolClass, PoolProtocol, PreswapRequirement, SwapDirection};
 use lazy_static::lazy_static;
-use loom_defi_abi::maverick::IMaverickPool::{getStateCall, IMaverickPoolCalls, IMaverickPoolInstance};
-use loom_defi_abi::maverick::IMaverickQuoter::{calculateSwapCall, IMaverickQuoterCalls};
-use loom_defi_abi::maverick::{IMaverickPool, IMaverickQuoter, State};
-use loom_defi_abi::IERC20;
-use loom_defi_address_book::PeripheryAddress;
-use loom_evm_utils::{evm_dyn_call, LoomExecuteEvm};
-use loom_types_entities::required_state::RequiredState;
-use loom_types_entities::{EntityAddress, Pool, PoolAbiEncoder, PoolClass, PoolProtocol, PreswapRequirement, SwapDirection};
 use std::any::Any;
 use tracing::error;
 
@@ -442,12 +442,12 @@ impl PoolAbiEncoder for MaverickAbiSwapEncoder {
 mod tests {
     use super::*;
     use alloy::rpc::types::BlockNumberOrTag;
-    use loom_defi_abi::maverick::IMaverickQuoter::IMaverickQuoterInstance;
-    use loom_evm_db::LoomDBType;
-    use loom_evm_utils::LoomEVMWrapper;
-    use loom_node_debug_provider::AnvilDebugProviderFactory;
-    use loom_types_blockchain::LoomDataTypesEthereum;
-    use loom_types_entities::required_state::RequiredStateReader;
+    use kabu_defi_abi::maverick::IMaverickQuoter::IMaverickQuoterInstance;
+    use kabu_evm_db::KabuDBType;
+    use kabu_evm_utils::KabuEVMWrapper;
+    use kabu_node_debug_provider::AnvilDebugProviderFactory;
+    use kabu_types_blockchain::KabuDataTypesEthereum;
+    use kabu_types_entities::required_state::RequiredStateReader;
     use revm::database::CacheDB;
     use std::env;
     use tracing::debug;
@@ -468,16 +468,16 @@ mod tests {
         let state_required = pool.get_state_required()?;
 
         let state_required =
-            RequiredStateReader::<LoomDataTypesEthereum>::fetch_calls_and_slots(client.clone(), state_required, Some(20045799)).await?;
+            RequiredStateReader::<KabuDataTypesEthereum>::fetch_calls_and_slots(client.clone(), state_required, Some(20045799)).await?;
         debug!("{:?}", state_required);
 
         let block_number = 20045799u64;
 
-        use loom_types_entities::MarketState;
-        let mut market_state = MarketState::new(LoomDBType::default());
+        use kabu_types_entities::MarketState;
+        let mut market_state = MarketState::new(KabuDBType::default());
         market_state.state_db.apply_geth_update(state_required);
         let block = client.get_block_by_number(BlockNumberOrTag::Number(block_number)).await?.unwrap();
-        let mut evm = LoomEVMWrapper::new(CacheDB::new(market_state.state_db.clone())).with_header(&block.header);
+        let mut evm = KabuEVMWrapper::new(CacheDB::new(market_state.state_db.clone())).with_header(&block.header);
 
         let amount = U256::from(pool.liquidity1 / U256::from(1000));
 
