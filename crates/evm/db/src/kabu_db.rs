@@ -181,7 +181,7 @@ impl KabuDB {
 
         let rpc_client = ClientBuilder::default().transport(box_transport, true);
 
-        let provider = ProviderBuilder::new().disable_recommended_fillers().on_client(rpc_client);
+        let provider = ProviderBuilder::new().disable_recommended_fillers().connect_client(rpc_client);
 
         let ext_db = AlloyDB::new(provider, BlockNumberOrTag::Latest.into());
 
@@ -696,7 +696,7 @@ mod test {
     #[test]
     fn test_new_with_provider() {
         let db = KabuDB::new();
-        let provider = ProviderBuilder::new().on_anvil_with_wallet();
+        let provider = ProviderBuilder::new().connect_anvil_with_wallet();
 
         let rt = tokio::runtime::Runtime::new().unwrap();
 
@@ -719,7 +719,7 @@ mod test {
     #[test]
     fn test_new_with_ext_db() {
         let db = KabuDB::new();
-        let provider = ProviderBuilder::new().on_anvil_with_wallet();
+        let provider = ProviderBuilder::new().connect_anvil_with_wallet();
 
         let rt = tokio::runtime::Runtime::new().unwrap();
 

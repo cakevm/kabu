@@ -11,8 +11,9 @@ use crate::EntityAddress;
 use alloy_primitives::{Address, Bytes, U256};
 use eyre::{eyre, ErrReport, Result};
 use kabu_defi_address_book::FactoryAddress;
-use kabu_evm_utils::LoomExecuteEvm;
+use kabu_evm_db::KabuDBError;
 use kabu_types_blockchain::{KabuDataTypes, KabuDataTypesEthereum};
+use revm::DatabaseRef;
 use serde::{Deserialize, Serialize};
 use strum_macros::{Display, EnumIter, EnumString, VariantNames};
 
@@ -257,7 +258,7 @@ pub trait Pool: Sync + Send {
 
     fn calculate_out_amount(
         &self,
-        evm: &mut dyn LoomExecuteEvm,
+        db: &dyn DatabaseRef<Error = KabuDBError>,
         token_address_from: &EntityAddress,
         token_address_to: &EntityAddress,
         in_amount: U256,
@@ -266,7 +267,7 @@ pub trait Pool: Sync + Send {
     // returns (in_amount, gas_used)
     fn calculate_in_amount(
         &self,
-        env: &mut dyn LoomExecuteEvm,
+        db: &dyn DatabaseRef<Error = KabuDBError>,
         token_address_from: &EntityAddress,
         token_address_to: &EntityAddress,
         out_amount: U256,

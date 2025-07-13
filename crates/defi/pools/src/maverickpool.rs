@@ -1,19 +1,20 @@
 use crate::state_readers::UniswapV3EvmStateReader;
-use alloy::network::TransactionBuilder;
-use alloy::primitives::{Address, Bytes, TxKind, U128, U256};
+use alloy::primitives::{Address, Bytes, U128, U256};
 use alloy::providers::{Network, Provider};
-use alloy::rpc::types::TransactionRequest;
 use alloy::sol_types::{SolCall, SolInterface};
+use alloy_evm::EvmEnv;
 use eyre::{eyre, ErrReport, OptionExt, Result};
 use kabu_defi_abi::maverick::IMaverickPool::{getStateCall, IMaverickPoolCalls, IMaverickPoolInstance};
 use kabu_defi_abi::maverick::IMaverickQuoter::{calculateSwapCall, IMaverickQuoterCalls};
 use kabu_defi_abi::maverick::{IMaverickPool, IMaverickQuoter, State};
 use kabu_defi_abi::IERC20;
 use kabu_defi_address_book::PeripheryAddress;
-use kabu_evm_utils::{evm_dyn_call, LoomExecuteEvm};
+use kabu_evm_db::KabuDBError;
+use kabu_evm_utils::evm_call;
 use kabu_types_entities::required_state::RequiredState;
 use kabu_types_entities::{EntityAddress, Pool, PoolAbiEncoder, PoolClass, PoolProtocol, PreswapRequirement, SwapDirection};
 use lazy_static::lazy_static;
+use revm::DatabaseRef;
 use std::any::Any;
 use tracing::error;
 
@@ -84,18 +85,18 @@ impl MaverickPool {
     pub async fn fetch_pool_data<N: Network, P: Provider<N> + Send + Sync + Clone + 'static>(client: P, address: Address) -> Result<Self> {
         let pool = IMaverickPoolInstance::new(address, client.clone());
 
-        let token0: Address = pool.tokenA().call().await?._0;
-        let token1: Address = pool.tokenB().call().await?._0;
-        let fee: U256 = pool.fee().call().await?._0;
-        let slot0 = pool.getState().call().await?._0;
-        let factory: Address = pool.factory().call().await?._0;
-        let spacing: u32 = pool.tickSpacing().call().await?._0.to();
+        let token0: Address = pool.tokenA().call().await?;
+        let token1: Address = pool.tokenB().call().await?;
+        let fee: U256 = pool.fee().call().await?;
+        let slot0 = pool.getState().call().await?;
+        let factory: Address = pool.factory().call().await?;
+        let spacing: u32 = pool.tickSpacing().call().await?.to();
 
         let token0_erc20 = IERC20::IERC20Instance::new(token0, client.clone());
         let token1_erc20 = IERC20::IERC20Instance::new(token1, client.clone());
 
-        let liquidity0: U256 = token0_erc20.balanceOf(address).call().await?._0;
-        let liquidity1: U256 = token1_erc20.balanceOf(address).call().await?._0;
+        let liquidity0: U256 = token0_erc20.balanceOf(address).call().await?;
+        let liquidity1: U256 = token1_erc20.balanceOf(address).call().await?;
 
         let protocol = MaverickPool::get_protocol_by_factory(factory);
 
@@ -115,12 +116,12 @@ impl MaverickPool {
 
         Ok(ret)
     }
-    pub fn fetch_pool_data_evm(evm: &mut dyn LoomExecuteEvm, address: Address) -> Result<Self> {
-        let token0: Address = UniswapV3EvmStateReader::token0(evm, address)?;
-        let token1: Address = UniswapV3EvmStateReader::token1(evm, address)?;
-        let fee = UniswapV3EvmStateReader::fee(evm, address)?;
-        let factory: Address = UniswapV3EvmStateReader::factory(evm, address)?;
-        let spacing: u32 = UniswapV3EvmStateReader::tick_spacing(evm, address)?;
+    pub fn fetch_pool_data_evm<DB: DatabaseRef<Error = KabuDBError> + ?Sized>(db: &DB, address: Address) -> Result<Self> {
+        let token0: Address = UniswapV3EvmStateReader::token0(db, address)?;
+        let token1: Address = UniswapV3EvmStateReader::token1(db, address)?;
+        let fee = UniswapV3EvmStateReader::fee(db, address)?;
+        let factory: Address = UniswapV3EvmStateReader::factory(db, address)?;
+        let spacing: u32 = UniswapV3EvmStateReader::tick_spacing(db, address)?;
 
         let protocol = Self::get_protocol_by_factory(factory);
 
@@ -177,7 +178,7 @@ impl Pool for MaverickPool {
 
     fn calculate_out_amount(
         &self,
-        evm: &mut dyn LoomExecuteEvm,
+        db: &dyn DatabaseRef<Error = KabuDBError>,
         token_address_from: &EntityAddress,
         token_address_to: &EntityAddress,
         in_amount: U256,
@@ -199,11 +200,9 @@ impl Pool for MaverickPool {
         })
         .abi_encode();
 
-        let req = TransactionRequest::default().with_kind(TxKind::Call(PeripheryAddress::MAVERICK_QUOTER)).with_input(call_data_vec);
+        let (value, gas_used, _) = evm_call(db, EvmEnv::default(), PeripheryAddress::MAVERICK_QUOTER, call_data_vec)?;
 
-        let (value, gas_used) = evm_dyn_call(evm, req)?;
-
-        let ret = calculateSwapCall::abi_decode_returns(&value, false)?.returnAmount;
+        let ret = calculateSwapCall::abi_decode_returns(&value)?;
 
         if ret.is_zero() {
             Err(eyre!("ZERO_OUT_AMOUNT"))
@@ -214,7 +213,7 @@ impl Pool for MaverickPool {
 
     fn calculate_in_amount(
         &self,
-        evm: &mut dyn LoomExecuteEvm,
+        db: &dyn DatabaseRef<Error = KabuDBError>,
         token_address_from: &EntityAddress,
         token_address_to: &EntityAddress,
         out_amount: U256,
@@ -236,14 +235,9 @@ impl Pool for MaverickPool {
         })
         .abi_encode();
 
-        let req = TransactionRequest::default()
-            .with_kind(TxKind::Call(PeripheryAddress::MAVERICK_QUOTER))
-            .with_input(call_data_vec)
-            .with_gas_limit(500_000);
+        let (value, gas_used, _) = evm_call(db, EvmEnv::default(), PeripheryAddress::MAVERICK_QUOTER, call_data_vec)?;
 
-        let (value, gas_used) = evm_dyn_call(evm, req)?;
-
-        let ret = calculateSwapCall::abi_decode_returns(&value, false)?.returnAmount;
+        let ret = calculateSwapCall::abi_decode_returns(&value)?;
 
         if ret.is_zero() {
             Err(eyre!("ZERO_IN_AMOUNT"))
@@ -444,7 +438,6 @@ mod tests {
     use alloy::rpc::types::BlockNumberOrTag;
     use kabu_defi_abi::maverick::IMaverickQuoter::IMaverickQuoterInstance;
     use kabu_evm_db::KabuDBType;
-    use kabu_evm_utils::KabuEVMWrapper;
     use kabu_node_debug_provider::AnvilDebugProviderFactory;
     use kabu_types_blockchain::KabuDataTypesEthereum;
     use kabu_types_entities::required_state::RequiredStateReader;
@@ -477,35 +470,25 @@ mod tests {
         let mut market_state = MarketState::new(KabuDBType::default());
         market_state.state_db.apply_geth_update(state_required);
         let block = client.get_block_by_number(BlockNumberOrTag::Number(block_number)).await?.unwrap();
-        let mut evm = KabuEVMWrapper::new(CacheDB::new(market_state.state_db.clone())).with_header(&block.header);
+        let cache_db = CacheDB::new(market_state.state_db.clone());
 
         let amount = U256::from(pool.liquidity1 / U256::from(1000));
 
         let quoter = IMaverickQuoterInstance::new(PeripheryAddress::MAVERICK_QUOTER, client.clone());
 
         let resp = quoter.calculateSwap(pool_address, amount.to(), false, false, U256::ZERO).call().await?;
-        debug!("Router call : {:?}", resp.returnAmount);
-        assert_ne!(resp.returnAmount, U256::ZERO);
+        debug!("Router call : {:?}", resp);
+        assert_ne!(resp, U256::ZERO);
 
         let (out_amount, gas_used) = pool
-            .calculate_out_amount(
-                evm.get_evm_mut(),
-                &pool.token1.into(),
-                &pool.token0.into(),
-                U256::from(pool.liquidity1 / U256::from(1000)),
-            )
+            .calculate_out_amount(&cache_db, &pool.token1.into(), &pool.token0.into(), U256::from(pool.liquidity1 / U256::from(1000)))
             .unwrap();
         debug!("{} {} {}", pool.get_protocol(), out_amount, gas_used);
         assert_ne!(out_amount, U256::ZERO);
         assert!(gas_used > 100000);
 
         let (out_amount, gas_used) = pool
-            .calculate_out_amount(
-                evm.get_evm_mut(),
-                &pool.token0.into(),
-                &pool.token1.into(),
-                U256::from(pool.liquidity0 / U256::from(1000)),
-            )
+            .calculate_out_amount(&cache_db, &pool.token0.into(), &pool.token1.into(), U256::from(pool.liquidity0 / U256::from(1000)))
             .unwrap();
         debug!("{} {} {}", pool.get_protocol(), out_amount, gas_used);
         assert_ne!(out_amount, U256::ZERO);

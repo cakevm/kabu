@@ -6,7 +6,8 @@ use crate::swap_path::SwapPath;
 use crate::{CalculationResult, EntityAddress, PoolWrapper, SwapError, SwapStep, Token};
 use alloy_primitives::{I256, U256};
 use eyre::{eyre, Result};
-use kabu_evm_utils::LoomExecuteEvm;
+use kabu_evm_db::KabuDBError;
+use revm::DatabaseRef;
 use tracing::debug;
 
 #[derive(Debug, Clone, Default)]
@@ -301,9 +302,9 @@ impl SwapLine {
 
     /// Calculate the out amount for the swap line for a given in amount
     #[allow(clippy::result_large_err)]
-    pub fn calculate_with_in_amount(
+    pub fn calculate_with_in_amount<DB: DatabaseRef<Error = KabuDBError>>(
         &self,
-        evm: &mut dyn LoomExecuteEvm,
+        db: &DB,
         in_amount: U256,
     ) -> Result<(U256, u64, Vec<CalculationResult>), SwapError> {
         let mut current_in_amount = in_amount;
@@ -314,7 +315,7 @@ impl SwapLine {
         for (i, pool) in self.pools().iter().enumerate() {
             let token_from = &self.tokens()[i];
             let token_to = &self.tokens()[i + 1];
-            match pool.calculate_out_amount(evm, &token_from.get_address(), &token_to.get_address(), current_in_amount) {
+            match pool.calculate_out_amount(db, &token_from.get_address(), &token_to.get_address(), current_in_amount) {
                 Ok((out_amount_result, gas_result)) => {
                     if out_amount_result.is_zero() {
                         return Err(SwapError {
@@ -360,9 +361,9 @@ impl SwapLine {
 
     /// Calculate the in amount for the swap line for a given out amount
     #[allow(clippy::result_large_err)]
-    pub fn calculate_with_out_amount(
+    pub fn calculate_with_out_amount<DB: DatabaseRef<Error = KabuDBError>>(
         &self,
-        evm: &mut dyn LoomExecuteEvm,
+        db: &DB,
         out_amount: U256,
     ) -> Result<(U256, u64, Vec<CalculationResult>), SwapError> {
         let mut current_out_amount = out_amount;
@@ -379,7 +380,7 @@ impl SwapLine {
         for (i, pool) in pool_reverse.iter().enumerate() {
             let token_from = &tokens_reverse[i + 1];
             let token_to = &tokens_reverse[i];
-            match pool.calculate_in_amount(evm, &token_from.get_address(), &token_to.get_address(), current_out_amount) {
+            match pool.calculate_in_amount(db, &token_from.get_address(), &token_to.get_address(), current_out_amount) {
                 Ok((in_amount_result, gas_result)) => {
                     if in_amount_result == U256::MAX || in_amount_result == U256::ZERO {
                         return Err(SwapError {
@@ -415,7 +416,11 @@ impl SwapLine {
 
     /// Optimize the swap line for a given in amount
     #[allow(clippy::result_large_err)]
-    pub fn optimize_with_in_amount(&mut self, evm: &mut dyn LoomExecuteEvm, in_amount: U256) -> Result<&mut Self, SwapError> {
+    pub fn optimize_with_in_amount<DB: DatabaseRef<Error = KabuDBError>>(
+        &mut self,
+        db: &DB,
+        in_amount: U256,
+    ) -> Result<&mut Self, SwapError> {
         let mut current_in_amount = in_amount;
         let mut best_profit: Option<I256> = None;
         let mut current_step = U256::from(10000);
@@ -435,7 +440,7 @@ impl SwapLine {
                 return Ok(self);
             }
 
-            let (current_out_amount, current_gas_used, calculation_results) = match self.calculate_with_in_amount(evm, next_amount) {
+            let (current_out_amount, current_gas_used, calculation_results) = match self.calculate_with_in_amount(db, next_amount) {
                 Ok(ret) => ret,
                 Err(e) => {
                     if counter == 1 {

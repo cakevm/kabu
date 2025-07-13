@@ -112,7 +112,7 @@ where
                                     for log_entry in logs.iter() {
                                         let log_entry: Option<Log> = Log::new(log_entry.inner.address, log_entry.topics().to_vec(), log_entry.inner.data.data.clone());
                                         if let Some(log_entry) = log_entry {
-                                            if let Ok(event) = IERC20Events::decode_log(&log_entry, false ){
+                                            if let Ok(event) = IERC20Events::decode_log(&log_entry){
                                                 if let  IERC20Events::Transfer(event) = event.data {
                                                     //debug!("ERC20TransferEvent {} : {:?}", log_entry.address, event);
                                                     if accounts_lock.is_monitored(&event.to.into()) {

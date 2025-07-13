@@ -10,8 +10,6 @@ use kabu::node::actor_config::NodeBlockActorConfig;
 use kabu::node::exex::mempool_worker;
 use kabu::types::blockchain::KabuDataTypesEthereum;
 use kabu::types::entities::MarketState;
-use reth::builder::engine_tree_config::TreeConfig;
-use reth::builder::EngineNodeLauncher;
 use reth::chainspec::{Chain, EthereumChainSpecParser};
 use reth::cli::Cli;
 use reth_node_ethereum::node::EthereumAddOns;
@@ -41,23 +39,17 @@ fn main() -> eyre::Result<()> {
             let bc = Blockchain::new(builder.config().chain.chain.id());
             let bc_clone = bc.clone();
 
-            let engine_tree_config = TreeConfig::default()
-                .with_persistence_threshold(kabu_args.persistence_threshold)
-                .with_memory_block_buffer_target(kabu_args.memory_block_buffer_target);
             let handle = builder
                 .with_types_and_provider::<EthereumNode, BlockchainProvider<_>>()
                 .with_components(EthereumNode::components())
                 .with_add_ons(EthereumAddOns::default())
                 .install_exex("kabu-exex", |node_ctx| kabu_runtime::init(node_ctx, bc_clone, NodeBlockActorConfig::all_enabled()))
-                .launch_with_fn(|builder| {
-                    let launcher = EngineNodeLauncher::new(builder.task_executor().clone(), builder.config().datadir(), engine_tree_config);
-                    builder.launch_with(launcher)
-                })
+                .launch()
                 .await?;
 
             let mempool = handle.node.pool.clone();
             let ipc_provider =
-                ProviderBuilder::new().disable_recommended_fillers().on_ipc(IpcConnect::new(handle.node.config.rpc.ipcpath)).await?;
+                ProviderBuilder::new().disable_recommended_fillers().connect_ipc(IpcConnect::new(handle.node.config.rpc.ipcpath)).await?;
             let alloy_db = AlloyDB::new(ipc_provider.clone(), BlockId::latest()).unwrap();
 
             let state_db = KabuDB::new().with_ext_db(alloy_db);
@@ -94,9 +86,9 @@ fn main() -> eyre::Result<()> {
                 let topology_config = TopologyConfig::load_from_file(kabu_args.kabu_config.clone())?;
 
                 let client_config = topology_config.clients.get("remote").unwrap();
-                let transport = WsConnect { url: client_config.url.clone(), auth: None, config: None };
+                let transport = WsConnect::new(client_config.url.clone());
                 let client = ClientBuilder::default().ws(transport).await?;
-                let provider = ProviderBuilder::new().disable_recommended_fillers().on_client(client);
+                let provider = ProviderBuilder::new().disable_recommended_fillers().connect_client(client);
                 let bc = Blockchain::new(Chain::mainnet().id());
                 let bc_clone = bc.clone();
 

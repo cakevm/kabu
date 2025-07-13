@@ -34,17 +34,17 @@ where
     N: Network,
     P: Provider<N> + Send + Sync + Clone + 'static,
 {
-    I128_2(ICurveI128_2Instance<(), P, N>),
-    I128_2To(ICurveI128_2_ToInstance<(), P, N>),
-    I128_2ToMeta(ICurveI128_2_To_MetaInstance<(), P, N>),
-    I128_3(ICurveI128_3Instance<(), P, N>),
-    I128_4(ICurveI128_4Instance<(), P, N>),
-    U256_2(ICurveU256_2Instance<(), P, N>),
-    U256_2To(ICurveU256_2_ToInstance<(), P, N>),
-    U256_2EthTo(ICurveU256_2_Eth_ToInstance<(), P, N>),
-    U256_3Eth(ICurveU256_3_EthInstance<(), P, N>),
-    U256_3EthTo(ICurveU256_3_Eth_ToInstance<(), P, N>),
-    U256_3EthTo2(ICurveU256_3_Eth_To2Instance<(), P, N>),
+    I128_2(ICurveI128_2Instance<P, N>),
+    I128_2To(ICurveI128_2_ToInstance<P, N>),
+    I128_2ToMeta(ICurveI128_2_To_MetaInstance<P, N>),
+    I128_3(ICurveI128_3Instance<P, N>),
+    I128_4(ICurveI128_4Instance<P, N>),
+    U256_2(ICurveU256_2Instance<P, N>),
+    U256_2To(ICurveU256_2_ToInstance<P, N>),
+    U256_2EthTo(ICurveU256_2_Eth_ToInstance<P, N>),
+    U256_3Eth(ICurveU256_3_EthInstance<P, N>),
+    U256_3EthTo(ICurveU256_3_Eth_ToInstance<P, N>),
+    U256_3EthTo2(ICurveU256_3_Eth_To2Instance<P, N>),
 }
 
 impl<P, N> Display for CurveContract<P, N>
@@ -183,12 +183,12 @@ where
         let common_contract = ICurveCommonInstance::new(address, client.clone());
         match common_contract.get_balances().call().await {
             Ok(return_bytes) => {
-                if return_bytes._0.len() < 64 {
+                if return_bytes.0.len() < 64 {
                     return Err(eyre!("CANNOT_FETCH_BALANCES"));
                 }
-                let balances_count = U256::from_be_slice(&return_bytes._0.to_vec()[0..32]);
+                let balances_count = U256::from_be_slice(&return_bytes.0.to_vec()[0..32]);
                 for i in 0usize..balances_count.to() {
-                    let balance = U256::from_be_slice(&return_bytes._0.to_vec()[32 + i * 32..64 + i * 32]);
+                    let balance = U256::from_be_slice(&return_bytes.0.to_vec()[32 + i * 32..64 + i * 32]);
                     ret.push(balance)
                 }
                 debug!("Curve Balances {:?} {:?}", address, ret);
@@ -252,47 +252,47 @@ where
     pub async fn get_dy(&self, i: u32, j: u32, amount: U256) -> Result<U256> {
         match self {
             CurveContract::I128_2(interface) => match interface.get_dy(i.into(), j.into(), amount).call().await {
-                Ok(x) => Ok(x._0),
+                Ok(x) => Ok(x),
                 _ => Err(eyre!("CURVE_GET_DY_CALL_ERROR")),
             },
             CurveContract::I128_2ToMeta(interface) => match interface.get_dy(i.into(), j.into(), amount).call().await {
-                Ok(x) => Ok(x._0),
+                Ok(x) => Ok(x),
                 _ => Err(eyre!("CURVE_GET_DY_CALL_ERROR")),
             },
             CurveContract::I128_2To(interface) => match interface.get_dy(i.into(), j.into(), amount).call().await {
-                Ok(x) => Ok(x._0),
+                Ok(x) => Ok(x),
                 _ => Err(eyre!("CURVE_GET_DY_CALL_ERROR")),
             },
             CurveContract::I128_3(interface) => match interface.get_dy(i.into(), j.into(), amount).call().await {
-                Ok(x) => Ok(x._0),
+                Ok(x) => Ok(x),
                 _ => Err(eyre!("CURVE_GET_DY_CALL_ERROR")),
             },
             CurveContract::I128_4(interface) => match interface.get_dy(i.into(), j.into(), amount).call().await {
-                Ok(x) => Ok(x._0),
+                Ok(x) => Ok(x),
                 _ => Err(eyre!("CURVE_GET_DY_CALL_ERROR")),
             },
             CurveContract::U256_2(interface) => match interface.get_dy(U256::from(i), U256::from(j), amount).call().await {
-                Ok(x) => Ok(x._0),
+                Ok(x) => Ok(x),
                 _ => Err(eyre!("CURVE_GET_DY_CALL_ERROR")),
             },
             CurveContract::U256_2To(interface) => match interface.get_dy(U256::from(i), U256::from(j), amount).call().await {
-                Ok(x) => Ok(x._0),
+                Ok(x) => Ok(x),
                 _ => Err(eyre!("CURVE_GET_DY_CALL_ERROR")),
             },
             CurveContract::U256_2EthTo(interface) => match interface.get_dy(U256::from(i), U256::from(j), amount).call().await {
-                Ok(x) => Ok(x._0),
+                Ok(x) => Ok(x),
                 _ => Err(eyre!("CURVE_GET_DY_CALL_ERROR")),
             },
             CurveContract::U256_3EthTo(interface) => match interface.get_dy(U256::from(i), U256::from(j), amount).call().await {
-                Ok(x) => Ok(x._0),
+                Ok(x) => Ok(x),
                 _ => Err(eyre!("CURVE_GET_DY_CALL_ERROR")),
             },
             CurveContract::U256_3EthTo2(interface) => match interface.get_dy(U256::from(i), U256::from(j), amount).call().await {
-                Ok(x) => Ok(x._0),
+                Ok(x) => Ok(x),
                 _ => Err(eyre!("CURVE_GET_DY_CALL_ERROR")),
             },
             CurveContract::U256_3Eth(interface) => match interface.get_dy(U256::from(i), U256::from(j), amount).call().await {
-                Ok(x) => Ok(x._0),
+                Ok(x) => Ok(x),
                 _ => Err(eyre!("CURVE_GET_DY_CALL_ERROR")),
             },
         }
@@ -529,7 +529,7 @@ where
         let address_provider_address: Address = "0x0000000022D53366457F9d5E68Ec105046FC4383".parse().unwrap();
         let address_provider = ICurveAddressProviderInstance::new(address_provider_address, client);
         match address_provider.get_address(U256::from(id)).call().await {
-            Ok(x) => Ok(x._0),
+            Ok(x) => Ok(x),
             Err(e) => {
                 error!("Error getting factory address : {}", e);
                 Err(eyre!("GET_FACTORY_ADDRESS_ERROR"))
@@ -540,7 +540,7 @@ where
     pub async fn get_pool_address(client: P, factory_address: Address, pool_id: u32) -> Result<Address> {
         let factory = ICurveFactoryInstance::new(factory_address, client);
         match factory.pool_list(U256::from(pool_id)).call().await {
-            Ok(x) => Ok(x._0),
+            Ok(x) => Ok(x),
             Err(e) => {
                 error!("Error getting factory address :{}", e);
                 Err(eyre!("GET_POOL_ADDRESS_ERROR"))
@@ -551,7 +551,7 @@ where
     pub async fn get_pool_count(client: P, factory_address: Address) -> Result<u32> {
         let factory = ICurveFactoryInstance::new(factory_address, client);
         match factory.pool_count().call().await {
-            Ok(x) => Ok(x._0.to()),
+            Ok(x) => Ok(x.to()),
             Err(e) => {
                 error!("Error getting pool count : {}", e);
                 Err(eyre!("GET_POOL_COUNT_ERROR"))

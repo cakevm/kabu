@@ -59,13 +59,13 @@ pub fn get_uniswap3pool_address(token0: Address, token1: Address, fee: u32, fact
 pub async fn fetch_uni2_factory<N: Network, P: Provider<N>>(client: P, address: Address) -> Result<Address> {
     let pool = IUniswapV2Pair::IUniswapV2PairInstance::new(address, client);
     let factory = pool.factory().call().await?;
-    Ok(factory._0)
+    Ok(factory)
 }
 
 pub async fn fetch_uni3_factory<N: Network, P: Provider<N>>(client: P, address: Address) -> Result<Address> {
     let pool = IUniswapV3Pool::IUniswapV3PoolInstance::new(address, client);
     let factory = pool.factory().call().await?;
-    Ok(factory._0)
+    Ok(factory)
 }
 
 pub fn match_abi(code: &Bytes, selectors: Vec<[u8; 4]>) -> bool {
@@ -91,7 +91,7 @@ mod test {
         let init_code: B256 = "96e8ac4277198ff8b6f785478aa9a39f403cb768dd02cbee326c3e7da348845f".parse().unwrap();
 
         let pair_address = get_uniswap2pool_address(TokenAddressEth::WETH, TokenAddressEth::USDC, FactoryAddress::UNISWAP_V2, init_code);
-        println!("{:?}", pair_address)
+        println!("{pair_address:?}")
     }
 
     #[test]
@@ -100,6 +100,6 @@ mod test {
 
         let pair_address =
             get_uniswap3pool_address(TokenAddressEth::WETH, TokenAddressEth::USDC, 3000, FactoryAddress::UNISWAP_V3, init_code);
-        println!("{:?}", pair_address)
+        println!("{pair_address:?}")
     }
 }

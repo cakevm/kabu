@@ -81,8 +81,8 @@ pub struct Tick {
 }
 
 impl UniswapV3PoolVirtual {
-    pub fn simulate_swap_in_amount_provider(
-        db: &dyn DatabaseRef<Error = KabuDBError>,
+    pub fn simulate_swap_in_amount_provider<DB: DatabaseRef<Error = KabuDBError> + ?Sized>(
+        db: &DB,
         pool: &UniswapV3Pool,
         token_in: &EntityAddress,
         amount_in: U256,
@@ -207,8 +207,8 @@ impl UniswapV3PoolVirtual {
         }
     }
 
-    pub fn simulate_swap_out_amount_provided(
-        db: &dyn DatabaseRef<Error = KabuDBError>,
+    pub fn simulate_swap_out_amount_provided<DB: DatabaseRef<Error = KabuDBError> + ?Sized>(
+        db: &DB,
         pool: &UniswapV3Pool,
         token_in: &EntityAddress,
         amount_out: U256,

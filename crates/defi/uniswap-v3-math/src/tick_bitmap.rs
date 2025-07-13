@@ -9,7 +9,7 @@ use std::{collections::HashMap, sync::Arc};
 sol! {
     #[sol(rpc)]
     interface IUniswapV3Pool {
-        function tick_bitmap(int16) external returns (int16);
+        function tick_bitmap(int16) external returns (uint256);
     }
 }
 
@@ -90,12 +90,12 @@ pub async fn next_initialized_tick_within_one_word_from_provider<P: Provider>(
 
         let word = if let Some(block_number) = block_number {
             match IUniswapV3Pool::new(pool_address, provider).tick_bitmap(word_pos).block(block_number.into()).call().await {
-                Ok(word) => U256::from(word._0),
+                Ok(word) => word,
                 Err(err) => return Err(UniswapV3MathError::MiddlewareError(err.to_string())),
             }
         } else {
             match IUniswapV3Pool::new(pool_address, provider).tick_bitmap(word_pos).call().await {
-                Ok(word) => U256::from(word._0),
+                Ok(word) => word,
                 Err(err) => return Err(UniswapV3MathError::MiddlewareError(err.to_string())),
             }
         };
@@ -117,12 +117,12 @@ pub async fn next_initialized_tick_within_one_word_from_provider<P: Provider>(
 
         let word = if let Some(block_number) = block_number {
             match IUniswapV3Pool::new(pool_address, provider).tick_bitmap(word_pos).block(block_number.into()).call().await {
-                Ok(word) => U256::from(word._0),
+                Ok(word) => word,
                 Err(err) => return Err(UniswapV3MathError::MiddlewareError(err.to_string())),
             }
         } else {
             match IUniswapV3Pool::new(pool_address, provider).tick_bitmap(word_pos).call().await {
-                Ok(word) => U256::from(word._0),
+                Ok(word) => word,
                 Err(err) => return Err(UniswapV3MathError::MiddlewareError(err.to_string())),
             }
         };

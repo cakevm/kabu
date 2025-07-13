@@ -252,7 +252,7 @@ mod test {
         let _ = env_logger::try_init_from_env(env_logger::Env::default().default_filter_or("debug,flashbots=off"));
         let node_url = Url::try_from(env::var("MAINNET_HTTP")?.as_str())?;
 
-        let provider = ProviderBuilder::new().disable_recommended_fillers().on_http(node_url);
+        let provider = ProviderBuilder::new().disable_recommended_fillers().connect_http(node_url);
         let block = provider.get_block_number().await?;
 
         let flashbots_client = FlashbotsClient::new(provider.clone(), "https://relay.flashbots.net");
@@ -280,7 +280,7 @@ mod test {
         let _ = env_logger::try_init_from_env(env_logger::Env::default().default_filter_or("trace"));
         let node_url = Url::try_from(env::var("MAINNET_HTTP")?.as_str())?;
 
-        let provider = ProviderBuilder::new().disable_recommended_fillers().on_http(node_url);
+        let provider = ProviderBuilder::new().disable_recommended_fillers().connect_http(node_url);
         let block = provider.get_block_number().await?;
 
         let flashbots_client =

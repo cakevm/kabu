@@ -599,7 +599,7 @@ mod test {
         let anvil = Anvil::new().try_spawn()?;
         let client_anvil = ClientBuilder::default().http(anvil.endpoint_url());
 
-        let provider = ProviderBuilder::new().disable_recommended_fillers().on_client(client_anvil);
+        let provider = ProviderBuilder::new().disable_recommended_fillers().connect_client(client_anvil);
 
         provider.anvil_set_auto_mine(false).await?;
 

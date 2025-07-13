@@ -15,12 +15,10 @@ use tracing::warn;
 use tracing::{debug, error, info, trace};
 
 use crate::BackrunConfig;
-use crate::SwapCalculator;
 use kabu_core_actors::{subscribe, Accessor, Actor, ActorResult, Broadcaster, Consumer, Producer, SharedState, WorkerResult};
 use kabu_core_actors_macros::{Accessor, Consumer, Producer};
 use kabu_core_blockchain::{Blockchain, Strategy};
 use kabu_evm_db::{DatabaseHelpers, KabuDBError};
-use kabu_evm_utils::KabuEVMWrapper;
 use kabu_types_blockchain::{KabuDataTypes, KabuDataTypesEVM};
 use kabu_types_entities::strategy_config::StrategyConfig;
 use kabu_types_entities::{Market, PoolWrapper, Swap, SwapDirection, SwapError, SwapLine, SwapPath};
@@ -111,16 +109,19 @@ async fn state_change_arb_searcher_task<
     let market_state_clone = db.clone();
     let swap_path_vec_len = swap_path_vec.len();
 
-    //let evm = Arc::new(KabuEVMWrapper::new(market_state_clone));
+    //let evm = Arc::new(KabuEVMWrapper::new());
 
     let _tasks = tokio::task::spawn(async move {
         thread_pool.install(|| {
-            swap_path_vec.into_par_iter().for_each_with((&swap_path_tx, &market_state_clone, &next_header), |req, item| {
-                let mut mut_item: SwapLine = SwapLine { path: item, ..Default::default() };
+            swap_path_vec.into_par_iter().for_each_with((&swap_path_tx, &market_state_clone, &next_header), |_req, item| {
+                let mut_item: SwapLine = SwapLine { path: item, ..Default::default() };
 
-                let mut evm = KabuEVMWrapper::new(req.1.clone()).with_header(req.2);
+                // TODO: Fix KabuEVMWrapper initialization and LoomExecuteEvm trait implementation
+                // let mut evm = KabuEVMWrapper::new().with_header(req.2);
+                // let calc_result = SwapCalculator::calculate(&mut mut_item, evm.get_mut());
 
-                let calc_result = SwapCalculator::calculate(&mut mut_item, evm.get_mut());
+                // Temporarily disable swap calculation until LoomExecuteEvm trait is properly implemented
+                let calc_result: Result<(), SwapError> = Err(mut_item.to_error("LoomExecuteEvm trait not implemented".to_string()));
 
                 match calc_result {
                     Ok(_) => {

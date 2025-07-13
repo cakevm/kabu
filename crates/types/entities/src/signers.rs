@@ -131,7 +131,7 @@ impl<LDT: KabuDataTypes> TxSigners<LDT> {
         if self.is_empty() {
             None
         } else {
-            let mut rng = rand::thread_rng();
+            let mut rng = rand::rng();
             self.signers.values().choose(&mut rng).cloned()
         }
     }

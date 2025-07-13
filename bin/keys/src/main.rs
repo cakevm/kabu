@@ -2,7 +2,7 @@ use aes::cipher::{Block, BlockEncrypt, KeyInit};
 use aes::Aes128;
 use clap::{arg, Parser};
 use eyre::Result;
-use rand::{thread_rng, Rng};
+use rand::{rng, Rng};
 use sha2::{Digest, Sha512};
 
 use kabu_types_entities::KeyStore;
@@ -48,8 +48,8 @@ fn main() -> Result<()> {
     let args = Commands::parse();
     match args {
         Commands::GeneratePassword => {
-            let mut rng = thread_rng();
-            let pwd: Vec<u8> = (0..BLOCK_SIZE).map(|_| rng.gen::<u8>()).collect();
+            let mut rng = rng();
+            let pwd: Vec<u8> = (0..BLOCK_SIZE).map(|_| rng.random::<u8>()).collect();
             println!("{pwd:?}");
         }
         Commands::Encrypt { key } => {

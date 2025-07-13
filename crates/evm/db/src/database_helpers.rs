@@ -3,7 +3,7 @@ use alloy::primitives::map::HashMap;
 use alloy::primitives::{Address, U256};
 use alloy::rpc::types::trace::geth::AccountState;
 use revm::bytecode::Bytecode;
-use revm::state::{Account, AccountStatus, EvmStorageSlot};
+use revm::state::{Account, EvmStorageSlot};
 use revm::{DatabaseCommit, DatabaseRef};
 use std::collections::BTreeMap;
 use tracing::trace;
@@ -13,8 +13,8 @@ pub struct DatabaseHelpers {}
 impl DatabaseHelpers {
     #[inline]
     pub fn account_db_to_revm(db: FastDbAccount) -> Account {
-        let storage = db.storage.into_iter().map(|(k, v)| (k, EvmStorageSlot::new(v))).collect();
-        Account { info: db.info, storage, status: AccountStatus::Loaded }
+        let storage = db.storage.into_iter().map(|(k, v)| (k, EvmStorageSlot::new(v, 0))).collect();
+        Account { info: db.info, storage, status: Default::default(), transaction_id: 0 }
     }
 
     #[inline]
@@ -42,9 +42,10 @@ impl DatabaseHelpers {
                 info.balance = balance
             }
 
-            let storage = state.storage.into_iter().map(|(k, v)| (k.into(), EvmStorageSlot::new_changed(U256::ZERO, v.into()))).collect();
+            let storage =
+                state.storage.into_iter().map(|(k, v)| (k.into(), EvmStorageSlot::new_changed(U256::ZERO, v.into(), 0))).collect();
 
-            result.insert(address, Account { info, storage, status: AccountStatus::Touched });
+            result.insert(address, Account { info, storage, status: Default::default(), transaction_id: 0 });
         }
         result
     }

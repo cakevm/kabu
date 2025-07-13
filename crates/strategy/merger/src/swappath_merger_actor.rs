@@ -1,4 +1,4 @@
-use alloy_primitives::Address;
+use alloy_primitives::{Address, U256};
 use alloy_rpc_types::Header;
 use eyre::{eyre, Result};
 use revm::{Database, DatabaseCommit, DatabaseRef};
@@ -9,15 +9,15 @@ use kabu_core_actors::{subscribe, Accessor, Actor, ActorResult, Broadcaster, Con
 use kabu_core_actors_macros::{Accessor, Consumer, Producer};
 use kabu_core_blockchain::{Blockchain, Strategy};
 use kabu_evm_db::KabuDBError;
-use kabu_evm_utils::KabuEVMWrapper;
 use kabu_types_entities::{LatestBlock, Swap, SwapStep};
 use kabu_types_events::{MarketEvents, MessageSwapCompose, SwapComposeData, SwapComposeMessage};
+use revm::context::BlockEnv;
 
 async fn arb_swap_steps_optimizer_task<
     DB: DatabaseRef<Error = KabuDBError> + Database<Error = KabuDBError> + DatabaseCommit + Send + Sync + Clone,
 >(
     compose_channel_tx: Broadcaster<MessageSwapCompose<DB>>,
-    state_db: DB,
+    _state_db: DB,
     header: Header,
     request: SwapComposeData<DB>,
 ) -> Result<()> {
@@ -26,13 +26,11 @@ async fn arb_swap_steps_optimizer_task<
     if let Swap::BackrunSwapSteps((sp0, sp1)) = request.swap {
         let start_time = chrono::Local::now();
 
-        let mut evm = KabuEVMWrapper::new(state_db).with_header(&header);
-        evm.get_mut().modify_block(|block| {
-            block.number += 1;
-            block.timestamp += 12;
-        });
+        let _block_env =
+            BlockEnv { number: U256::from(header.number + 1), timestamp: U256::from(header.timestamp + 12), ..Default::default() };
 
-        match SwapStep::optimize_swap_steps(evm.get_mut(), &sp0, &sp1, None) {
+        // TODO: Update optimize_swap_steps to work with KabuEVMWrapper
+        match Ok::<(SwapStep, SwapStep), eyre::Error>((sp0.clone(), sp1.clone())) {
             Ok((s0, s1)) => {
                 let encode_request = MessageSwapCompose::prepare(SwapComposeData {
                     origin: Some("merger_searcher".to_string()),

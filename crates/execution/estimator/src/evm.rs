@@ -1,6 +1,7 @@
 use alloy_consensus::TxEnvelope;
 use alloy_eips::eip2718::Encodable2718;
 use alloy_eips::BlockNumberOrTag;
+use alloy_evm::EvmEnv;
 use alloy_network::{Ethereum, Network};
 use alloy_primitives::{Bytes, TxKind, U256};
 use alloy_provider::Provider;
@@ -12,13 +13,15 @@ use tokio::sync::broadcast::error::RecvError;
 use tracing::{debug, error, info, trace};
 
 use kabu_core_blockchain::{Blockchain, Strategy};
-use kabu_evm_utils::{KabuEVMWrapper, NWETH};
+use kabu_evm_utils::{evm_access_list, NWETH};
 use kabu_types_entities::{EstimationError, Swap, SwapEncoder};
 
 use kabu_core_actors::{subscribe, Actor, ActorResult, Broadcaster, Consumer, Producer, WorkerResult};
 use kabu_core_actors_macros::{Consumer, Producer};
 use kabu_evm_db::{AlloyDB, DatabaseKabuExt, KabuDBError};
+use kabu_evm_utils::evm_env::tx_req_to_env;
 use kabu_types_events::{HealthEvent, MessageHealthEvent, MessageSwapCompose, SwapComposeData, SwapComposeMessage, TxComposeData, TxState};
+use revm::context::BlockEnv;
 use revm::{Database, DatabaseCommit, DatabaseRef};
 
 async fn estimator_task<N, DB>(
@@ -85,13 +88,18 @@ where
         }
     }
 
-    let mut evm = KabuEVMWrapper::new(db.clone());
-    evm.get_mut().modify_block(|block| {
-        block.number = estimate_request.tx_compose.next_block_number;
-        block.timestamp = estimate_request.tx_compose.next_block_timestamp;
-    });
+    let evm_env = EvmEnv {
+        block_env: BlockEnv {
+            timestamp: U256::from(estimate_request.tx_compose.next_block_timestamp),
+            number: U256::from(estimate_request.tx_compose.next_block_number),
+            ..Default::default()
+        },
+        ..Default::default()
+    };
 
-    let (gas_used, access_list) = match evm.evm_access_list(tx_request) {
+    let tx_env = tx_req_to_env(tx_request);
+
+    let (gas_used, access_list) = match evm_access_list(&db, &evm_env, tx_env) {
         Ok((gas_used, access_list)) => {
             let pool_id_vec = estimate_request.swap.get_pool_id_vec();
 

@@ -119,7 +119,7 @@ mod test {
 
         let client_anvil = ClientBuilder::default().http(anvil.endpoint_url());
 
-        let provider = ProviderBuilder::new().disable_recommended_fillers().on_client(client_anvil);
+        let provider = ProviderBuilder::new().disable_recommended_fillers().connect_client(client_anvil);
 
         let address: Address = Address::repeat_byte(0x12);
 
@@ -147,10 +147,10 @@ mod test {
         let node_url = url::Url::parse(node_url.as_str())?;
 
         let client_anvil = ClientBuilder::default().http(test_node_url);
-        let provider_anvil = ProviderBuilder::new().disable_recommended_fillers().on_client(client_anvil);
+        let provider_anvil = ProviderBuilder::new().disable_recommended_fillers().connect_client(client_anvil);
 
         let client_node = ClientBuilder::default().http(node_url);
-        let provider_node = ProviderBuilder::new().disable_recommended_fillers().on_client(client_node);
+        let provider_node = ProviderBuilder::new().disable_recommended_fillers().connect_client(client_node);
 
         let provider = AnvilDebugProvider::new(provider_node, provider_anvil, BlockNumberOrTag::Number(10));
 

@@ -150,7 +150,7 @@ impl<
                 }
                 _ => {
                     info!("Starting WS connection");
-                    let transport = WsConnect { url: config_params.url, auth: None, config: None };
+                    let transport = WsConnect::new(config_params.url);
                     ClientBuilder::default().ws(transport).await
                 }
             };
@@ -163,7 +163,7 @@ impl<
                 }
             };
 
-            let provider = ProviderBuilder::<_, _, Ethereum>::new().disable_recommended_fillers().on_client(client);
+            let provider = ProviderBuilder::<_, _, Ethereum>::new().disable_recommended_fillers().connect_client(client);
 
             clients.insert(name.clone(), provider);
         }

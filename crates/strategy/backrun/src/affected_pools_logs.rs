@@ -16,7 +16,7 @@ pub async fn get_affected_pools_from_logs(market: SharedState<Market>, logs: &[L
 
     for log in logs.iter() {
         if log.address().eq(&FactoryAddress::UNISWAP_V4_POOL_MANAGER_ADDRESS) {
-            if let Some(pool_id) = match IUniswapV4PoolManagerEventsEvents::decode_log(&log.inner, false) {
+            if let Some(pool_id) = match IUniswapV4PoolManagerEventsEvents::decode_log(&log.inner) {
                 Ok(event) => match event.data {
                     IUniswapV4PoolManagerEventsEvents::Initialize(params) => Some(params.id),
                     IUniswapV4PoolManagerEventsEvents::ModifyLiquidity(params) => Some(params.id),

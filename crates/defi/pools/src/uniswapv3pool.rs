@@ -14,10 +14,11 @@ use kabu_defi_abi::uniswap3::IUniswapV3Pool::slot0Return;
 use kabu_defi_abi::uniswap_periphery::ITickLens;
 use kabu_defi_abi::IERC20;
 use kabu_defi_address_book::{FactoryAddress, PeripheryAddress};
-use kabu_evm_utils::LoomExecuteEvm;
+use kabu_evm_db::KabuDBError;
 use kabu_types_entities::required_state::RequiredState;
 use kabu_types_entities::{EntityAddress, Pool, PoolAbiEncoder, PoolClass, PoolProtocol, PreswapRequirement, SwapDirection};
 use lazy_static::lazy_static;
+use revm::DatabaseRef;
 use tracing::debug;
 #[cfg(feature = "debug-calculation")]
 use tracing::error;
@@ -157,12 +158,12 @@ impl UniswapV3Pool {
         }
     }
 
-    pub fn fetch_pool_data_evm(evm: &mut dyn LoomExecuteEvm, address: Address) -> Result<Self> {
-        let token0 = UniswapV3EvmStateReader::token0(evm, address)?;
-        let token1 = UniswapV3EvmStateReader::token1(evm, address)?;
-        let fee: u32 = UniswapV3EvmStateReader::fee(evm, address)?.to();
-        let liquidity = UniswapV3EvmStateReader::liquidity(evm, address)?;
-        let factory = UniswapV3EvmStateReader::factory(evm, address).unwrap_or_default();
+    pub fn fetch_pool_data_evm<DB: DatabaseRef<Error = KabuDBError> + ?Sized>(db: &DB, address: Address) -> Result<Self> {
+        let token0 = UniswapV3EvmStateReader::token0(db, address)?;
+        let token1 = UniswapV3EvmStateReader::token1(db, address)?;
+        let fee: u32 = UniswapV3EvmStateReader::fee(db, address)?.to();
+        let liquidity = UniswapV3EvmStateReader::liquidity(db, address)?;
+        let factory = UniswapV3EvmStateReader::factory(db, address).unwrap_or_default();
         let protocol = UniswapV3Pool::get_protocol_by_factory(factory);
 
         let ret = UniswapV3Pool {
@@ -186,18 +187,18 @@ impl UniswapV3Pool {
     pub async fn fetch_pool_data<N: Network, P: Provider<N> + Send + Sync + Clone + 'static>(client: P, address: Address) -> Result<Self> {
         let uni3_pool = IUniswapV3Pool::IUniswapV3PoolInstance::new(address, client.clone());
 
-        let token0: Address = uni3_pool.token0().call().await?._0;
-        let token1: Address = uni3_pool.token1().call().await?._0;
-        let fee: u32 = uni3_pool.fee().call().await?._0.try_into()?;
-        let liquidity: u128 = uni3_pool.liquidity().call().await?._0;
+        let token0: Address = uni3_pool.token0().call().await?;
+        let token1: Address = uni3_pool.token1().call().await?;
+        let fee: u32 = uni3_pool.fee().call().await?.try_into()?;
+        let liquidity: u128 = uni3_pool.liquidity().call().await?;
         let slot0 = uni3_pool.slot0().call().await?;
-        let factory: Address = uni3_pool.factory().call().await?._0;
+        let factory: Address = uni3_pool.factory().call().await?;
 
         let token0_erc20 = IERC20::IERC20Instance::new(token0, client.clone());
         let token1_erc20 = IERC20::IERC20Instance::new(token1, client.clone());
 
-        let liquidity0: U256 = token0_erc20.balanceOf(address).call().await?._0;
-        let liquidity1: U256 = token1_erc20.balanceOf(address).call().await?._0;
+        let liquidity0: U256 = token0_erc20.balanceOf(address).call().await?;
+        let liquidity1: U256 = token1_erc20.balanceOf(address).call().await?;
 
         let protocol = UniswapV3Pool::get_protocol_by_factory(factory);
 
@@ -252,27 +253,26 @@ impl Pool for UniswapV3Pool {
 
     fn calculate_out_amount(
         &self,
-        evm: &mut dyn LoomExecuteEvm,
+        db: &dyn DatabaseRef<Error = KabuDBError>,
         token_address_from: &EntityAddress,
         token_address_to: &EntityAddress,
         in_amount: U256,
     ) -> Result<(U256, u64), ErrReport> {
         let (ret, gas_used) = if self.get_protocol() == PoolProtocol::UniswapV3 {
-            let ret_virtual =
-                UniswapV3PoolVirtual::simulate_swap_in_amount_provider(evm.get_db_ref(), self, token_address_from, in_amount)?;
+            let ret_virtual = UniswapV3PoolVirtual::simulate_swap_in_amount_provider(db, self, token_address_from, in_amount)?;
 
             #[cfg(feature = "debug-calculation")]
             {
                 // TODO check gas limit issue
                 let (ret_evm, gas_used) = UniswapV3QuoterV2StateReader::quote_exact_input(
-                    evm,
+                    db,
                     PeripheryAddress::UNISWAP_V3_QUOTER_V2,
                     token_address_from.into(),
                     token_address_to.into(),
                     self.fee.try_into()?,
                     in_amount,
                 )?;
-                println!("calculate_out_amount ret_evm: {:?} ret: {:?} gas_used: {:?}", ret_evm, ret_virtual, gas_used);
+                println!("calculate_out_amount ret_evm: {ret_evm:?} ret: {ret_virtual:?} gas_used: {gas_used:?}");
                 if ret_virtual != ret_evm {
                     error!(%ret_virtual, %ret_evm, "calculate_out_amount RETURN_RESULT_IS_INCORRECT");
                 };
@@ -282,7 +282,7 @@ impl Pool for UniswapV3Pool {
             // TODO check gas limit issue
 
             let (ret_evm, gas_used) = UniswapV3QuoterV2StateReader::quote_exact_input(
-                evm,
+                db,
                 PeripheryAddress::UNISWAP_V3_QUOTER_V2,
                 token_address_from.into(),
                 token_address_to.into(),
@@ -302,27 +302,26 @@ impl Pool for UniswapV3Pool {
 
     fn calculate_in_amount(
         &self,
-        evm: &mut dyn LoomExecuteEvm,
+        db: &dyn DatabaseRef<Error = KabuDBError>,
         token_address_from: &EntityAddress,
         token_address_to: &EntityAddress,
         out_amount: U256,
     ) -> Result<(U256, u64), ErrReport> {
         let (ret, gas_used) = if self.get_protocol() == PoolProtocol::UniswapV3 {
-            let ret_virtual =
-                UniswapV3PoolVirtual::simulate_swap_out_amount_provided(evm.get_db_ref(), self, token_address_from, out_amount)?;
+            let ret_virtual = UniswapV3PoolVirtual::simulate_swap_out_amount_provided(db, self, token_address_from, out_amount)?;
 
             #[cfg(feature = "debug-calculation")]
             {
                 // TODO : Gas limit issue
                 let (ret_evm, gas_used) = UniswapV3QuoterV2StateReader::quote_exact_output(
-                    evm,
+                    db,
                     PeripheryAddress::UNISWAP_V3_QUOTER_V2,
                     token_address_from.into(),
                     token_address_to.into(),
                     self.fee.try_into()?,
                     out_amount,
                 )?;
-                println!("calculate_out_amount ret_evm: {:?} ret: {:?} gas_used: {:?}", ret_evm, ret_virtual, gas_used);
+                println!("calculate_out_amount ret_evm: {ret_evm:?} ret: {ret_virtual:?} gas_used: {gas_used:?}");
 
                 if ret_virtual != ret_evm {
                     error!(%ret_virtual, %ret_evm,"calculate_in_amount RETURN_RESULT_IS_INCORRECT");
@@ -333,7 +332,7 @@ impl Pool for UniswapV3Pool {
             // TODO : Gas limit issue
 
             let (ret_evm, gas_used) = UniswapV3QuoterV2StateReader::quote_exact_output(
-                evm,
+                db,
                 PeripheryAddress::UNISWAP_V3_QUOTER_V2,
                 token_address_from.into(),
                 token_address_to.into(),
@@ -522,7 +521,6 @@ mod test {
     use kabu_defi_address_book::{PeripheryAddress, UniswapV3PoolAddress};
     use kabu_evm_db::{AlloyDB, KabuDB};
     use kabu_evm_db::{KabuDBError, KabuDBType};
-    use kabu_evm_utils::KabuEVMWrapper;
     use kabu_node_debug_provider::{AnvilDebugProviderFactory, AnvilDebugProviderType};
     use kabu_types_blockchain::KabuDataTypesEthereum;
     use kabu_types_entities::required_state::RequiredStateReader;
@@ -545,8 +543,8 @@ mod test {
 
         for pool_address in POOL_ADDRESSES {
             let pool_contract = IUniswapV3Pool::new(pool_address, client.clone());
-            let token0 = pool_contract.token0().call().await?._0;
-            let token1 = pool_contract.token1().call().await?._0;
+            let token0 = pool_contract.token0().call().await?;
+            let token1 = pool_contract.token1().call().await?;
 
             let pool = UniswapV3Pool::fetch_pool_data(client.clone(), pool_address).await?;
 
@@ -568,7 +566,7 @@ mod test {
     ) -> Result<U256> {
         let router_contract = IQuoterV2::new(PeripheryAddress::UNISWAP_V3_QUOTER_V2, client.clone());
         let pool_contract = IUniswapV3Pool::new(pool_address, client.clone());
-        let pool_fee = pool_contract.fee().call().block(BlockId::from(block_number)).await?._0;
+        let pool_fee = pool_contract.fee().call().block(BlockId::from(block_number)).await?;
 
         if is_amount_out {
             let contract_amount_out = router_contract
@@ -616,8 +614,8 @@ mod test {
             let mut state_db = KabuDBType::default();
             state_db.apply_geth_update(state_update);
 
-            let token0_decimals = IERC20::new(pool.token0, client.clone()).decimals().call().block(BlockId::from(BLOCK_NUMBER)).await?._0;
-            let token1_decimals = IERC20::new(pool.token1, client.clone()).decimals().call().block(BlockId::from(BLOCK_NUMBER)).await?._0;
+            let token0_decimals = IERC20::new(pool.token0, client.clone()).decimals().call().block(BlockId::from(BLOCK_NUMBER)).await?;
+            let token1_decimals = IERC20::new(pool.token1, client.clone()).decimals().call().block(BlockId::from(BLOCK_NUMBER)).await?;
 
             //// CASE: token0 -> token1
             let amount_in = U256::from(10u64).pow(token0_decimals);
@@ -625,14 +623,11 @@ mod test {
                 fetch_original_contract_amounts(client.clone(), pool_address, pool.token0, pool.token1, amount_in, BLOCK_NUMBER, true)
                     .await?;
 
-            let mut evm = KabuEVMWrapper::new(state_db.clone());
-
             // under test
-            let (amount_out, gas_used) = match pool.calculate_out_amount(evm.get_mut(), &pool.token0.into(), &pool.token1.into(), amount_in)
-            {
+            let (amount_out, gas_used) = match pool.calculate_out_amount(&state_db, &pool.token0.into(), &pool.token1.into(), amount_in) {
                 Ok((amount_out, gas_used)) => (amount_out, gas_used),
                 Err(e) => {
-                    panic!("Calculation error for pool={:?}, amount_in={}, e={:?}", pool_address, amount_in, e);
+                    panic!("Calculation error for pool={pool_address:?}, amount_in={amount_in}, e={e:?}");
                 }
             };
             assert_eq!(
@@ -649,11 +644,10 @@ mod test {
                     .await?;
 
             // under test
-            let (amount_out, gas_used) = match pool.calculate_out_amount(evm.get_mut(), &pool.token1.into(), &pool.token0.into(), amount_in)
-            {
+            let (amount_out, gas_used) = match pool.calculate_out_amount(&state_db, &pool.token1.into(), &pool.token0.into(), amount_in) {
                 Ok((amount_out, gas_used)) => (amount_out, gas_used),
                 Err(e) => {
-                    panic!("Calculation error for pool={:?}, amount_in={}, e={:?}", pool_address, amount_in, e);
+                    panic!("Calculation error for pool={pool_address:?}, amount_in={amount_in}, e={e:?}");
                 }
             };
             assert_eq!(
@@ -684,8 +678,8 @@ mod test {
             let mut state_db = KabuDBType::default().with_ext_db(EmptyDBTyped::<KabuDBError>::new());
             state_db.apply_geth_update(state_update);
 
-            let token0_decimals = IERC20::new(pool.token0, client.clone()).decimals().call().block(BlockId::from(BLOCK_NUMBER)).await?._0;
-            let token1_decimals = IERC20::new(pool.token1, client.clone()).decimals().call().block(BlockId::from(BLOCK_NUMBER)).await?._0;
+            let token0_decimals = IERC20::new(pool.token0, client.clone()).decimals().call().block(BlockId::from(BLOCK_NUMBER)).await?;
+            let token1_decimals = IERC20::new(pool.token1, client.clone()).decimals().call().block(BlockId::from(BLOCK_NUMBER)).await?;
 
             //// CASE: token0 -> token1
             let amount_out = U256::from(10u64).pow(token1_decimals);
@@ -693,14 +687,11 @@ mod test {
                 fetch_original_contract_amounts(client.clone(), pool_address, pool.token0, pool.token1, amount_out, BLOCK_NUMBER, false)
                     .await?;
 
-            let mut evm = KabuEVMWrapper::new(state_db.clone());
-
             // under test
-            let (amount_in, gas_used) = match pool.calculate_in_amount(evm.get_mut(), &pool.token0.into(), &pool.token1.into(), amount_out)
-            {
+            let (amount_in, gas_used) = match pool.calculate_in_amount(&state_db, &pool.token0.into(), &pool.token1.into(), amount_out) {
                 Ok((amount_in, gas_used)) => (amount_in, gas_used),
                 Err(e) => {
-                    panic!("Calculation error for pool={:?}, amount_out={}, e={:?}", pool_address, amount_out, e);
+                    panic!("Calculation error for pool={pool_address:?}, amount_out={amount_out}, e={e:?}");
                 }
             };
             assert_eq!(
@@ -717,11 +708,10 @@ mod test {
                     .await?;
 
             // under test
-            let (amount_in, gas_used) = match pool.calculate_in_amount(evm.get_mut(), &pool.token1.into(), &pool.token0.into(), amount_out)
-            {
+            let (amount_in, gas_used) = match pool.calculate_in_amount(&state_db, &pool.token1.into(), &pool.token0.into(), amount_out) {
                 Ok((amount_in, gas_used)) => (amount_in, gas_used),
                 Err(e) => {
-                    panic!("Calculation error for pool={:?}, amount_out={}, e={:?}", pool_address, amount_out, e);
+                    panic!("Calculation error for pool={pool_address:?}, amount_out={amount_out}, e={e:?}");
                 }
             };
             assert_eq!(
@@ -749,8 +739,8 @@ mod test {
 
             let state_db = KabuDB::new().with_ext_db(alloy_db);
 
-            let token0_decimals = IERC20::new(pool.token0, client.clone()).decimals().call().block(BlockId::from(BLOCK_NUMBER)).await?._0;
-            let token1_decimals = IERC20::new(pool.token1, client.clone()).decimals().call().block(BlockId::from(BLOCK_NUMBER)).await?._0;
+            let token0_decimals = IERC20::new(pool.token0, client.clone()).decimals().call().block(BlockId::from(BLOCK_NUMBER)).await?;
+            let token1_decimals = IERC20::new(pool.token1, client.clone()).decimals().call().block(BlockId::from(BLOCK_NUMBER)).await?;
 
             //// CASE: token0 -> token1
             let amount_out = U256::from(10u64).pow(token1_decimals);
@@ -758,14 +748,11 @@ mod test {
                 fetch_original_contract_amounts(client.clone(), pool_address, pool.token0, pool.token1, amount_out, BLOCK_NUMBER, false)
                     .await?;
 
-            let mut evm = KabuEVMWrapper::new(state_db);
-
             // under test
-            let (amount_in, gas_used) = match pool.calculate_in_amount(evm.get_mut(), &pool.token0.into(), &pool.token1.into(), amount_out)
-            {
+            let (amount_in, gas_used) = match pool.calculate_in_amount(&state_db, &pool.token0.into(), &pool.token1.into(), amount_out) {
                 Ok((amount_in, gas_used)) => (amount_in, gas_used),
                 Err(e) => {
-                    panic!("Calculation error for pool={:?}, amount_out={}, e={:?}", pool_address, amount_out, e);
+                    panic!("Calculation error for pool={pool_address:?}, amount_out={amount_out}, e={e:?}");
                 }
             };
             assert_eq!(
@@ -782,11 +769,10 @@ mod test {
                     .await?;
 
             // under test
-            let (amount_in, gas_used) = match pool.calculate_in_amount(evm.get_mut(), &pool.token1.into(), &pool.token0.into(), amount_out)
-            {
+            let (amount_in, gas_used) = match pool.calculate_in_amount(&state_db, &pool.token1.into(), &pool.token0.into(), amount_out) {
                 Ok((amount_in, gas_used)) => (amount_in, gas_used),
                 Err(e) => {
-                    panic!("Calculation error for pool={:?}, amount_out={}, e={:?}", pool_address, amount_out, e);
+                    panic!("Calculation error for pool={pool_address:?}, amount_out={amount_out}, e={e:?}");
                 }
             };
             assert_eq!(

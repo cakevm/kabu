@@ -418,7 +418,7 @@ mod test {
         let transport = HttpCachedTransport::new(node_url, Some("./.cache")).await;
 
         let client = RpcClient::new(transport.clone(), true);
-        let provider = ProviderBuilder::new().on_client(client);
+        let provider = ProviderBuilder::new().connect_client(client);
 
         let block_number = provider.get_block_number().await?;
         debug!("Hello, block {block_number}");
@@ -442,7 +442,7 @@ mod test {
         transport.set_block_number(20179184);
 
         let client = ClientBuilder::default().transport(transport.clone(), true).with_poll_interval(Duration::from_millis(50));
-        let provider = ProviderBuilder::new().disable_recommended_fillers().on_client(client);
+        let provider = ProviderBuilder::new().disable_recommended_fillers().connect_client(client);
 
         let block_number = provider.get_block_number().await?;
         debug!("block {block_number}");
@@ -477,7 +477,7 @@ mod test {
             tokio::time::sleep(Duration::from_millis(10)).await;
 
             let total_supply = weth.totalSupply().call().await.unwrap();
-            debug!("Total supply : {}", total_supply._0);
+            debug!("Total supply : {}", total_supply);
 
             let block_by_number = provider.get_block_by_number(BlockNumberOrTag::Latest).await?.unwrap();
             let block_by_hash = provider.get_block_by_hash(block_by_number.header.hash).await?.unwrap();

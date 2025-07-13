@@ -7,10 +7,11 @@ use eyre::{eyre, ErrReport, Result};
 use kabu_defi_abi::uniswap2::IUniswapV2Pair;
 use kabu_defi_abi::IERC20;
 use kabu_defi_address_book::FactoryAddress;
-use kabu_evm_utils::LoomExecuteEvm;
+use kabu_evm_db::KabuDBError;
 use kabu_types_entities::required_state::RequiredState;
 use kabu_types_entities::{EntityAddress, Pool, PoolAbiEncoder, PoolClass, PoolProtocol, PreswapRequirement, SwapDirection};
 use lazy_static::lazy_static;
+use revm::DatabaseRef;
 use std::any::Any;
 use std::ops::Div;
 use tracing::debug;
@@ -118,10 +119,10 @@ impl UniswapV2Pool {
         ((value >> 0) & *U112_MASK, (value >> (112)) & *U112_MASK)
     }
 
-    pub fn fetch_pool_data_evm(evm: &mut dyn LoomExecuteEvm, address: Address) -> Result<Self> {
-        let token0 = UniswapV2EVMStateReader::token0(evm, address)?;
-        let token1 = UniswapV2EVMStateReader::token1(evm, address)?;
-        let factory = UniswapV2EVMStateReader::factory(evm, address)?;
+    pub fn fetch_pool_data_evm<DB: DatabaseRef<Error = KabuDBError> + ?Sized>(db: &DB, address: Address) -> Result<Self> {
+        let token0 = UniswapV2EVMStateReader::token0(db, address)?;
+        let token1 = UniswapV2EVMStateReader::token1(db, address)?;
+        let factory = UniswapV2EVMStateReader::factory(db, address)?;
         let protocol = Self::get_uni2_protocol_by_factory(factory);
 
         let fee = Self::get_fee_by_protocol(protocol);
@@ -146,9 +147,9 @@ impl UniswapV2Pool {
     pub async fn fetch_pool_data<N: Network, P: Provider<N> + Send + Sync + Clone + 'static>(client: P, address: Address) -> Result<Self> {
         let uni2_pool = IUniswapV2Pair::IUniswapV2PairInstance::new(address, client.clone());
 
-        let token0: Address = uni2_pool.token0().call().await?._0;
-        let token1: Address = uni2_pool.token1().call().await?._0;
-        let factory: Address = uni2_pool.factory().call().await?._0;
+        let token0: Address = uni2_pool.token0().call().await?;
+        let token1: Address = uni2_pool.token1().call().await?;
+        let factory: Address = uni2_pool.factory().call().await?;
         let reserves = uni2_pool.getReserves().call().await?.clone();
 
         let storage_reserves_cell = client.get_storage_at(address, U256::from(8)).block_id(BlockNumberOrTag::Latest.into()).await.unwrap();
@@ -182,8 +183,8 @@ impl UniswapV2Pool {
         Ok(ret)
     }
 
-    pub fn fetch_reserves(&self, evm: &mut dyn LoomExecuteEvm) -> Result<(U256, U256)> {
-        let (reserve_0, reserve_1) = UniswapV2EVMStateReader::get_reserves(evm, self.address)?;
+    pub fn fetch_reserves<DB: DatabaseRef<Error = KabuDBError> + ?Sized>(&self, db: &DB) -> Result<(U256, U256)> {
+        let (reserve_0, reserve_1) = UniswapV2EVMStateReader::get_reserves(db, self.address)?;
         Ok((reserve_0, reserve_1))
     }
 }
@@ -221,12 +222,12 @@ impl Pool for UniswapV2Pool {
 
     fn calculate_out_amount(
         &self,
-        evm: &mut dyn LoomExecuteEvm,
+        db: &dyn DatabaseRef<Error = KabuDBError>,
         token_address_from: &EntityAddress,
         token_address_to: &EntityAddress,
         in_amount: U256,
     ) -> Result<(U256, u64), ErrReport> {
-        let (reserves_0, reserves_1) = self.fetch_reserves(evm)?;
+        let (reserves_0, reserves_1) = self.fetch_reserves(db)?;
 
         let (reserve_in, reserve_out) = match token_address_from < token_address_to {
             true => (reserves_0, reserves_1),
@@ -250,12 +251,12 @@ impl Pool for UniswapV2Pool {
 
     fn calculate_in_amount(
         &self,
-        evm: &mut dyn LoomExecuteEvm,
+        db: &dyn DatabaseRef<Error = KabuDBError>,
         token_address_from: &EntityAddress,
         token_address_to: &EntityAddress,
         out_amount: U256,
     ) -> Result<(U256, u64), ErrReport> {
-        let (reserves_0, reserves_1) = self.fetch_reserves(evm)?;
+        let (reserves_0, reserves_1) = self.fetch_reserves(db)?;
 
         let (reserve_in, reserve_out) = match token_address_from.lt(token_address_to) {
             true => (reserves_0, reserves_1),
@@ -373,7 +374,6 @@ mod test {
     use kabu_defi_abi::uniswap2::IUniswapV2Router;
     use kabu_defi_address_book::PeripheryAddress;
     use kabu_evm_db::KabuDBType;
-    use kabu_evm_utils::KabuEVMWrapper;
     use kabu_node_debug_provider::{AnvilDebugProviderFactory, AnvilDebugProviderType};
     use kabu_types_blockchain::KabuDataTypesEthereum;
     use kabu_types_entities::required_state::RequiredStateReader;
@@ -413,10 +413,8 @@ mod test {
             let mut state_db = KabuDBType::default();
             state_db.apply_geth_update(state_update);
 
-            let mut evm = KabuEVMWrapper::new(state_db);
-
             // under test
-            let (reserves_0, reserves_1) = pool.fetch_reserves(evm.get_mut())?;
+            let (reserves_0, reserves_1) = pool.fetch_reserves(&state_db)?;
 
             assert_eq!(reserves_0, reserves_0_original, "{}", format!("Missmatch for pool={:?}", pool_address));
             assert_eq!(reserves_1, reserves_1_original, "{}", format!("Missmatch for pool={:?}", pool_address));
@@ -437,8 +435,8 @@ mod test {
         let pool_contract = IUniswapV2Pair::new(pool_address, client.clone());
         let contract_reserves = pool_contract.getReserves().call().block(BlockId::from(block_number)).await?;
 
-        let token0 = pool_contract.token0().call().await?._0;
-        let token1 = pool_contract.token1().call().await?._0;
+        let token0 = pool_contract.token0().call().await?;
+        let token1 = pool_contract.token1().call().await?;
 
         let (reserve_in, reserve_out) = match token0 < token1 {
             true => (U256::from(contract_reserves.reserve0), U256::from(contract_reserves.reserve1)),
@@ -448,11 +446,11 @@ mod test {
         if amount_out {
             let contract_amount_out =
                 router_contract.getAmountOut(amount, reserve_in, reserve_out).call().block(BlockId::from(block_number)).await?;
-            Ok(contract_amount_out.amountOut)
+            Ok(contract_amount_out)
         } else {
             let contract_amount_in =
                 router_contract.getAmountIn(amount, reserve_in, reserve_out).call().block(BlockId::from(block_number)).await?;
-            Ok(contract_amount_in.amountIn)
+            Ok(contract_amount_in)
         }
     }
 
@@ -464,7 +462,7 @@ mod test {
         let node_url = env::var("MAINNET_WS")?;
         let client = AnvilDebugProviderFactory::from_node_on_block(node_url, BlockNumber::from(block_number)).await?;
 
-        let amount_in = U256::from(133_333_333_333u128) + U256::from(rand::thread_rng().gen_range(0..100_000_000_000u64));
+        let amount_in = U256::from(133_333_333_333u128) + U256::from(rand::rng().random_range(0..100_000_000_000u64));
         for pool_address in POOL_ADDRESSES {
             let pool = UniswapV2Pool::fetch_pool_data(client.clone(), pool_address).await?;
             let state_required = pool.get_state_required()?;
@@ -478,10 +476,7 @@ mod test {
             // fetch original
             let contract_amount_out = fetch_original_contract_amounts(client.clone(), pool_address, amount_in, block_number, true).await?;
 
-            let mut evm = KabuEVMWrapper::new(state_db);
-
-            let (amount_out, gas_used) =
-                pool.calculate_out_amount(evm.get_evm_mut(), &pool.token0.into(), &pool.token1.into(), amount_in)?;
+            let (amount_out, gas_used) = pool.calculate_out_amount(&state_db, &pool.token0.into(), &pool.token1.into(), amount_in)?;
 
             assert_eq!(amount_out, contract_amount_out, "{}", format!("Missmatch for pool={:?}, amount_in={}", pool_address, amount_in));
             assert_eq!(gas_used, 100_000);
@@ -498,7 +493,7 @@ mod test {
         let node_url = env::var("MAINNET_WS")?;
         let client = AnvilDebugProviderFactory::from_node_on_block(node_url, BlockNumber::from(block_number)).await?;
 
-        let amount_out = U256::from(133_333_333_333u128) + U256::from(rand::thread_rng().gen_range(0..100_000_000_000u64));
+        let amount_out = U256::from(133_333_333_333u128) + U256::from(rand::rng().random_range(0..100_000_000_000u64));
         for pool_address in POOL_ADDRESSES {
             let pool = UniswapV2Pool::fetch_pool_data(client.clone(), pool_address).await?;
             let state_required = pool.get_state_required()?;
@@ -512,11 +507,8 @@ mod test {
             // fetch original
             let contract_amount_in = fetch_original_contract_amounts(client.clone(), pool_address, amount_out, block_number, false).await?;
 
-            let mut evm = KabuEVMWrapper::new(state_db);
-
             // under test
-            let (amount_in, gas_used) =
-                pool.calculate_in_amount(evm.get_evm_mut(), &pool.token0.into(), &pool.token1.into(), amount_out)?;
+            let (amount_in, gas_used) = pool.calculate_in_amount(&state_db, &pool.token0.into(), &pool.token1.into(), amount_out)?;
 
             assert_eq!(amount_in, contract_amount_in, "{}", format!("Missmatch for pool={:?}, amount_out={}", pool_address, amount_out));
             assert_eq!(gas_used, 100_000);

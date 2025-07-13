@@ -4,9 +4,10 @@ use alloy::primitives::Bytes;
 use async_stream::stream;
 use eyre::eyre;
 use futures::Stream;
-use kabu_evm_utils::LoomExecuteEvm;
+use kabu_evm_db::KabuDBError;
 use kabu_types_blockchain::{KabuDataTypes, KabuDataTypesEVM, KabuDataTypesEthereum};
 use kabu_types_entities::{EntityAddress, PoolClass, PoolLoader, PoolWrapper};
+use revm::DatabaseRef;
 use std::future::Future;
 use std::pin::Pin;
 use std::sync::Arc;
@@ -55,7 +56,7 @@ where
         })
     }
 
-    fn fetch_pool_by_id_from_evm(&self, _pool_id: EntityAddress, _evm: &mut dyn LoomExecuteEvm) -> eyre::Result<PoolWrapper> {
+    fn fetch_pool_by_id_from_evm(&self, _pool_id: EntityAddress, _db: &dyn DatabaseRef<Error = KabuDBError>) -> eyre::Result<PoolWrapper> {
         Err(eyre!("NOT_IMPLEMENTED"))
     }
 

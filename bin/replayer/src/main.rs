@@ -3,9 +3,9 @@ use std::env;
 use std::process::exit;
 use std::time::Duration;
 
-use alloy::contract::CallBuilder;
+use alloy::network::TransactionBuilder;
 use alloy::primitives::{address, Address, U256};
-use alloy::providers::RootProvider;
+use alloy::providers::Provider;
 use alloy::rpc::types::Header;
 use alloy::{providers::ProviderBuilder, rpc::client::ClientBuilder};
 use clap::Parser;
@@ -21,7 +21,7 @@ use kabu_defi_abi::AbiEncoderHelper;
 use kabu_defi_address_book::{TokenAddressEth, UniswapV3PoolAddress};
 use kabu_defi_pools::state_readers::ERC20StateReader;
 use kabu_evm_db::DatabaseKabuExt;
-use kabu_evm_utils::{KabuEVMWrapper, NWETH};
+use kabu_evm_utils::NWETH;
 use kabu_execution_multicaller::MulticallerSwapEncoder;
 use kabu_node_player::NodeBlockPlayerActor;
 use kabu_types_entities::required_state::RequiredState;
@@ -59,9 +59,9 @@ async fn main() -> Result<()> {
     transport.set_block_number(start_block_number);
 
     let client = ClientBuilder::default().transport(transport.clone(), true).with_poll_interval(Duration::from_millis(50));
-    let provider = ProviderBuilder::new().disable_recommended_fillers().on_client(client);
+    let provider = ProviderBuilder::new().disable_recommended_fillers().connect_client(client);
 
-    let node_provider = ProviderBuilder::new().disable_recommended_fillers().on_http(node_url);
+    let node_provider = ProviderBuilder::new().disable_recommended_fillers().connect_http(node_url);
 
     // creating singers
     //let tx_signers = SharedState::new(TxSigners::new());
@@ -194,19 +194,27 @@ async fn main() -> Result<()> {
                         state_db.apply_geth_update_vec(state_update.state_update);
 
 
-                        let mut evm = KabuEVMWrapper::new(state_db.clone());
-                        if let Ok(balance) = ERC20StateReader::balance_of(evm.get_mut(), TokenAddressEth::WETH, TARGET_ADDRESS ) {
+                        // Note: ERC20StateReader calls will still fail until full EVM integration is complete,
+                        // but database access is now direct
+                        if let Ok(balance) = ERC20StateReader::balance_of(&state_db, TokenAddressEth::WETH, TARGET_ADDRESS ) {
                             info!("------WETH Balance of {} : {}", TARGET_ADDRESS, balance);
-                            let fetched_balance = CallBuilder::<(), RootProvider, ()>::new_raw(node_provider.clone(), AbiEncoderHelper::encode_erc20_balance_of(TARGET_ADDRESS)).to(TokenAddressEth::WETH).block(cur_header.number.into()).call().await?;
+                            let tx_req = alloy::rpc::types::TransactionRequest::default()
+                                .to(TokenAddressEth::WETH)
+                                .with_input(AbiEncoderHelper::encode_erc20_balance_of(TARGET_ADDRESS));
+                            let fetched_balance = node_provider.call(tx_req).block(cur_header.number.into()).await?;
 
                             let fetched_balance = U256::from_be_slice(fetched_balance.to_vec().as_slice());
                             if fetched_balance != balance {
                                 error!("Balance is wrong {}/({:#x}) need {}({:#x})", balance, balance, fetched_balance, fetched_balance);
                                 exit(1);
                             }
+                        } else {
+                            info!("ERC20StateReader call failed - EVM integration not complete yet");
                         }
-                        if let Ok(balance) = ERC20StateReader::balance_of(evm.get_mut(), TokenAddressEth::WETH, UniswapV3PoolAddress::USDC_WETH_500 ) {
+                        if let Ok(balance) = ERC20StateReader::balance_of(&state_db, TokenAddressEth::WETH, UniswapV3PoolAddress::USDC_WETH_500 ) {
                             info!("------WETH Balance of {} : {}/({:#x}) ", UniswapV3PoolAddress::USDC_WETH_500, balance, balance);
+                        } else {
+                            info!("ERC20StateReader call for pool balance failed - EVM integration not complete yet");
                         }
 
                         info!("StateDB : Accounts: {} / {} Contracts : {} / {}", state_db.accounts_len(), state_db.ro_accounts_len(), state_db.contracts_len(), state_db.ro_contracts_len())

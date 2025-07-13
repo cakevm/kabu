@@ -4,9 +4,10 @@ use alloy::primitives::Log as EVMLog;
 use alloy::sol_types::SolEventInterface;
 use eyre::{eyre, Result};
 use kabu_defi_abi::maverick::IMaverickPool::IMaverickPoolEvents;
-use kabu_evm_utils::LoomExecuteEvm;
+use kabu_evm_db::KabuDBError;
 use kabu_types_blockchain::{KabuDataTypes, KabuDataTypesEVM, KabuDataTypesEthereum};
 use kabu_types_entities::{EntityAddress, PoolClass, PoolLoader, PoolWrapper};
+use revm::DatabaseRef;
 use std::future::Future;
 use std::pin::Pin;
 use std::sync::Arc;
@@ -23,7 +24,7 @@ where
     fn get_pool_class_by_log(&self, log_entry: &LDT::Log) -> Option<(EntityAddress, PoolClass)> {
         let log_entry: Option<EVMLog> = EVMLog::new(log_entry.address(), log_entry.topics().to_vec(), log_entry.data().data.clone());
         match log_entry {
-            Some(log_entry) => match IMaverickPoolEvents::decode_log(&log_entry, false) {
+            Some(log_entry) => match IMaverickPoolEvents::decode_log(&log_entry) {
                 Ok(event) => match event.data {
                     IMaverickPoolEvents::Swap(_) | IMaverickPoolEvents::AddLiquidity(_) | IMaverickPoolEvents::RemoveLiquidity(_) => {
                         Some((EntityAddress::Address(log_entry.address), PoolClass::Maverick))
@@ -54,8 +55,8 @@ where
         Box::pin(async move { Ok(PoolWrapper::new(Arc::new(MaverickPool::fetch_pool_data(provider.clone(), pool_id.address()?).await?))) })
     }
 
-    fn fetch_pool_by_id_from_evm(&self, pool_id: EntityAddress, evm: &mut dyn LoomExecuteEvm) -> Result<PoolWrapper> {
-        Ok(PoolWrapper::new(Arc::new(MaverickPool::fetch_pool_data_evm(evm, pool_id.address()?)?)))
+    fn fetch_pool_by_id_from_evm(&self, pool_id: EntityAddress, db: &dyn DatabaseRef<Error = KabuDBError>) -> Result<PoolWrapper> {
+        Ok(PoolWrapper::new(Arc::new(MaverickPool::fetch_pool_data_evm(db, pool_id.address()?)?)))
     }
 
     fn is_code(&self, _code: &Bytes) -> bool {

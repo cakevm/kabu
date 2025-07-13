@@ -4,8 +4,6 @@ use alloy_rpc_types::{BlockNumberOrTag, TransactionInput, TransactionRequest};
 use clap::Parser;
 use colored::*;
 use eyre::{OptionExt, Result};
-use revm::context::BlockEnv;
-use revm::database::CacheDB;
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, HashMap};
 use std::env;
@@ -26,11 +24,12 @@ use kabu_types_entities::{EntityAddress, Market, MarketState, PoolWrapper, Swap,
 use kabu_core_actors::SharedState;
 use kabu_defi_preloader::preload_market_state;
 use kabu_evm_db::KabuDBType;
-use kabu_evm_utils::{BalanceCheater, KabuEVMWrapper, NWETH};
+use kabu_evm_utils::{BalanceCheater, NWETH};
 use kabu_execution_multicaller::pool_opcodes_encoder::ProtocolSwapOpcodesEncoderV2;
 use kabu_execution_multicaller::{
     MulticallerDeployer, MulticallerEncoder, MulticallerSwapEncoder, ProtocolABIEncoderV2, SwapLineEncoder, SwapStepEncoder,
 };
+use revm::database::CacheDB;
 
 mod cli;
 mod dto;
@@ -56,7 +55,7 @@ async fn main() -> Result<()> {
 
     let client = AnvilDebugProviderFactory::from_node_on_block(node_url, BlockNumber::from(block_number)).await?;
 
-    let block_header = client.get_block_by_number(BlockNumberOrTag::Number(block_number)).await?.unwrap().header;
+    let _block_header = client.get_block_by_number(BlockNumberOrTag::Number(block_number)).await?.unwrap().header;
 
     let operator_address = Address::repeat_byte(0x12);
     let multicaller_address = Address::repeat_byte(0x78);
@@ -113,16 +112,7 @@ async fn main() -> Result<()> {
 
     let swap_paths = market.swap_paths_vec();
 
-    let db = market_state_instance.read().await.state_db.clone();
-
-    let block_env = BlockEnv {
-        number: block_number,
-        timestamp: block_header.timestamp,
-        //basefee: block_header.base_fee_per_gas.unwrap_or_default(),
-        ..Default::default()
-    };
-
-    let mut evm = KabuEVMWrapper::new(CacheDB::new(db)).with_block_env(block_env);
+    let db = CacheDB::new(market_state_instance.read().await.state_db.clone());
 
     let in_amount_f64 = 1.0;
     let in_amount = NWETH::from_float(in_amount_f64);
@@ -149,7 +139,7 @@ async fn main() -> Result<()> {
 
         let mut swapline = SwapLine { path: sp, amount_in: SwapAmountType::Set(in_amount), ..SwapLine::default() };
 
-        match swapline.calculate_with_in_amount(evm.get_mut(), in_amount) {
+        match swapline.calculate_with_in_amount(&db, in_amount) {
             Ok((out_amount, gas_used, _)) => {
                 println!("{} gas: {}  amount {} -> {}", sp_dto, gas_used, in_amount_f64, NWETH::to_float(out_amount));
                 swapline.amount_out = SwapAmountType::Set(out_amount)

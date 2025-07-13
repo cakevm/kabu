@@ -188,7 +188,7 @@ mod tests {
         let node_url = env::var("MAINNET_HTTP").unwrap();
         let node_url = Url::parse(node_url.as_str()).unwrap();
 
-        let client = ProviderBuilder::new().on_http(node_url);
+        let client = ProviderBuilder::new().connect_http(node_url);
         let alloydb = AlloyDB::new(client, BlockId::from(16148323));
 
         if alloydb.is_none() {

@@ -278,7 +278,8 @@ mod test {
     use crate::{Pool, PoolAbiEncoder, PoolClass, PoolProtocol, PreswapRequirement, SwapDirection};
     use alloy_primitives::{Address, U256};
     use eyre::{eyre, ErrReport};
-    use kabu_evm_utils::LoomExecuteEvm;
+    use kabu_evm_db::KabuDBError;
+    use revm::DatabaseRef;
     use std::any::Any;
     use tokio::task::JoinHandle;
     use tracing::error;
@@ -312,7 +313,7 @@ mod test {
 
         fn calculate_out_amount(
             &self,
-            _evm: &mut dyn LoomExecuteEvm,
+            _db: &dyn DatabaseRef<Error = KabuDBError>,
             _token_address_from: &EntityAddress,
             _token_address_to: &EntityAddress,
             _in_amount: U256,
@@ -322,7 +323,7 @@ mod test {
 
         fn calculate_in_amount(
             &self,
-            _evm: &mut dyn LoomExecuteEvm,
+            _db: &dyn DatabaseRef<Error = KabuDBError>,
             _token_address_from: &EntityAddress,
             _token_address_to: &EntityAddress,
             _out_amount: U256,

@@ -1,4 +1,4 @@
-name: Kabu
+name: CI
 
 on:
   push:

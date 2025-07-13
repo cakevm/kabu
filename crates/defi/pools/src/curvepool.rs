@@ -1,17 +1,17 @@
 use crate::protocols::{CurveCommonContract, CurveContract, CurveProtocol};
-use alloy::network::TransactionBuilder;
 use alloy::primitives::{address, Address, Bytes, U256};
 use alloy::providers::{Network, Provider};
-use alloy::rpc::types::TransactionRequest;
 use alloy::sol_types::SolCall;
+use alloy_evm::EvmEnv;
 use eyre::{eyre, OptionExt, Result};
 use kabu_defi_abi::IERC20;
 use kabu_defi_address_book::TokenAddressEth;
-use kabu_evm_utils::{evm_dyn_call, LoomExecuteEvm};
+use kabu_evm_db::KabuDBError;
+use kabu_evm_utils::evm_call;
 use kabu_types_entities::required_state::RequiredState;
 use kabu_types_entities::{EntityAddress, Pool, PoolAbiEncoder, PoolClass, PoolProtocol, PreswapRequirement, SwapDirection};
 use lazy_static::lazy_static;
-use revm::primitives::TxKind;
+use revm::DatabaseRef;
 use std::any::Any;
 use std::sync::Arc;
 use tracing::error;
@@ -268,7 +268,7 @@ where
 
     fn calculate_out_amount(
         &self,
-        evm: &mut dyn LoomExecuteEvm,
+        db: &dyn DatabaseRef<Error = KabuDBError>,
         token_address_from: &EntityAddress,
         token_address_to: &EntityAddress,
         in_amount: U256,
@@ -304,9 +304,7 @@ where
             self.pool_contract.get_dy_call_data(i, j, in_amount)?
         };
 
-        let req = TransactionRequest::default().with_kind(TxKind::Call(self.address)).with_input(call_data).with_gas_limit(500_000);
-
-        let (value, gas_used) = evm_dyn_call(evm, req)?;
+        let (value, gas_used, _) = evm_call(db, EvmEnv::default(), self.address, call_data.to_vec())?;
 
         let ret = if value.len() > 32 { U256::from_be_slice(&value[0..32]) } else { U256::from_be_slice(&value[0..]) };
 
@@ -319,7 +317,7 @@ where
 
     fn calculate_in_amount(
         &self,
-        evm: &mut dyn LoomExecuteEvm,
+        db: &dyn DatabaseRef<Error = KabuDBError>,
         token_address_from: &EntityAddress,
         token_address_to: &EntityAddress,
         out_amount: U256,
@@ -332,9 +330,7 @@ where
             let j: u32 = self.get_coin_idx(token_address_to)?;
             let call_data = self.pool_contract.get_dx_call_data(i, j, out_amount)?;
 
-            let req = TransactionRequest::default().with_kind(TxKind::Call(self.address)).with_input(call_data).with_gas_limit(500_000);
-
-            let (value, gas_used) = evm_dyn_call(evm, req)?;
+            let (value, gas_used, _) = evm_call(db, EvmEnv::default(), self.address, call_data.to_vec())?;
 
             let ret = if value.len() > 32 { U256::from_be_slice(&value[0..32]) } else { U256::from_be_slice(&value[0..]) };
 
@@ -606,7 +602,6 @@ mod tests {
     use alloy::rpc::types::BlockNumberOrTag;
     use env_logger::Env as EnvLog;
     use kabu_evm_db::{DatabaseKabuExt, KabuDBType};
-    use kabu_evm_utils::KabuEVMWrapper;
     use kabu_node_debug_provider::AnvilDebugProviderFactory;
     use kabu_types_blockchain::KabuDataTypesEthereum;
     use kabu_types_entities::required_state::RequiredStateReader;
@@ -649,7 +644,7 @@ mod tests {
             let block_header = client.get_block_by_number(BlockNumberOrTag::Number(20045799)).await.unwrap().unwrap().header;
             debug!("Block {} {}", block_header.number, block_header.timestamp);
 
-            let mut evm = KabuEVMWrapper::new(CacheDB::new(market_state.state_db.clone())).with_header(&block_header);
+            let cache_db = CacheDB::new(market_state.state_db.clone());
 
             let tokens = pool.tokens.clone();
             let balances = pool.balances.clone();
@@ -661,14 +656,14 @@ mod tests {
                     let in_amount = balances[i] / U256::from(100);
                     let token_in = tokens[i];
                     let token_out = tokens[j];
-                    let (out_amount, gas_used) =
-                        match pool.calculate_out_amount(evm.get_evm_mut(), &token_in.into(), &token_out.into(), in_amount) {
-                            Ok(result) => result,
-                            Err(e) => {
-                                error!("Failed to calculate out amount for pool {:?}: {}", pool.get_address(), e);
-                                (U256::ZERO, 0)
-                            }
-                        };
+                    let (out_amount, gas_used) = match pool.calculate_out_amount(&cache_db, &token_in.into(), &token_out.into(), in_amount)
+                    {
+                        Ok(result) => result,
+                        Err(e) => {
+                            error!("Failed to calculate out amount for pool {:?}: {}", pool.get_address(), e);
+                            (U256::ZERO, 0)
+                        }
+                    };
                     debug!(
                         "Calculated : {:?} {} -> {} : {} -> {} gas : {}",
                         pool.get_address(),
@@ -690,12 +685,12 @@ mod tests {
                     let in_amount = balances[i] / U256::from(1000);
                     let token_in = tokens[i];
                     let (out_amount, gas_used) =
-                        pool.calculate_out_amount(evm.get_evm_mut(), &token_in.into(), &lp_token.into(), in_amount).unwrap_or_default();
+                        pool.calculate_out_amount(&cache_db, &token_in.into(), &lp_token.into(), in_amount).unwrap_or_default();
                     debug!("LP {:?} {} -> {} : {} -> {} gas : {}", pool.get_address(), token_in, lp_token, in_amount, out_amount, gas_used);
                     assert!(gas_used > 50000);
 
                     let (out_amount2, gas_used) =
-                        pool.calculate_out_amount(evm.get_evm_mut(), &lp_token.into(), &token_in.into(), out_amount).unwrap_or_default();
+                        pool.calculate_out_amount(&cache_db, &lp_token.into(), &token_in.into(), out_amount).unwrap_or_default();
                     debug!(
                         "LP {:?} {} -> {} : {} -> {} gas : {}",
                         pool.get_address(),
@@ -718,7 +713,7 @@ mod tests {
                     let token_in = tokens[0];
                     let token_out = underlying_token;
                     let (out_amount, gas_used) =
-                        pool.calculate_out_amount(evm.get_evm_mut(), &token_in.into(), &token_out.into(), in_amount).unwrap_or_default();
+                        pool.calculate_out_amount(&cache_db, &token_in.into(), &token_out.into(), in_amount).unwrap_or_default();
                     debug!(
                         "Meta {:?} {} -> {} : {} -> {} gas: {}",
                         pool.get_address(),
@@ -729,7 +724,7 @@ mod tests {
                         gas_used
                     );
                     let (out_amount2, gas_used) =
-                        pool.calculate_out_amount(evm.get_evm_mut(), &token_out.into(), &token_in.into(), out_amount).unwrap_or_default();
+                        pool.calculate_out_amount(&cache_db, &token_out.into(), &token_in.into(), out_amount).unwrap_or_default();
                     debug!(
                         "Meta {:?} {} -> {} : {} -> {} gas : {} ",
                         pool.get_address(),

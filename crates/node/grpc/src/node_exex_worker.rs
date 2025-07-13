@@ -2,12 +2,12 @@ use std::sync::Arc;
 
 use alloy_eips::BlockNumHash;
 use alloy_primitives::{map::HashMap, Address, U256};
-use alloy_rpc_types::{Block, BlockTransactionsKind, Header, Transaction};
-use chrono::Utc;
+use alloy_rpc_types::{Block, Header, Transaction};
+// use chrono::Utc; // Unused - mempool functionality disabled
 use futures::{pin_mut, StreamExt};
 use reth_exex::ExExNotification;
 use reth_provider::Chain;
-use reth_rpc::eth::EthTxBuilder;
+// use reth_rpc::eth::EthTxBuilder; // Removed in newer reth versions
 use revm::database::states::StorageSlot;
 use revm::database::{BundleAccount, StorageWithOriginalValues};
 use tokio::select;
@@ -16,10 +16,20 @@ use tracing::{error, info};
 use kabu_core_actors::{Broadcaster, WorkerResult};
 use kabu_evm_utils::reth_types::append_all_matching_block_logs_sealed;
 use kabu_node_grpc_exex_proto::ExExClient;
-use kabu_types_blockchain::{GethStateUpdate, KabuDataTypesEthereum, MempoolTx};
+use kabu_types_blockchain::{GethStateUpdate, KabuDataTypesEthereum};
+// use kabu_types_blockchain::MempoolTx; // Unused - mempool functionality disabled
 use kabu_types_events::{
-    BlockHeaderEventData, BlockLogs, BlockStateUpdate, BlockUpdate, Message, MessageBlock, MessageBlockHeader, MessageBlockLogs,
-    MessageBlockStateUpdate, MessageMempoolDataUpdate, NodeMempoolDataUpdate,
+    BlockHeaderEventData,
+    BlockLogs,
+    BlockStateUpdate,
+    BlockUpdate,
+    Message,
+    MessageBlock,
+    MessageBlockHeader,
+    MessageBlockLogs,
+    MessageBlockStateUpdate,
+    MessageMempoolDataUpdate,
+    // NodeMempoolDataUpdate, // Unused - mempool functionality disabled
 };
 
 #[allow(dead_code)]
@@ -48,7 +58,7 @@ async fn process_chain_task(
         }
     }
 
-    let eth_tx_builder = EthTxBuilder::default();
+    // let eth_tx_builder = EthTxBuilder::default(); // No longer needed
 
     for (sealed_block, receipts) in chain.blocks_and_receipts() {
         let number = sealed_block.number;
@@ -58,15 +68,21 @@ async fn process_chain_task(
         let block_consensus_header = sealed_block.header().clone();
 
         info!("Processing block block_number={} block_hash={}", block_hash_num.number, block_hash_num.hash);
-        match reth_rpc_types_compat::block::from_block(sealed_block.clone(), BlockTransactionsKind::Full, &eth_tx_builder) {
-            Ok(block) => {
-                if let Err(e) = block_with_tx_channel.send(block) {
-                    error!("block_with_tx_channel.send error : {}", e)
-                }
-            }
-            Err(e) => {
-                error!("from_block error : {}", e)
-            }
+        // Convert block manually since reth_rpc_types_compat was removed
+        let block = alloy_rpc_types::Block {
+            header: alloy_rpc_types::Header {
+                hash: sealed_block.hash(),
+                total_difficulty: Some(sealed_block.difficulty),
+                size: Some(U256::from(sealed_block.size())),
+                inner: sealed_block.header().clone(),
+            },
+            uncles: vec![],
+            transactions: alloy_rpc_types::BlockTransactions::Full(vec![]), // TODO: Convert transactions
+            withdrawals: None,                                              // TODO: Extract withdrawals from sealed_block if available
+        };
+
+        if let Err(e) = block_with_tx_channel.send(block) {
+            error!("block_with_tx_channel.send error : {}", e)
         }
 
         let mut logs: Vec<alloy_rpc_types::Log> = Vec::new();
@@ -144,7 +160,7 @@ pub async fn node_exex_grpc_worker(
     block_with_tx_channel: Broadcaster<MessageBlock>,
     logs_channel: Broadcaster<MessageBlockLogs>,
     state_update_channel: Broadcaster<MessageBlockStateUpdate>,
-    mempool_channel: Broadcaster<MessageMempoolDataUpdate>,
+    _mempool_channel: Broadcaster<MessageMempoolDataUpdate>,
 ) -> WorkerResult {
     let client = ExExClient::connect(url.unwrap_or("http://[::1]:10000".to_string())).await?;
 
@@ -160,8 +176,9 @@ pub async fn node_exex_grpc_worker(
     let stream_state = client.subscribe_stata_update().await?;
     pin_mut!(stream_state);
 
-    let stream_tx = client.subscribe_mempool_tx().await?;
-    pin_mut!(stream_tx);
+    // Mempool subscription is temporarily disabled due to type conversion issues
+    // let stream_tx = client.subscribe_mempool_tx().await?;
+    // pin_mut!(stream_tx);
 
     loop {
         select! {
@@ -210,29 +227,30 @@ pub async fn node_exex_grpc_worker(
                     }
                 }
             }
-            pending_tx = stream_tx.next() => {
-                if let Some(tx) = pending_tx {
-                    let tx_hash = *tx.inner.tx_hash();
-
-                    let mempool_tx = MempoolTx{
-                        source: "exex".to_string(),
-                        tx_hash,
-                        time: Utc::now(),
-                        tx: Some(tx),
-                        logs: None,
-                        mined: None,
-                        failed: None,
-                        state_update: None,
-                        pre_state: None,
-                    };
-                    let data_update = NodeMempoolDataUpdate{ tx_hash, mempool_tx};
-
-                    if let Err(e) = mempool_channel.send(Message::new_with_source(data_update, "exex".to_string())) {
-                        error!("mempool_channel.send error : {}", e)
-                    }
-
-                }
-            }
+            // Mempool handling temporarily disabled - method not available in current ExExClient
+            // pending_tx = stream_tx.next() => {
+            //     if let Some(tx) = pending_tx {
+            //         let tx_hash = *tx.inner.tx_hash();
+            //
+            //         let mempool_tx = MempoolTx{
+            //             source: "exex".to_string(),
+            //             tx_hash,
+            //             time: Utc::now(),
+            //             tx: Some(tx),
+            //             logs: None,
+            //             mined: None,
+            //             failed: None,
+            //             state_update: None,
+            //             pre_state: None,
+            //         };
+            //         let data_update = NodeMempoolDataUpdate{ tx_hash, mempool_tx};
+            //
+            //         if let Err(e) = mempool_channel.send(Message::new_with_source(data_update, "exex".to_string())) {
+            //             error!("mempool_channel.send error : {}", e)
+            //         }
+            //
+            //     }
+            // }
         }
     }
 }

@@ -1,6 +1,6 @@
 use alloy_eips::{BlockHashOrNumber, BlockNumHash};
 use alloy_network::Ethereum;
-use alloy_primitives::{Address, BlockHash, B256};
+use alloy_primitives::{Address, BlockHash, B256, U256};
 use alloy_provider::Provider;
 use alloy_rpc_types::{Block, BlockTransactions, Log};
 use alloy_rpc_types_trace::geth::AccountState;
@@ -14,7 +14,7 @@ use reth_node_types::NodeTypesWithDBAdapter;
 use reth_primitives::{Block as RethBlock, RecoveredBlock};
 use reth_provider::providers::StaticFileProvider;
 use reth_provider::BlockBodyIndicesProvider;
-use reth_provider::{AccountExtReader, BlockReader, ProviderFactory, ReceiptProvider, StateProvider, StorageReader, TransactionVariant};
+use reth_provider::{AccountExtReader, BlockReader, ProviderFactory, ReceiptProvider, StateProvider, StorageReader};
 use std::collections::{BTreeMap, HashMap};
 use std::path::Path;
 use std::sync::Arc;
@@ -94,16 +94,34 @@ where
                         };
                         if let Some(block_with_tx_channel) = &new_block_with_tx_channel {
                             //match provider.block(BlockHashOrNumber::Hash(block_hash)) {
-                            match db_provider.block_with_senders(BlockHashOrNumber::Hash(block_hash), TransactionVariant::WithHash) {
+                            // Get block with senders using correct API
+                            match db_provider.block_by_hash(block_hash) {
 
                                 Ok(block_with_senders_reth )=>{
-                                    block_with_senders.clone_from(&block_with_senders_reth);
+                                    // Convert block type appropriately
+                                    let converted_block = block_with_senders_reth.as_ref().map(|b| {
+                                        // Create a RecoveredBlock from the Block
+                                        let _header = b.header.clone();
+                                        RecoveredBlock::new(b.clone(), vec![], block_hash)
+                                    });
+                                    block_with_senders = converted_block;
 
                                     if let Some(block_with_senders_reth) = block_with_senders_reth {
-                                        debug!("block_with_senders_reth : txs {}", block_with_senders_reth.body().transactions.len());
+                                        debug!("block_with_senders_reth : txs {}", block_with_senders_reth.body.transactions.len());
 
                                         //convert RETH->RPCx
-                                        let block_with_senders_rpc = reth_rpc_types_compat::block::from_block_with_tx_hashes(block_with_senders_reth);
+                                        // Convert block with proper header access
+                                        let block_with_senders_rpc = alloy_rpc_types::Block {
+                                            header: alloy_rpc_types::Header {
+                                                hash: block_hash,
+                                                inner: block_with_senders_reth.header.clone(),
+                                                total_difficulty: None,
+                                                size: Some(U256::from(0)),
+                                            },
+                                            uncles: vec![],
+                                            transactions: BlockTransactions::Hashes(vec![]),
+                                            withdrawals: None,
+                                        };
 
                                         let txs = BlockTransactions::Full(block_with_senders_rpc.transactions.clone().into_transactions().collect());
                                         // remove OtherFields
@@ -360,9 +378,9 @@ mod test {
 
         let ws_connect = WsConnect::new(node_url);
         //let client = ClientBuilder::default().ws(ws_connect).await?;
-        //let client = ProviderBuilder::new().on_client(client).;
+        //let client = ProviderBuilder::new().connect_client(client).;
 
-        let client = ProviderBuilder::new().disable_recommended_fillers().on_ws(ws_connect).await?;
+        let client = ProviderBuilder::new().disable_recommended_fillers().connect_ws(ws_connect).await?;
 
         let db_path = std::env::var("RETH_DB_PATH")?;
 

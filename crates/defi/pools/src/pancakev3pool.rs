@@ -1,10 +1,9 @@
 use crate::state_readers::UniswapV3EvmStateReader;
-use alloy::network::TransactionBuilder;
 use alloy::primitives::aliases::{I24, U24};
-use alloy::primitives::{Address, Bytes, TxKind, I256, U160, U256};
+use alloy::primitives::{Address, Bytes, I256, U160, U256};
 use alloy::providers::{Network, Provider};
-use alloy::rpc::types::TransactionRequest;
 use alloy::sol_types::{SolCall, SolInterface};
+use alloy_evm::EvmEnv;
 use eyre::{eyre, ErrReport, OptionExt, Result};
 use kabu_defi_abi::pancake::IPancakeQuoterV2::IPancakeQuoterV2Calls;
 use kabu_defi_abi::pancake::IPancakeV3Pool::slot0Return;
@@ -13,9 +12,11 @@ use kabu_defi_abi::uniswap3::IUniswapV3Pool;
 use kabu_defi_abi::uniswap_periphery::ITickLens;
 use kabu_defi_abi::IERC20;
 use kabu_defi_address_book::PeripheryAddress;
-use kabu_evm_utils::{evm_dyn_call, LoomExecuteEvm};
+use kabu_evm_db::KabuDBError;
+use kabu_evm_utils::evm_call;
 use kabu_types_entities::required_state::RequiredState;
 use kabu_types_entities::{EntityAddress, Pool, PoolAbiEncoder, PoolClass, PoolProtocol, PreswapRequirement, SwapDirection};
+use revm::DatabaseRef;
 use std::any::Any;
 use std::fmt::Debug;
 use std::ops::Sub;
@@ -120,12 +121,12 @@ impl PancakeV3Pool {
             PoolProtocol::UniswapV3Like
         }
     }
-    pub fn fetch_pool_data_evm(evm: &mut dyn LoomExecuteEvm, address: Address) -> Result<Self> {
-        let token0: Address = UniswapV3EvmStateReader::token0(evm, address)?;
-        let token1: Address = UniswapV3EvmStateReader::token1(evm, address)?;
-        let fee = UniswapV3EvmStateReader::fee(evm, address)?;
+    pub fn fetch_pool_data_evm<DB: DatabaseRef<Error = KabuDBError> + ?Sized>(db: &DB, address: Address) -> Result<Self> {
+        let token0: Address = UniswapV3EvmStateReader::token0(db, address)?;
+        let token1: Address = UniswapV3EvmStateReader::token1(db, address)?;
+        let fee = UniswapV3EvmStateReader::fee(db, address)?;
         let fee_u32: u32 = fee.to();
-        let factory = UniswapV3EvmStateReader::factory(evm, address)?;
+        let factory = UniswapV3EvmStateReader::factory(db, address)?;
         let protocol = Self::get_protocol_by_factory(factory);
 
         let ret = PancakeV3Pool {
@@ -148,18 +149,18 @@ impl PancakeV3Pool {
     pub async fn fetch_pool_data<N: Network, P: Provider<N> + Send + Sync + Clone + 'static>(client: P, address: Address) -> Result<Self> {
         let uni3_pool = IPancakeV3Pool::IPancakeV3PoolInstance::new(address, client.clone());
 
-        let token0: Address = uni3_pool.token0().call().await?._0;
-        let token1: Address = uni3_pool.token1().call().await?._0;
-        let fee = uni3_pool.fee().call().await?._0;
+        let token0: Address = uni3_pool.token0().call().await?;
+        let token1: Address = uni3_pool.token1().call().await?;
+        let fee = uni3_pool.fee().call().await?;
         let fee_u32: u32 = fee.to();
         let slot0 = uni3_pool.slot0().call().await?;
-        let factory: Address = uni3_pool.factory().call().await?._0;
+        let factory: Address = uni3_pool.factory().call().await?;
 
         let token0_erc20 = IERC20::IERC20Instance::new(token0, client.clone());
         let token1_erc20 = IERC20::IERC20Instance::new(token1, client.clone());
 
-        let liquidity0: U256 = token0_erc20.balanceOf(address).call().await?._0;
-        let liquidity1: U256 = token1_erc20.balanceOf(address).call().await?._0;
+        let liquidity0: U256 = token0_erc20.balanceOf(address).call().await?;
+        let liquidity1: U256 = token1_erc20.balanceOf(address).call().await?;
 
         let protocol = PancakeV3Pool::get_protocol_by_factory(factory);
 
@@ -215,7 +216,7 @@ impl Pool for PancakeV3Pool {
 
     fn calculate_out_amount(
         &self,
-        evm: &mut dyn LoomExecuteEvm,
+        db: &dyn DatabaseRef<Error = KabuDBError>,
         token_address_from: &EntityAddress,
         token_address_to: &EntityAddress,
         in_amount: U256,
@@ -231,14 +232,9 @@ impl Pool for PancakeV3Pool {
         })
         .abi_encode();
 
-        let req = TransactionRequest::default()
-            .with_kind(TxKind::Call(PeripheryAddress::PANCAKE_V3_QUOTER))
-            .with_input(call_data)
-            .gas_limit(1_000_000);
+        let (value, gas_used, _) = evm_call(db, EvmEnv::default(), PeripheryAddress::PANCAKE_V3_QUOTER, call_data)?;
 
-        let (value, gas_used) = evm_dyn_call(evm, req)?;
-
-        let ret = IPancakeQuoterV2::quoteExactInputSingleCall::abi_decode_returns(&value, false)?;
+        let ret = IPancakeQuoterV2::quoteExactInputSingleCall::abi_decode_returns(&value)?;
 
         if ret.amountOut.is_zero() {
             Err(eyre!("ZERO_OUT_AMOUNT"))
@@ -249,7 +245,7 @@ impl Pool for PancakeV3Pool {
 
     fn calculate_in_amount(
         &self,
-        evm: &mut dyn LoomExecuteEvm,
+        db: &dyn DatabaseRef<Error = KabuDBError>,
         token_address_from: &EntityAddress,
         token_address_to: &EntityAddress,
         out_amount: U256,
@@ -265,14 +261,9 @@ impl Pool for PancakeV3Pool {
         })
         .abi_encode();
 
-        let req = TransactionRequest::default()
-            .with_kind(TxKind::Call(PeripheryAddress::PANCAKE_V3_QUOTER))
-            .with_input(call_data)
-            .gas_limit(1_000_000);
+        let (value, gas_used, _) = evm_call(db, EvmEnv::default(), PeripheryAddress::PANCAKE_V3_QUOTER, call_data)?;
 
-        let (value, gas_used) = evm_dyn_call(evm, req)?;
-
-        let ret = IPancakeQuoterV2::quoteExactOutputSingleCall::abi_decode_returns(&value, false)?;
+        let ret = IPancakeQuoterV2::quoteExactOutputSingleCall::abi_decode_returns(&value)?;
 
         if ret.amountIn.is_zero() {
             Err(eyre!("ZERO_IN_AMOUNT"))
@@ -505,7 +496,6 @@ impl PoolAbiEncoder for PancakeV3AbiSwapEncoder {
 mod tests {
     use env_logger::Env as EnvLog;
     use kabu_evm_db::KabuDBType;
-    use kabu_evm_utils::KabuEVMWrapper;
     use kabu_node_debug_provider::AnvilDebugProviderFactory;
     use kabu_types_blockchain::KabuDataTypesEthereum;
     use kabu_types_entities::required_state::RequiredStateReader;
@@ -544,10 +534,10 @@ mod tests {
 
         market_state.state_db.apply_geth_update(state_update);
 
-        let mut evm = KabuEVMWrapper::new(CacheDB::new(market_state.state_db));
+        let cache_db = CacheDB::new(market_state.state_db);
 
         let (out_amount, gas_used) = pool
-            .calculate_out_amount(evm.get_mut(), &pool.token0.into(), &pool.token1.into(), U256::from(pool.liquidity0 / U256::from(100)))
+            .calculate_out_amount(&cache_db, &pool.token0.into(), &pool.token1.into(), U256::from(pool.liquidity0 / U256::from(100)))
             .unwrap();
 
         debug!("{} {} ", out_amount, gas_used);
@@ -555,7 +545,7 @@ mod tests {
         assert!(gas_used > 100_000, "gas used check failed");
 
         let (out_amount, gas_used) = pool
-            .calculate_out_amount(evm.get_mut(), &pool.token1.into(), &pool.token0.into(), U256::from(pool.liquidity1 / U256::from(100)))
+            .calculate_out_amount(&cache_db, &pool.token1.into(), &pool.token0.into(), U256::from(pool.liquidity1 / U256::from(100)))
             .unwrap();
         debug!("{} {} ", out_amount, gas_used);
         assert_ne!(out_amount, U256::ZERO);

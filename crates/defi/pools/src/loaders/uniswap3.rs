@@ -6,9 +6,10 @@ use alloy::sol_types::SolEventInterface;
 use eyre::eyre;
 use futures::Stream;
 use kabu_defi_abi::uniswap3::IUniswapV3Pool::IUniswapV3PoolEvents;
-use kabu_evm_utils::LoomExecuteEvm;
+use kabu_evm_db::KabuDBError;
 use kabu_types_blockchain::{KabuDataTypes, KabuDataTypesEVM, KabuDataTypesEthereum};
 use kabu_types_entities::{get_protocol_by_factory, EntityAddress, PoolClass, PoolLoader, PoolProtocol, PoolWrapper};
+use revm::DatabaseRef;
 use std::future::Future;
 use std::pin::Pin;
 use std::sync::Arc;
@@ -25,7 +26,7 @@ where
     fn get_pool_class_by_log(&self, log_entry: &LDT::Log) -> Option<(EntityAddress, PoolClass)> {
         let log_entry: Option<EVMLog> = EVMLog::new(log_entry.address(), log_entry.topics().to_vec(), log_entry.data().data.clone());
         match log_entry {
-            Some(log_entry) => match IUniswapV3PoolEvents::decode_log(&log_entry, false) {
+            Some(log_entry) => match IUniswapV3PoolEvents::decode_log(&log_entry) {
                 Ok(event) => match event.data {
                     IUniswapV3PoolEvents::Swap(_)
                     | IUniswapV3PoolEvents::Mint(_)
@@ -76,8 +77,8 @@ where
         })
     }
 
-    fn fetch_pool_by_id_from_evm(&self, pool_id: EntityAddress, evm: &mut dyn LoomExecuteEvm) -> eyre::Result<PoolWrapper> {
-        Ok(PoolWrapper::new(Arc::new(UniswapV3Pool::fetch_pool_data_evm(evm, pool_id.address()?)?)))
+    fn fetch_pool_by_id_from_evm(&self, pool_id: EntityAddress, db: &dyn DatabaseRef<Error = KabuDBError>) -> eyre::Result<PoolWrapper> {
+        Ok(PoolWrapper::new(Arc::new(UniswapV3Pool::fetch_pool_data_evm(db, pool_id.address()?)?)))
     }
 
     fn is_code(&self, code: &Bytes) -> bool {

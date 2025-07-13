@@ -3,7 +3,8 @@ use chrono::Local;
 #[allow(unused_imports)]
 use criterion::{black_box, criterion_group, criterion_main, Criterion};
 use eyre::Result;
-use rand::prelude::{Rng, SeedableRng, StdRng};
+use rand::prelude::{Rng, StdRng};
+use rand::SeedableRng;
 use rayon::prelude::*;
 use rayon::{ThreadPool, ThreadPoolBuilder};
 use std::collections::HashMap;
@@ -20,12 +21,11 @@ use kabu::evm::db::{KabuDB, KabuDBType};
 use kabu::node::debug_provider::AnvilDebugProviderFactory;
 use kabu::types::entities::required_state::RequiredStateReader;
 use kabu::types::entities::{MarketState, Pool, PoolWrapper};
-use kabu_evm_utils::KabuEVMWrapper;
 use kabu_types_blockchain::KabuDataTypesEthereum;
 
 #[allow(dead_code)]
 async fn performance_test() {
-    let mut rng = StdRng::from_entropy();
+    let mut rng = StdRng::from_os_rng();
 
     // Initializing 60,000 structures with random U256 and unique generated ethers::Address
     let mut map = HashMap::new();
@@ -33,9 +33,9 @@ async fn performance_test() {
         //let random_u256 = rng.gen::<U256>();
         //let address = rng.gen::<Address>();
 
-        let random_bytes: [u8; 32] = rng.gen();
+        let random_bytes: [u8; 32] = rng.random();
         let random_u256 = U256::from_be_bytes(random_bytes);
-        let random_address_bytes: [u8; 20] = rng.gen();
+        let random_address_bytes: [u8; 20] = rng.random();
         let address = Address::from(&random_address_bytes);
 
         map.insert(address, random_u256);
@@ -76,12 +76,13 @@ async fn fetch_data_and_pool() -> Result<(MarketState<KabuDB>, PoolWrapper)> {
 }
 
 #[allow(dead_code)]
-async fn sync_run(state_db: &KabuDBType, pool: UniswapV3Pool) {
+async fn sync_run(state_db: &KabuDBType, pool: PoolWrapper) {
     let step = U256::from(U256::from(10).pow(U256::from(18)));
     let mut in_amount = U256::from(U256::from(10).pow(U256::from(18)));
     (0..10).for_each(|_| {
-        let mut evm = KabuEVMWrapper::new(state_db.clone());
-        let (out_amount, gas_used) = pool.calculate_out_amount(evm.get_mut(), &pool.token1.into(), &pool.token0.into(), in_amount).unwrap();
+        let tokens = pool.get_tokens();
+        let (out_amount, gas_used) =
+            pool.calculate_out_amount(&state_db, tokens.first().unwrap(), tokens.get(1).unwrap(), in_amount).unwrap();
         if out_amount.is_zero() || gas_used < 50_000 {
             panic!("BAD CALC")
         }
@@ -111,8 +112,7 @@ async fn rayon_run(state_db: &KabuDBType, pool: PoolWrapper, threadpool: Arc<Thr
     tokio::task::spawn(async move {
         threadpool.install(|| {
             in_vec.into_par_iter().for_each_with((&state_db_clone, &result_tx), |(state_db, result_tx), in_amount| {
-                let mut evm = KabuEVMWrapper::new(state_db.clone());
-                let (out_amount, gas_used) = pool.calculate_out_amount(evm.get_mut(), &token_from, &token_to, in_amount).unwrap();
+                let (out_amount, gas_used) = pool.calculate_out_amount(state_db, &token_from, &token_to, in_amount).unwrap();
                 if out_amount.is_zero() || gas_used < 50_000 {
                     panic!("BAD CALC")
                 }
@@ -169,7 +169,7 @@ async fn rayon_parallel_run(state_db: &KabuDBType, pool: PoolWrapper) {
     }
 }
 
-async fn tokio_run(state_db: &KabuDBType, pool: UniswapV3Pool) {
+async fn tokio_run(state_db: &KabuDBType, pool: PoolWrapper) {
     let step = U256::from(U256::from(10).pow(U256::from(16)));
     let in_amount = U256::from(U256::from(10).pow(U256::from(18)));
 
@@ -195,9 +195,10 @@ async fn tokio_run(state_db: &KabuDBType, pool: UniswapV3Pool) {
                         drop(request_rx_guard);
                         match req {
                             Some(req) => {
-                                let mut evm = KabuEVMWrapper::new(req.0.as_ref().clone());
-                                let (out_amount, gas_used) =
-                                    pool.calculate_out_amount(evm.get_mut(), &pool.token1.into(), &pool.token0.into(), req.1).unwrap();
+                                let tokens = pool.get_tokens();
+                                let (out_amount, gas_used) = pool
+                                    .calculate_out_amount(req.0.as_ref(), tokens.first().unwrap(), tokens.get(1).unwrap(), req.1)
+                                    .unwrap();
                                 if out_amount.is_zero() || gas_used < 50_000 {
                                     panic!("BAD CALC")
                                 }
@@ -251,7 +252,7 @@ async fn tokio_run(state_db: &KabuDBType, pool: UniswapV3Pool) {
 }
 
 #[allow(dead_code)]
-async fn tokio_parallel_run(state_db: &KabuDBType, pool: UniswapV3Pool) {
+async fn tokio_parallel_run(state_db: &KabuDBType, pool: PoolWrapper) {
     const TASKS_COUNT: u32 = 3;
     let mut tasks: Vec<JoinHandle<_>> = Vec::new();
 

@@ -4,8 +4,9 @@ use alloy_network::{Ethereum, Network};
 use alloy_primitives::Bytes;
 use alloy_provider::Provider;
 use eyre::{eyre, Result};
-use kabu_evm_utils::LoomExecuteEvm;
+use kabu_evm_db::KabuDBError;
 use kabu_types_blockchain::{KabuDataTypes, KabuDataTypesEVM, KabuDataTypesEthereum};
+use revm::DatabaseRef;
 use std::collections::HashMap;
 use std::future::Future;
 use std::pin::Pin;
@@ -26,7 +27,7 @@ where
         pool_id: EntityAddress,
         provider: P,
     ) -> Pin<Box<dyn Future<Output = Result<PoolWrapper>> + Send + 'a>>;
-    fn fetch_pool_by_id_from_evm(&self, pool_id: EntityAddress, evm: &mut dyn LoomExecuteEvm) -> Result<PoolWrapper>;
+    fn fetch_pool_by_id_from_evm(&self, pool_id: EntityAddress, db: &dyn DatabaseRef<Error = KabuDBError>) -> Result<PoolWrapper>;
     fn is_code(&self, code: &Bytes) -> bool;
     fn protocol_loader(&self) -> Result<Pin<Box<dyn Stream<Item = (EntityAddress, PoolClass)> + Send>>>;
 }

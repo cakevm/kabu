@@ -1,4 +1,4 @@
-use std::ops::{BitAnd, Shl, Shr};
+use std::ops::{Shl, Shr};
 
 use alloy::primitives::{Address, Signed, Uint, B256, I256};
 use alloy::primitives::{U160, U256};
@@ -104,7 +104,6 @@ mod test {
 
     use kabu_defi_address_book::UniswapV3PoolAddress;
     use kabu_evm_db::KabuDBType;
-    use kabu_evm_utils::KabuEVMWrapper;
     use kabu_node_debug_provider::AnvilDebugProviderFactory;
     use kabu_types_blockchain::KabuDataTypesEthereum;
     use kabu_types_entities::required_state::RequiredStateReader;
@@ -138,14 +137,14 @@ mod test {
 
         market_state.state_db.apply_geth_update(state_required);
 
-        let mut evm = KabuEVMWrapper::new(CacheDB::new(market_state.state_db.clone()));
+        let cache_db = CacheDB::new(market_state.state_db.clone());
 
-        let factory_evm = UniswapV3EvmStateReader::factory(evm.get_mut(), pool_address)?;
-        let token0_evm = UniswapV3EvmStateReader::token0(evm.get_mut(), pool_address)?;
-        let token1_evm = UniswapV3EvmStateReader::token1(evm.get_mut(), pool_address)?;
+        let factory_evm = UniswapV3EvmStateReader::factory(&cache_db, pool_address)?;
+        let token0_evm = UniswapV3EvmStateReader::token0(&cache_db, pool_address)?;
+        let token1_evm = UniswapV3EvmStateReader::token1(&cache_db, pool_address)?;
         debug!("{factory_evm:?} {token0_evm:?} {token1_evm:?}");
 
-        let slot0_evm = UniswapV3EvmStateReader::slot0(evm.get_mut(), pool_address)?;
+        let slot0_evm = UniswapV3EvmStateReader::slot0(&cache_db, pool_address)?;
 
         let slot0_db = UniswapV3DbReader::slot0(&market_state.state_db, pool_address)?;
 

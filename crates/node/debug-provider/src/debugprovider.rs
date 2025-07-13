@@ -41,7 +41,7 @@ pub type AnvilDebugProviderType = AnvilDebugProvider<RootProvider<Ethereum>, Roo
 impl AnvilDebugProviderFactory {
     pub async fn from_node_on_block(node_url: String, block: BlockNumber) -> Result<AnvilDebugProviderType> {
         let node_ws = WsConnect::new(node_url.clone());
-        let node_provider = ProviderBuilder::new().disable_recommended_fillers().on_ws(node_ws).await?;
+        let node_provider = ProviderBuilder::new().disable_recommended_fillers().connect_ws(node_ws).await?;
 
         let anvil = Anvil::new().fork_block_number(block).fork(node_url.clone()).chain_id(1).arg("--disable-console-log").spawn();
 
@@ -49,7 +49,7 @@ impl AnvilDebugProviderFactory {
         let anvil_url = anvil.ws_endpoint_url();
         let anvil_ws = WsConnect::new(anvil_url.clone());
 
-        let anvil_provider = ProviderBuilder::new().disable_recommended_fillers().on_ws(anvil_ws).await?;
+        let anvil_provider = ProviderBuilder::new().disable_recommended_fillers().connect_ws(anvil_ws).await?;
 
         let curblock = anvil_provider.get_block_by_number(BlockNumberOrTag::Latest).await?;
 
@@ -259,11 +259,11 @@ mod test {
         let node_url = url::Url::parse(std::env::var("MAINNET_HTTP")?.as_str())?;
 
         let provider_anvil =
-            ProviderBuilder::new().on_anvil_with_config(|x| x.chain_id(1).fork(node_url.clone()).fork_block_number(20322777));
+            ProviderBuilder::new().connect_anvil_with_config(|x| x.chain_id(1).fork(node_url.clone()).fork_block_number(20322777));
 
         let client_node = ClientBuilder::default().http(node_url);
 
-        let provider_node = ProviderBuilder::new().disable_recommended_fillers().on_client(client_node);
+        let provider_node = ProviderBuilder::new().disable_recommended_fillers().connect_client(client_node);
 
         let provider = AnvilDebugProvider::new(provider_node, provider_anvil, BlockNumberOrTag::Number(10));
 

@@ -204,7 +204,7 @@ mod test {
         let ws_connect = WsConnect::new(node_url);
         let client = ClientBuilder::default().ws(ws_connect).await?;
 
-        let client = ProviderBuilder::new().disable_recommended_fillers().on_client(client);
+        let client = ProviderBuilder::new().disable_recommended_fillers().connect_client(client);
 
         let blocknumber = client.get_block_number().await?;
         let _block = client.get_block_by_number(blocknumber.into()).await?.unwrap();

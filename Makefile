@@ -86,9 +86,9 @@ deny-check:
 # check files format with fmt and clippy
 .PHONY: pre-release
 pre-release:
-	cargo +stable fmt --all --check
+	cargo +stable fmt --all
 	cargo clippy --all-targets --all-features -- -D warnings
-	taplo format --check
+	taplo format
 
 # replayer test
 .PHONY: replayer

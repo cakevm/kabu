@@ -20,7 +20,7 @@
 
 ## What is Kabu?
 
-Kabu is a MEV bot framework, currently under heavy development.
+Kabu is a backrunning bot, currently under heavy development. It continues the journey of [loom](https://github.com/dexloom/loom). Since then many breaking changes have been made to revm, reth and alloy. The goal here is to make everything work again and modernize the codebase. Currently, Kabu is a work in progress and not yet ready for production use.
 
 ## Kabu is opinionated
 - Kabu will only support exex and json-rpc.

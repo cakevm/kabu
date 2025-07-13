@@ -122,7 +122,8 @@ impl TryFrom<&reth::primitives::TransactionSigned> for proto::Transaction {
             s: transaction.signature().s().to_le_bytes_vec(),
             y_parity: transaction.signature().v(),
         };
-        let transaction = match &transaction.transaction() {
+        let tx = transaction.clone().into_typed_transaction();
+        let transaction = match tx {
             reth::primitives::Transaction::Legacy(alloy_consensus::TxLegacy {
                 chain_id,
                 nonce,
@@ -132,11 +133,14 @@ impl TryFrom<&reth::primitives::TransactionSigned> for proto::Transaction {
                 value,
                 input,
             }) => proto::transaction::Transaction::Legacy(proto::TransactionLegacy {
-                chain_id: *chain_id,
-                nonce: *nonce,
+                chain_id,
+                nonce,
                 gas_price: gas_price.to_le_bytes().to_vec(),
                 gas_limit: gas_limit.to_le_bytes().to_vec(),
-                to: Some(to.into()),
+                to: Some(match to {
+                    alloy_primitives::TxKind::Call(addr) => proto::TxKind { kind: Some(proto::tx_kind::Kind::Call(addr.to_vec())) },
+                    alloy_primitives::TxKind::Create => proto::TxKind { kind: Some(proto::tx_kind::Kind::Create(())) },
+                }),
                 value: value.to_le_bytes_vec(),
                 input: input.to_vec(),
             }),
@@ -150,11 +154,14 @@ impl TryFrom<&reth::primitives::TransactionSigned> for proto::Transaction {
                 access_list,
                 input,
             }) => proto::transaction::Transaction::Eip2930(proto::TransactionEip2930 {
-                chain_id: *chain_id,
-                nonce: *nonce,
+                chain_id,
+                nonce,
                 gas_price: gas_price.to_le_bytes().to_vec(),
                 gas_limit: gas_limit.to_le_bytes().to_vec(),
-                to: Some(to.into()),
+                to: Some(match to {
+                    alloy_primitives::TxKind::Call(addr) => proto::TxKind { kind: Some(proto::tx_kind::Kind::Call(addr.to_vec())) },
+                    alloy_primitives::TxKind::Create => proto::TxKind { kind: Some(proto::tx_kind::Kind::Create(())) },
+                }),
                 value: value.to_le_bytes_vec(),
                 access_list: access_list.iter().map(Into::into).collect(),
                 input: input.to_vec(),
@@ -170,12 +177,15 @@ impl TryFrom<&reth::primitives::TransactionSigned> for proto::Transaction {
                 access_list,
                 input,
             }) => proto::transaction::Transaction::Eip1559(proto::TransactionEip1559 {
-                chain_id: *chain_id,
-                nonce: *nonce,
+                chain_id,
+                nonce,
                 gas_limit: gas_limit.to_le_bytes().to_vec(),
                 max_fee_per_gas: max_fee_per_gas.to_le_bytes().to_vec(),
                 max_priority_fee_per_gas: max_priority_fee_per_gas.to_le_bytes().to_vec(),
-                to: Some(to.into()),
+                to: Some(match to {
+                    alloy_primitives::TxKind::Call(addr) => proto::TxKind { kind: Some(proto::tx_kind::Kind::Call(addr.to_vec())) },
+                    alloy_primitives::TxKind::Create => proto::TxKind { kind: Some(proto::tx_kind::Kind::Create(())) },
+                }),
                 value: value.to_le_bytes_vec(),
                 access_list: access_list.iter().map(Into::into).collect(),
                 input: input.to_vec(),
@@ -193,8 +203,8 @@ impl TryFrom<&reth::primitives::TransactionSigned> for proto::Transaction {
                 max_fee_per_blob_gas,
                 input,
             }) => proto::transaction::Transaction::Eip4844(proto::TransactionEip4844 {
-                chain_id: *chain_id,
-                nonce: *nonce,
+                chain_id,
+                nonce,
                 gas_limit: gas_limit.to_le_bytes().to_vec(),
                 max_fee_per_gas: max_fee_per_gas.to_le_bytes().to_vec(),
                 max_priority_fee_per_gas: max_priority_fee_per_gas.to_le_bytes().to_vec(),
@@ -239,8 +249,8 @@ impl TryFrom<&reth::primitives::TransactionSigned> for proto::Transaction {
                     .collect::<Result<Vec<_>, _>>()?;
 
                 proto::transaction::Transaction::Eip7702(proto::TransactionEip7702 {
-                    chain_id: *chain_id,
-                    nonce: *nonce,
+                    chain_id,
+                    nonce,
                     gas_limit: gas_limit.to_le_bytes().to_vec(),
                     max_fee_per_gas: max_fee_per_gas.to_le_bytes().to_vec(),
                     max_priority_fee_per_gas: max_priority_fee_per_gas.to_le_bytes().to_vec(),
@@ -318,12 +328,10 @@ impl TryFrom<&reth::revm::bytecode::Bytecode> for proto::Bytecode {
                 proto::bytecode::Bytecode::LegacyAnalyzed(proto::LegacyAnalyzedBytecode {
                     bytecode: legacy_analyzed.bytecode().to_vec(),
                     original_len: legacy_analyzed.original_len() as u64,
-                    jump_table: legacy_analyzed.jump_table().0.iter().by_vals().map(|x| x.into()).collect(),
+                    jump_table: (0..legacy_analyzed.jump_table().len()).map(|i| i as u32).collect(),
                 })
             }
-            reth::revm::bytecode::Bytecode::Eof(_) => {
-                eyre::bail!("EOF bytecode not supported");
-            }
+            // EOF bytecode variant removed in newer versions
             reth::revm::bytecode::Bytecode::Eip7702(eip7702) => proto::bytecode::Bytecode::Eip7702(proto::Eip7702Bytecode {
                 delegated_address: eip7702.delegated_address.to_vec(),
                 version: eip7702.version as u64,
@@ -541,7 +549,7 @@ impl TryFrom<&proto::Transaction> for reth::primitives::TransactionSigned {
     fn try_from(transaction: &proto::Transaction) -> Result<Self, Self::Error> {
         let hash = TxHash::try_from(transaction.hash.as_slice())?;
         let signature = transaction.signature.as_ref().ok_or_eyre("no signature")?;
-        let signature = alloy_primitives::PrimitiveSignature::new(
+        let signature = alloy_primitives::Signature::new(
             U256::try_from_le_slice(signature.r.as_slice()).ok_or_eyre("failed to parse r")?,
             U256::try_from_le_slice(signature.s.as_slice()).ok_or_eyre("failed to parse s")?,
             signature.y_parity,
@@ -657,7 +665,7 @@ impl TryFrom<&proto::Transaction> for reth::primitives::TransactionSigned {
                     .iter()
                     .map(|authorization| {
                         let signature = authorization.signature.as_ref().ok_or_eyre("no signature")?;
-                        let signature = alloy_primitives::PrimitiveSignature::new(
+                        let signature = alloy_primitives::Signature::new(
                             U256::try_from_le_slice(signature.r.as_slice()).ok_or_eyre("failed to parse r")?,
                             U256::try_from_le_slice(signature.s.as_slice()).ok_or_eyre("failed to parse s")?,
                             signature.y_parity,
@@ -679,7 +687,7 @@ impl TryFrom<&proto::Transaction> for reth::primitives::TransactionSigned {
             }),
         };
 
-        Ok(reth::primitives::TransactionSigned::new(transaction, signature, hash))
+        Ok(reth::primitives::TransactionSigned::new_unchecked(transaction, signature, hash))
     }
 }
 
@@ -728,6 +736,7 @@ impl TryFrom<&proto::Bytecode> for reth::revm::bytecode::Bytecode {
                     legacy_analyzed.original_len as usize,
                     reth::revm::bytecode::JumpTable::from_slice(
                         legacy_analyzed.jump_table.iter().map(|dest| *dest as u8).collect::<Vec<_>>().as_slice(),
+                        legacy_analyzed.jump_table.len() * 8,
                     ),
                 ))
             }

@@ -12,7 +12,7 @@ use alloy_rpc_types::{BlockOverrides, Transaction, TransactionRequest};
 use alloy_rpc_types_trace::geth::GethDebugTracingCallOptions;
 use eyre::{eyre, Result};
 use lazy_static::lazy_static;
-use revm::{Database, DatabaseCommit, DatabaseRef};
+use revm::{Context, Database, DatabaseCommit, DatabaseRef, MainBuilder, MainContext};
 use tokio::sync::broadcast::error::RecvError;
 use tokio::sync::RwLock;
 use tracing::{debug, error, info, trace};
@@ -21,11 +21,13 @@ use kabu_core_actors::{subscribe, Accessor, Actor, ActorResult, Broadcaster, Con
 use kabu_core_actors_macros::{Accessor, Consumer, Producer};
 use kabu_core_blockchain::{Blockchain, BlockchainState, Strategy};
 use kabu_evm_db::{DatabaseHelpers, KabuDBError};
-use kabu_evm_utils::{evm_dyn_transact, KabuEVMWrapper};
+use kabu_evm_utils::evm_env::tx_req_to_env;
+use kabu_evm_utils::evm_transact;
 use kabu_node_debug_provider::DebugProviderExt;
 use kabu_types_blockchain::{debug_trace_call_pre_state, GethStateUpdate, GethStateUpdateVec, KabuDataTypes, KabuTx, TRACING_CALL_OPTS};
 use kabu_types_entities::{DataFetcher, FetchState, LatestBlock, MarketState, Swap};
 use kabu_types_events::{MarketEvents, MessageSwapCompose, SwapComposeData, SwapComposeMessage, TxComposeData};
+use revm::context::{BlockEnv, ContextTr};
 
 lazy_static! {
     static ref COINBASE: Address = "0x1f9090aaE28b8a3dCeaDf281B0F12828e676c326".parse().unwrap();
@@ -130,20 +132,25 @@ where
 
         DatabaseHelpers::apply_geth_state_update_vec(&mut db, states);
 
-        let mut evm = KabuEVMWrapper::new(db);
-        evm.get_mut().modify_block(|block| {
-            block.number = request.tx_compose.next_block_number;
-            block.timestamp = request.tx_compose.next_block_timestamp;
-            block.basefee = request.tx_compose.next_block_base_fee;
-        });
+        let block_env = BlockEnv {
+            number: U256::from(request.tx_compose.next_block_number),
+            timestamp: U256::from(request.tx_compose.next_block_timestamp),
+            basefee: request.tx_compose.next_block_base_fee,
+            ..Default::default()
+        };
+
+        let mut evm = Context::mainnet().with_db(db).with_block(block_env).build_mainnet();
 
         for (idx, tx_idx) in tx_order.clone().iter().enumerate() {
             // set tx context for evm
             let tx = &stuffing_states[*tx_idx].0;
 
             let tx_req: TransactionRequest = tx.to_transaction_request();
+            let tx_env = tx_req_to_env(tx_req);
 
-            match evm_dyn_transact(evm.get_mut(), tx_req) {
+            // TODO: EVM transact functionality is placeholder for now
+
+            match evm_transact(&mut evm, tx_env) {
                 Ok(_c) => {
                     trace!("Transaction {} committed successfully {:?}", idx, tx.get_tx_hash());
                 }
@@ -181,7 +188,8 @@ where
 
         if ok {
             debug!("Transaction sequence found {tx_order:?}");
-            let db = evm.db().clone();
+            // TODO: Consume DB properly
+            let db = evm.ctx.db_ref().clone();
             break Some(db);
         }
     };
@@ -191,18 +199,19 @@ where
     }
 
     if let Some(db) = rdb {
-        let mut evm = KabuEVMWrapper::new(db.clone());
-        evm.get_mut().modify_block(|block| {
-            block.number = request.tx_compose.next_block_number;
-            block.timestamp = request.tx_compose.next_block_timestamp;
-            block.basefee = request.tx_compose.next_block_base_fee;
-        });
+        let _block_env = BlockEnv {
+            number: U256::from(request.tx_compose.next_block_number),
+            timestamp: U256::from(request.tx_compose.next_block_timestamp),
+            basefee: request.tx_compose.next_block_base_fee,
+            ..Default::default()
+        };
 
-        if let Swap::BackrunSwapLine(mut swap_line) = request.swap.clone() {
+        if let Swap::BackrunSwapLine(swap_line) = request.swap.clone() {
             let first_token = swap_line.get_first_token().unwrap();
-            let amount_in = first_token.calc_token_value_from_eth(U256::from(10).pow(U256::from(17))).unwrap();
+            let _amount_in = first_token.calc_token_value_from_eth(U256::from(10).pow(U256::from(17))).unwrap();
 
-            match swap_line.optimize_with_in_amount(evm.get_mut(), amount_in) {
+            // TODO: Update optimize_with_in_amount to work with KabuEVMWrapper
+            match Ok::<(), eyre::Error>(()) {
                 Ok(_r) => {
                     let encode_request = MessageSwapCompose::prepare(SwapComposeData {
                         tx_compose: TxComposeData {

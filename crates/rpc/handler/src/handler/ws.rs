@@ -40,7 +40,7 @@ async fn on_upgrade<DB: DatabaseRef + DatabaseCommit + Send + Sync + Clone + 'st
         });
         match serde_json::to_string(&ws_msg) {
             Ok(json) => {
-                let _ = socket.send(Message::Text(json)).await;
+                let _ = socket.send(Message::Text(json.into())).await;
             }
             Err(e) => {
                 error!("Failed to serialize block header: {}", e);
