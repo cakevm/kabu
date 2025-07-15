@@ -26,10 +26,7 @@ use kabu_execution_estimator::{EvmEstimatorActor, GethEstimatorActor};
 use kabu_execution_multicaller::MulticallerSwapEncoder;
 use kabu_metrics::InfluxDbWriterActor;
 use kabu_node_actor_config::NodeBlockActorConfig;
-#[cfg(feature = "db-access")]
-use kabu_node_db_access::RethDbAccessBlockActor;
 use kabu_node_debug_provider::DebugProviderExt;
-use kabu_node_grpc::NodeExExGrpcActor;
 use kabu_node_json_rpc::{NodeBlockActor, NodeMempoolActor, WaitForNodeSyncOneShotBlockingActor};
 use kabu_rpc_handler::WebServerActor;
 use kabu_storage_db::DbPool;
@@ -266,20 +263,6 @@ where
     /// Starts receiving blocks events through RPC
     pub fn with_block_events(&mut self, config: NodeBlockActorConfig) -> Result<&mut Self> {
         self.actor_manager.start(NodeBlockActor::new(self.provider.clone(), config).on_bc(&self.bc))?;
-        Ok(self)
-    }
-
-    /// Starts receiving blocks events through direct Reth DB access
-    #[cfg(feature = "db-access")]
-    pub fn reth_node_with_blocks(&mut self, db_path: String, config: NodeBlockActorConfig) -> Result<&mut Self> {
-        self.actor_manager.start(RethDbAccessBlockActor::new(self.provider.clone(), config, db_path).on_bc(&self.bc))?;
-        Ok(self)
-    }
-
-    /// Starts receiving blocks and mempool events through ExEx GRPC
-    pub fn with_exex_events(&mut self) -> Result<&mut Self> {
-        self.mempool()?;
-        self.actor_manager.start(NodeExExGrpcActor::new("http://[::1]:10000".to_string()).on_bc(&self.bc))?;
         Ok(self)
     }
 

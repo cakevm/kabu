@@ -40,11 +40,8 @@ kabu-execution-multicaller = { workspace = true, optional = true }
 kabu-metrics = { workspace = true, optional = true }
 # node
 kabu-node-actor-config = { workspace = true, optional = true }
-kabu-node-db-access = { workspace = true, optional = true }
 kabu-node-debug-provider = { workspace = true, optional = true }
 kabu-node-exex = { workspace = true, optional = true }
-kabu-node-grpc = { workspace = true, optional = true }
-kabu-node-grpc-exex-proto = { workspace = true, optional = true }
 kabu-node-json-rpc = { workspace = true, optional = true }
 kabu-node-player = { workspace = true, optional = true }
 # rpc
@@ -102,11 +99,8 @@ execution-estimator = ["dep:kabu-execution-estimator", "execution"]
 execution-multicaller = ["dep:kabu-execution-multicaller", "execution"]
 
 node-actor-config = ["dep:kabu-node-actor-config", "node"]
-node-db-access = ["dep:kabu-node-db-access", "node"]
 node-debug-provider = ["dep:kabu-node-debug-provider", "node"]
 node-exex = ["dep:kabu-node-exex", "node"]
-node-grpc = ["dep:kabu-node-grpc", "node"]
-node-grpc-exex-proto = ["dep:kabu-node-grpc-exex-proto", "node"]
 node-json-rpc = ["dep:kabu-node-json-rpc", "node"]
 node-player = ["dep:kabu-node-player", "node"]
 
@@ -149,6 +143,17 @@ full-json-rpc = [
   "types-full",
 ]
 
+broadcast-full = ["broadcast-accounts", "broadcast-broadcaster", "broadcast-flashbots"]
+core-full = [
+  "core-actors",
+  "core-actors-macros",
+  "core-block-history",
+  "core-blockchain",
+  "core-blockchain-actors",
+  "core-mempool",
+  "core-router",
+  "core-topology",
+]
 full-exex = [
   "broadcast-full",
   "core-full",
@@ -161,35 +166,6 @@ full-exex = [
   "rpc-full",
   "storage-full",
   "types-full",
-]
-
-full-db-access = [
-  "broadcast-full",
-  "core-full",
-  "defi-full",
-  "evm-full",
-  "execution-full",
-  "metrics-full",
-  "node-actor-config",
-  "node-db-access",
-  "rpc-full",
-  "storage-full",
-  "types-full",
-  # enable db access feature for deps
-  "kabu-core-blockchain-actors?/db-access",
-  "kabu-core-topology?/db-access",
-]
-
-broadcast-full = ["broadcast-accounts", "broadcast-broadcaster", "broadcast-flashbots"]
-core-full = [
-  "core-actors",
-  "core-actors-macros",
-  "core-block-history",
-  "core-blockchain",
-  "core-blockchain-actors",
-  "core-mempool",
-  "core-router",
-  "core-topology",
 ]
 
 defi-full = [
@@ -205,16 +181,7 @@ defi-full = [
 evm-full = ["evm-db", "evm-utils"]
 execution-full = ["execution-estimator", "execution-multicaller"]
 metrics-full = ["metrics"]
-node-full = [
-  "node-actor-config",
-  "node-db-access",
-  "node-debug-provider",
-  "node-exex",
-  "node-grpc",
-  "node-grpc-exex-proto",
-  "node-json-rpc",
-  "node-player",
-]
+node-full = ["node-actor-config", "node-debug-provider", "node-exex", "node-json-rpc", "node-player"]
 rpc-full = ["rpc-handler", "rpc-state"]
 storage-full = ["storage-db"]
 strategy-full = ["strategy-backrun", "strategy-merger"]

@@ -223,7 +223,6 @@ impl TxStatCollector {
 async fn collect_stat_task(
     id: usize,
     provider: RootProvider,
-    grps: bool,
     stat: Arc<RwLock<StatCollector>>,
     warn_up_blocks: usize,
     blocks_needed: usize,
@@ -237,11 +236,7 @@ async fn collect_stat_task(
     let encoder = MulticallerSwapEncoder::default();
 
     let mut bc_actors = BlockchainActors::new(provider, encoder, bc.clone(), bc_state, strategy, vec![]);
-    if grps {
-        bc_actors.with_exex_events()?;
-    } else {
-        bc_actors.with_block_events(NodeBlockActorConfig::all_enabled())?.with_local_mempool_events()?;
-    }
+    bc_actors.with_block_events(NodeBlockActorConfig::all_enabled())?.with_local_mempool_events()?;
 
     let mut blocks_counter: usize = 0;
 
@@ -373,18 +368,10 @@ async fn main() -> Result<()> {
     let mut tasks: Vec<JoinHandle<_>> = vec![];
 
     let mut first_provider: Option<RootProvider> = None;
-    let mut prev_provider: Option<RootProvider> = None;
 
     for (idx, endpoint) in cli.endpoint.iter().enumerate() {
         //let conn = WsConnect::new(endpoint.clone());
-        let (provider, is_grpc) = if endpoint == "grpc" {
-            (prev_provider.clone().unwrap(), true)
-        } else {
-            #[allow(deprecated)]
-            (ProviderBuilder::new().disable_recommended_fillers().on_builtin(endpoint.clone().as_str()).await?, false)
-        };
-
-        prev_provider = Some(provider.clone());
+        let provider = ProviderBuilder::new().disable_recommended_fillers().connect(endpoint.clone().as_str()).await?;
 
         if first_provider.is_none() {
             first_provider = Some(provider.clone());
@@ -399,7 +386,7 @@ async fn main() -> Result<()> {
         println!("Ping time {idx} : {ping_time}");
         stat.write().await.ping.push(ping_time);
 
-        let join_handler = tokio::spawn(collect_stat_task(idx, provider, is_grpc, stat.clone(), 3, 10, ping_time));
+        let join_handler = tokio::spawn(collect_stat_task(idx, provider, stat.clone(), 3, 10, ping_time));
         tasks.push(join_handler);
     }
 

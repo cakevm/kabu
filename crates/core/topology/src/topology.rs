@@ -26,9 +26,6 @@ use kabu_evm_db::{DatabaseKabuExt, KabuDBError};
 use kabu_execution_estimator::{EvmEstimatorActor, GethEstimatorActor};
 use kabu_execution_multicaller::MulticallerSwapEncoder;
 use kabu_node_actor_config::NodeBlockActorConfig;
-#[cfg(feature = "db-access")]
-use kabu_node_db_access::RethDbAccessBlockActor;
-use kabu_node_grpc::NodeExExGrpcActor;
 use kabu_node_json_rpc::{NodeBlockActor, NodeMempoolActor};
 use kabu_types_blockchain::{KabuDataTypes, KabuDataTypesEthereum};
 use kabu_types_entities::pool_config::PoolsLoadingConfig;
@@ -356,32 +353,6 @@ impl<
             warn!("No preloader in config")
         }
 
-        if let Some(node_exex_actors) = &self.config.actors.node_exex {
-            for (name, params) in node_exex_actors {
-                let blockchain = self.get_blockchain(params.blockchain.as_ref())?;
-                let url = params.url.clone().unwrap_or("http://[::1]:10000".to_string());
-
-                info!("Starting node actor {name}");
-                let mut node_exex_block_actor = NodeExExGrpcActor::new(url);
-                match node_exex_block_actor
-                    .produce(blockchain.new_block_headers_channel())
-                    .produce(blockchain.new_block_with_tx_channel())
-                    .produce(blockchain.new_block_logs_channel())
-                    .produce(blockchain.new_block_state_update_channel())
-                    .produce(blockchain.new_mempool_tx_channel())
-                    .start()
-                {
-                    Ok(r) => {
-                        tasks.extend(r);
-                        info!("Node ExEx actor started successfully for : {} @ {}", name, blockchain.chain_id())
-                    }
-                    Err(e) => {
-                        panic!("{}", e)
-                    }
-                }
-            }
-        }
-
         if let Some(node_block_actors) = &self.config.actors.node {
             for (name, params) in node_block_actors {
                 let client = self.get_client(params.client.as_ref())?;
@@ -389,30 +360,6 @@ impl<
                 let client_config = self.get_client_config(params.client.as_ref())?;
 
                 info!("Starting node actor {name}");
-
-                #[cfg(feature = "db-access")]
-                if client_config.db_path.is_some() {
-                    let mut node_block_actor = RethDbAccessBlockActor::new(
-                        client.clone(),
-                        NodeBlockActorConfig::all_enabled(),
-                        client_config.db_path.clone().unwrap_or_default(),
-                    );
-                    match node_block_actor
-                        .produce(blockchain.new_block_headers_channel())
-                        .produce(blockchain.new_block_with_tx_channel())
-                        .produce(blockchain.new_block_logs_channel())
-                        .produce(blockchain.new_block_state_update_channel())
-                        .start()
-                    {
-                        Ok(r) => {
-                            tasks.extend(r);
-                            info!("Reth db access node actor started successfully for : {} @ {}", name, blockchain.chain_id())
-                        }
-                        Err(e) => {
-                            panic!("{}", e)
-                        }
-                    }
-                }
 
                 if client_config.db_path.is_none() {
                     let mut node_block_actor = NodeBlockActor::new(client, NodeBlockActorConfig::all_enabled());

@@ -29,9 +29,7 @@ kabu-execution-estimator.workspace = true
 kabu-execution-multicaller.workspace = true
 kabu-metrics.workspace = true
 kabu-node-actor-config.workspace = true
-kabu-node-db-access = { workspace = true, optional = true }
 kabu-node-debug-provider.workspace = true
-kabu-node-grpc.workspace = true
 kabu-node-json-rpc.workspace = true
 kabu-rpc-handler.workspace = true
 kabu-rpc-state.workspace = true
@@ -54,6 +52,3 @@ alloy-transport.workspace = true
 
 #revm
 revm.workspace = true
-
-[features]
-db-access = ["dep:kabu-node-db-access"]

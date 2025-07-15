@@ -71,16 +71,10 @@ pub use kabu_metrics as metrics;
 pub mod node {
     #[cfg(feature = "node-actor-config")]
     pub use kabu_node_actor_config as actor_config;
-    #[cfg(feature = "node-db-access")]
-    pub use kabu_node_db_access as db_access;
     #[cfg(feature = "node-debug-provider")]
     pub use kabu_node_debug_provider as debug_provider;
     #[cfg(feature = "node-exex")]
     pub use kabu_node_exex as exex;
-    #[cfg(feature = "node-grpc")]
-    pub use kabu_node_grpc as grpc;
-    #[cfg(feature = "node-grpc-exex-proto")]
-    pub use kabu_node_grpc_exex_proto as grpc_exex_proto;
     #[cfg(feature = "node-json-rpc")]
     pub use kabu_node_json_rpc as json_rpc;
     #[cfg(feature = "node-player")]

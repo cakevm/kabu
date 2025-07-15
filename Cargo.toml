@@ -1,17 +1,6 @@
 [workspace]
-default-members = [
-  "bin/exex_grpc_node",
-  "bin/gasbench",
-  "bin/kabu_anvil",
-  "bin/kabu_backrun",
-  "bin/kabu_exex",
-  "bin/keys",
-  "bin/nodebench",
-  "bin/replayer",
-]
+default-members = ["bin/gasbench", "bin/kabu_anvil", "bin/kabu_backrun", "bin/kabu_exex", "bin/keys", "bin/nodebench", "bin/replayer"]
 members = [
-  "bin/exex_grpc_kabu",
-  "bin/exex_grpc_node",
   "bin/gasbench",
   "bin/kabu_anvil",
   "bin/kabu_backrun",
@@ -42,11 +31,8 @@ members = [
   "crates/execution/multicaller",
   "crates/kabu",
   "crates/metrics",
-  "crates/node/db-access",
   "crates/node/debug-provider",
   "crates/node/exex",
-  "crates/node/grpc",
-  "crates/node/grpc-exex-proto",
   "crates/node/json-rpc",
   "crates/node/node-actor-config",
   "crates/node/node-player",
@@ -105,11 +91,8 @@ kabu = { path = "crates/kabu" }
 kabu-metrics = { path = "crates/metrics" }
 # node
 kabu-node-actor-config = { path = "crates/node/node-actor-config" }
-kabu-node-db-access = { path = "crates/node/db-access" }
 kabu-node-debug-provider = { path = "crates/node/debug-provider" }
 kabu-node-exex = { path = "crates/node/exex" }
-kabu-node-grpc = { path = "crates/node/grpc" }
-kabu-node-grpc-exex-proto = { path = "crates/node/grpc-exex-proto" }
 kabu-node-json-rpc = { path = "crates/node/json-rpc" }
 kabu-node-player = { path = "crates/node/node-player" }
 # rpc
