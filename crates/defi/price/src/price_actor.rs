@@ -1,13 +1,16 @@
+use eyre::eyre;
+use kabu_core_components::Component;
 use std::collections::HashMap;
 use std::marker::PhantomData;
 use std::ops::{Div, Mul};
+use std::sync::Arc;
 use std::time::Duration;
+use tokio::sync::RwLock;
 
 use alloy_network::Network;
 use alloy_primitives::{address, Address, U256};
 use alloy_provider::Provider;
-use kabu_core_actors::{Accessor, Actor, ActorResult, SharedState, WorkerResult};
-use kabu_core_actors_macros::Accessor;
+
 use kabu_core_blockchain::Blockchain;
 use kabu_defi_address_book::TokenAddressEth;
 use kabu_defi_pools::protocols::CurveProtocol;
@@ -15,7 +18,11 @@ use kabu_defi_pools::CurvePool;
 use kabu_types_market::{Market, Pool};
 use tracing::{debug, error, info};
 
-async fn price_worker<N: Network, P: Provider<N> + Clone + 'static>(client: P, market: SharedState<Market>, once: bool) -> WorkerResult {
+async fn price_worker<N: Network, P: Provider<N> + Clone + 'static>(
+    client: P,
+    market: Arc<RwLock<Market>>,
+    once: bool,
+) -> eyre::Result<()> {
     let curve_tricrypto_usdc = CurveProtocol::new_u256_3_eth_to(client.clone(), address!("7F86Bf177Dd4F3494b841a37e810A34dD56c829B"));
     let curve_tricrypto_usdt = CurveProtocol::new_u256_3_eth_to(client.clone(), address!("f5f5b97624542d72a9e06f04804bf81baa15e2b4"));
 
@@ -91,15 +98,14 @@ async fn price_worker<N: Network, P: Provider<N> + Clone + 'static>(client: P, m
 
         let _ = tokio::time::sleep(Duration::new(60, 0)).await;
     }
-    Ok("PriceWorker finished".to_string())
+    Ok(())
 }
 
-#[derive(Accessor)]
 pub struct PriceActor<P, N> {
     client: P,
     only_once: bool,
-    #[accessor]
-    market: Option<SharedState<Market>>,
+
+    market: Option<Arc<RwLock<Market>>>,
     _n: PhantomData<N>,
 }
 
@@ -119,16 +125,31 @@ where
     pub fn on_bc(self, bc: &Blockchain) -> Self {
         Self { market: Some(bc.market()), ..self }
     }
+
+    pub fn with_market(self, market: Arc<RwLock<Market>>) -> Self {
+        Self { market: Some(market), ..self }
+    }
 }
 
-impl<P, N> Actor for PriceActor<P, N>
+impl<P, N> Component for PriceActor<P, N>
 where
     N: Network,
     P: Provider<N> + Send + Sync + Clone + 'static,
 {
-    fn start(&self) -> ActorResult {
-        let task = tokio::task::spawn(price_worker(self.client.clone(), self.market.clone().unwrap(), self.only_once));
-        Ok(vec![task])
+    fn spawn(self, executor: reth_tasks::TaskExecutor) -> eyre::Result<()> {
+        let name = self.name();
+        let market = self.market.ok_or_else(|| eyre!("Market is not set"))?;
+
+        executor.spawn_critical(name, async move {
+            if let Err(e) = price_worker(self.client, market, self.only_once).await {
+                tracing::error!("Price worker failed: {}", e);
+            }
+        });
+        Ok(())
+    }
+
+    fn spawn_boxed(self: Box<Self>, executor: reth_tasks::TaskExecutor) -> eyre::Result<()> {
+        (*self).spawn(executor)
     }
 
     fn name(&self) -> &'static str {

@@ -1,14 +1,16 @@
 use std::collections::BTreeMap;
+use std::sync::Arc;
+use tokio::sync::RwLock;
 
 use alloy_primitives::U256;
-use kabu_core_actors::SharedState;
+
 use kabu_types_blockchain::GethStateUpdateVec;
 use kabu_types_market::SwapDirection;
 use kabu_types_market::{Market, PoolId, PoolWrapper};
 use tracing::debug;
 
 pub async fn get_affected_pools_from_state_update(
-    market: SharedState<Market>,
+    market: Arc<RwLock<Market>>,
     state_update: &GethStateUpdateVec,
 ) -> BTreeMap<PoolWrapper, Vec<SwapDirection>> {
     let market_guard = market.read().await;

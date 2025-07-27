@@ -22,10 +22,21 @@
 
 Kabu is a backrunning bot, currently under heavy development. It continues the journey of [loom](https://github.com/dexloom/loom). Since then many breaking changes have been made to revm, reth and alloy. The goal here is to make everything work again and modernize the codebase. Currently, Kabu is a work in progress and not yet ready for production use.
 
+## Who is Kabu for?
+
+It is not intended to be a production-ready solution, but rather a playground for developers who want to learn about MEV and backrunning.
+
+
 ## Kabu is opinionated
 - Kabu will only support exex and json-rpc.
 - We reuse as much as possible from reth, alloy and revm
 - We keep as close as possible to the architecture of reth
+
+## Roadmap
+- Remove `KabuDataTypes`
+- Remove `Actor` model and use trait based components like in reth
+- Remove topology and simplify the config / codebase
+- Refactor the extra db pool cache layer to make it optional
 
 ## Kabu contract
 Find the Kabu contract [here](https://github.com/cakevm/kabu-contract).

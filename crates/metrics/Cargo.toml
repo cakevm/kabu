@@ -8,12 +8,11 @@ homepage.workspace = true
 repository.workspace = true
 
 [dependencies]
-kabu-core-actors.workspace = true
-kabu-core-actors-macros.workspace = true
-kabu-core-blockchain.workspace = true
-
-async-trait.workspace = true
 eyre.workspace = true
 influxdb.workspace = true
+kabu-core-components = { workspace = true }
 tokio.workspace = true
 tracing.workspace = true
+
+# reth
+reth-tasks.workspace = true

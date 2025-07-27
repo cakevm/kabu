@@ -7,6 +7,8 @@ use alloy_rpc_types::state::StateOverride;
 use alloy_rpc_types::BlockOverrides;
 use alloy_rpc_types_trace::geth::GethDebugTracingCallOptions;
 use eyre::{eyre, Result};
+use kabu_core_components::Component;
+use kabu_evm_db::KabuDBError;
 use lazy_static::lazy_static;
 use revm::context::{BlockEnv, CfgEnv};
 use revm::context_interface::block::BlobExcessGasAndPrice;
@@ -15,11 +17,9 @@ use std::collections::hash_map::Entry;
 use std::collections::HashMap;
 use std::marker::PhantomData;
 use std::sync::Arc;
-use tokio::sync::RwLock;
+use tokio::sync::{broadcast, RwLock};
 use tracing::{debug, error, warn};
 
-use kabu_core_actors::{subscribe, Accessor, Actor, ActorResult, Broadcaster, Consumer, Producer, SharedState, WorkerResult};
-use kabu_core_actors_macros::{Accessor, Consumer, Producer};
 use kabu_core_blockchain::{Blockchain, BlockchainState, Strategy};
 use kabu_node_debug_provider::DebugProviderExt;
 use kabu_types_blockchain::{debug_trace_call_diff, GethStateUpdateVec, KabuDataTypes, KabuTx, Mempool, TRACING_CALL_OPTS};
@@ -27,6 +27,7 @@ use kabu_types_entities::LatestBlock;
 use kabu_types_events::{MarketEvents, MempoolEvents, StateUpdateEvent};
 use kabu_types_market::{accounts_vec_len, storage_vec_len};
 use kabu_types_market::{Market, MarketState};
+use reth_tasks::TaskExecutor;
 
 use super::affected_pools_code::{get_affected_pools_from_code, is_pool_code};
 use super::affected_pools_state::get_affected_pools_from_state_update;
@@ -40,22 +41,22 @@ lazy_static! {
 pub async fn pending_tx_state_change_task<P, N, DB, LDT>(
     client: P,
     tx_hash: TxHash,
-    market: SharedState<Market>,
-    mempool: SharedState<Mempool<LDT>>,
-    latest_block: SharedState<LatestBlock<LDT>>,
-    market_state: SharedState<MarketState<DB>>,
+    market: Arc<RwLock<Market>>,
+    mempool: Arc<RwLock<Mempool<LDT>>>,
+    latest_block: Arc<RwLock<LatestBlock<LDT>>>,
+    market_state: Arc<RwLock<MarketState<DB>>>,
     affecting_tx: Arc<RwLock<HashMap<TxHash, bool>>>,
     cur_block_number: BlockNumber,
     cur_block_time: u64,
     cur_next_base_fee: u64,
     cur_state_override: StateOverride,
-    state_updates_broadcaster: Broadcaster<StateUpdateEvent<DB, LDT>>,
+    state_updates_broadcaster: broadcast::Sender<StateUpdateEvent<DB, LDT>>,
 ) -> Result<()>
 where
     N: Network<TransactionRequest = LDT::TransactionRequest>,
     P: Provider<N> + DebugProviderExt<N> + Send + Sync + Clone + 'static,
     DB: DatabaseRef + Database + DatabaseCommit + Clone + Send + Sync + 'static,
-    LDT: KabuDataTypes,
+    LDT: KabuDataTypes + 'static,
 {
     let mut state_update_vec: GethStateUpdateVec = Vec::new();
     let mut state_required_vec: GethStateUpdateVec = Vec::new();
@@ -258,22 +259,22 @@ where
 #[allow(clippy::too_many_arguments)]
 pub async fn pending_tx_state_change_worker<P, N, DB, LDT>(
     client: P,
-    market: SharedState<Market>,
-    mempool: SharedState<Mempool<LDT>>,
-    latest_block: SharedState<LatestBlock<LDT>>,
-    market_state: SharedState<MarketState<DB>>,
-    mempool_events_rx: Broadcaster<MempoolEvents>,
-    market_events_rx: Broadcaster<MarketEvents>,
-    state_updates_broadcaster: Broadcaster<StateUpdateEvent<DB, LDT>>,
-) -> WorkerResult
+    market: Arc<RwLock<Market>>,
+    mempool: Arc<RwLock<Mempool<LDT>>>,
+    latest_block: Arc<RwLock<LatestBlock<LDT>>>,
+    market_state: Arc<RwLock<MarketState<DB>>>,
+    mempool_events_rx: broadcast::Sender<MempoolEvents>,
+    market_events_rx: broadcast::Sender<MarketEvents>,
+    state_updates_broadcaster: broadcast::Sender<StateUpdateEvent<DB, LDT>>,
+) -> Result<()>
 where
     N: Network<TransactionRequest = LDT::TransactionRequest>,
     P: Provider<N> + DebugProviderExt<N> + Send + Sync + Clone + 'static,
     DB: DatabaseRef + Database + DatabaseCommit + Clone + Send + Sync + 'static,
-    LDT: KabuDataTypes,
+    LDT: KabuDataTypes + 'static,
 {
-    subscribe!(mempool_events_rx);
-    subscribe!(market_events_rx);
+    let mut mempool_events_receiver = mempool_events_rx.subscribe();
+    let mut market_events_receiver = market_events_rx.subscribe();
 
     let affecting_tx: Arc<RwLock<HashMap<TxHash, bool>>> = Arc::new(RwLock::new(HashMap::new()));
     let mut cur_next_base_fee = 0;
@@ -283,7 +284,7 @@ where
 
     loop {
         tokio::select! {
-            msg = market_events_rx.recv() => {
+            msg = market_events_receiver.recv() => {
                 if let Ok(msg) = msg {
                     let market_event_msg : MarketEvents = msg;
                     if let MarketEvents::BlockHeaderUpdate{ block_number, block_hash, timestamp, base_fee, next_base_fee } = market_event_msg {
@@ -293,7 +294,7 @@ where
                         cur_next_base_fee = next_base_fee;
 
                         for _counter in 0..5  {
-                            if let Ok(msg) = market_events_rx.recv().await {
+                            if let Ok(msg) = market_events_receiver.recv().await {
                                 if matches!(msg, MarketEvents::BlockStateUpdate{..} ) {
                                     cur_state_override = latest_block.read().await.node_state_override();
                                     debug!("Block state update received {} {}", block_number, block_hash);
@@ -304,7 +305,7 @@ where
                     }
                 }
             }
-            msg = mempool_events_rx.recv() => {
+            msg = mempool_events_receiver.recv() => {
                 if let Ok(msg) = msg {
                     let mempool_event_msg : MempoolEvents = msg;
                     if let MempoolEvents::MempoolActualTxUpdate{ tx_hash }  = mempool_event_msg {
@@ -336,23 +337,22 @@ where
     }
 }
 
-#[derive(Accessor, Consumer, Producer)]
 pub struct PendingTxStateChangeProcessorActor<P, N, DB: Clone + Send + Sync + 'static, LDT: KabuDataTypes + 'static> {
     client: P,
-    #[accessor]
-    market: Option<SharedState<Market>>,
-    #[accessor]
-    mempool: Option<SharedState<Mempool<LDT>>>,
-    #[accessor]
-    market_state: Option<SharedState<MarketState<DB>>>,
-    #[accessor]
-    latest_block: Option<SharedState<LatestBlock<LDT>>>,
-    #[consumer]
-    market_events_rx: Option<Broadcaster<MarketEvents>>,
-    #[consumer]
-    mempool_events_rx: Option<Broadcaster<MempoolEvents>>,
-    #[producer]
-    state_updates_tx: Option<Broadcaster<StateUpdateEvent<DB, LDT>>>,
+
+    market: Option<Arc<RwLock<Market>>>,
+
+    mempool: Option<Arc<RwLock<Mempool<LDT>>>>,
+
+    market_state: Option<Arc<RwLock<MarketState<DB>>>>,
+
+    latest_block: Option<Arc<RwLock<LatestBlock<LDT>>>>,
+
+    market_events_rx: Option<broadcast::Sender<MarketEvents>>,
+
+    mempool_events_rx: Option<broadcast::Sender<MempoolEvents>>,
+
+    state_updates_tx: Option<broadcast::Sender<StateUpdateEvent<DB, LDT>>>,
     _n: PhantomData<N>,
 }
 
@@ -389,27 +389,78 @@ where
             ..self
         }
     }
+
+    pub fn with_channels(
+        self,
+        market_events_rx: broadcast::Sender<MarketEvents>,
+        mempool_events_rx: broadcast::Sender<MempoolEvents>,
+        state_updates_tx: broadcast::Sender<StateUpdateEvent<DB, LDT>>,
+    ) -> Self {
+        Self {
+            market_events_rx: Some(market_events_rx),
+            mempool_events_rx: Some(mempool_events_rx),
+            state_updates_tx: Some(state_updates_tx),
+            ..self
+        }
+    }
+
+    pub fn with_market(self, market: Arc<RwLock<Market>>) -> Self {
+        Self { market: Some(market), ..self }
+    }
+
+    pub fn with_mempool(self, mempool: Option<Arc<RwLock<Mempool<LDT>>>>) -> Self {
+        Self { mempool, ..self }
+    }
+
+    pub fn with_market_state(self, market_state: Arc<RwLock<MarketState<DB>>>) -> Self {
+        Self { market_state: Some(market_state), ..self }
+    }
+
+    pub fn with_latest_block(self, latest_block: Arc<RwLock<LatestBlock<LDT>>>) -> Self {
+        Self { latest_block: Some(latest_block), ..self }
+    }
 }
 
-impl<P, N, DB, LDT> Actor for PendingTxStateChangeProcessorActor<P, N, DB, LDT>
+impl<P, N, DB, LDT> Component for PendingTxStateChangeProcessorActor<P, N, DB, LDT>
 where
     N: Network<TransactionRequest = LDT::TransactionRequest>,
     P: Provider<N> + DebugProviderExt<N> + Send + Sync + Clone + 'static,
-    DB: DatabaseRef + Database + DatabaseCommit + Send + Sync + Clone + 'static,
+    DB: DatabaseRef<Error = KabuDBError> + Database<Error = KabuDBError> + DatabaseCommit + Send + Sync + Clone + Default + 'static,
     LDT: KabuDataTypes + 'static,
 {
-    fn start(&self) -> ActorResult {
-        let task = tokio::task::spawn(pending_tx_state_change_worker(
-            self.client.clone(),
-            self.market.clone().unwrap(),
-            self.mempool.clone().unwrap(),
-            self.latest_block.clone().unwrap(),
-            self.market_state.clone().unwrap(),
-            self.mempool_events_rx.clone().unwrap(),
-            self.market_events_rx.clone().unwrap(),
-            self.state_updates_tx.clone().unwrap(),
-        ));
-        Ok(vec![task])
+    fn spawn(self, executor: TaskExecutor) -> Result<()> {
+        let name = self.name();
+
+        let mempool_events_rx = self.mempool_events_rx.ok_or_else(|| eyre!("mempool_events_rx not set"))?;
+        let market_events_rx = self.market_events_rx.ok_or_else(|| eyre!("market_events_rx not set"))?;
+        let state_updates_tx = self.state_updates_tx.ok_or_else(|| eyre!("state_updates_tx not set"))?;
+        let market = self.market.ok_or_else(|| eyre!("market not set"))?;
+        let mempool = self.mempool.ok_or_else(|| eyre!("mempool not set"))?;
+        let latest_block = self.latest_block.ok_or_else(|| eyre!("latest_block not set"))?;
+        let market_state = self.market_state.ok_or_else(|| eyre!("market_state not set"))?;
+
+        executor.spawn_critical(name, async move {
+            if let Err(e) = pending_tx_state_change_worker(
+                self.client.clone(),
+                market,
+                mempool,
+                latest_block,
+                market_state,
+                mempool_events_rx,
+                market_events_rx,
+                state_updates_tx,
+            )
+            .await
+            {
+                error!("pending_tx_state_change_worker failed: {}", e);
+            }
+        });
+
+        Ok(())
+    }
+
+    fn spawn_boxed(self: Box<Self>, executor: TaskExecutor) -> Result<()> {
+        (*self).spawn(executor)
     }
 
     fn name(&self) -> &'static str {

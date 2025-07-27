@@ -3,15 +3,16 @@ use alloy_provider::Provider;
 use alloy_rpc_types::Log;
 use eyre::Result;
 use std::collections::HashMap;
+use tokio::sync::broadcast;
+use tracing::error;
 
-use kabu_core_actors::{run_sync, Broadcaster};
 use kabu_types_events::LoomTask;
 use kabu_types_market::PoolLoaders;
 
 pub async fn process_log_entries<P, N>(
     log_entries: Vec<Log>,
     pool_loaders: &PoolLoaders<P, N>,
-    tasks_tx: Broadcaster<LoomTask>,
+    tasks_tx: broadcast::Sender<LoomTask>,
 ) -> Result<()>
 where
     N: Network,
@@ -31,6 +32,8 @@ where
         }
     }
 
-    run_sync!(tasks_tx.send(LoomTask::FetchAndAddPools(pool_to_fetch)));
+    if let Err(e) = tasks_tx.send(LoomTask::FetchAndAddPools(pool_to_fetch)) {
+        error!("Failed to send task: {}", e);
+    }
     Ok(())
 }

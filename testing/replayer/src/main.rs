@@ -1,4 +1,5 @@
 use kabu_evm_db::KabuDB;
+use kabu_types_blockchain::KabuDataTypesEthereum;
 use std::env;
 use std::process::exit;
 use std::time::Duration;
@@ -17,16 +18,15 @@ use url::Url;
 use kabu_node_debug_provider::HttpCachedTransport;
 
 use kabu_core_blockchain::{Blockchain, BlockchainState, Strategy};
-use kabu_core_blockchain_actors::BlockchainActors;
+// use kabu_core_blockchain::BlockchainActors; // TODO: Convert to component system
 use kabu_defi_abi::AbiEncoderHelper;
 use kabu_defi_address_book::{TokenAddressEth, UniswapV3PoolAddress};
 use kabu_defi_pools::state_readers::ERC20StateReader;
 use kabu_evm_db::DatabaseKabuExt;
 use kabu_evm_utils::NWETH;
 use kabu_execution_multicaller::MulticallerSwapEncoder;
-use kabu_node_player::NodeBlockPlayerActor;
 use kabu_types_events::{MessageSwapCompose, SwapComposeData, TxComposeData};
-use kabu_types_market::{MarketState, PoolClass, PoolId, RequiredState};
+use kabu_types_market::{MarketState, PoolId, RequiredState};
 use kabu_types_swap::{Swap, SwapAmountType, SwapLine};
 use tracing::{debug, error, info};
 use tracing_subscriber::layer::SubscriberExt;
@@ -61,7 +61,7 @@ async fn main() -> Result<()> {
     transport.set_block_number(start_block_number);
 
     let client = ClientBuilder::default().transport(transport.clone(), true).with_poll_interval(Duration::from_millis(50));
-    let provider = ProviderBuilder::new().disable_recommended_fillers().connect_client(client);
+    let _provider = ProviderBuilder::new().disable_recommended_fillers().connect_client(client);
 
     let node_provider = ProviderBuilder::new().disable_recommended_fillers().connect_http(node_url);
 
@@ -71,39 +71,48 @@ async fn main() -> Result<()> {
     // new blockchain
     let bc = Blockchain::new(1);
 
-    let bc_state = BlockchainState::new_with_market_state(MarketState::new(KabuDB::empty()));
+    let bc_state: BlockchainState<KabuDB, KabuDataTypesEthereum> =
+        BlockchainState::new_with_market_state(MarketState::new(KabuDB::empty()));
 
     let market_state = bc_state.market_state();
 
     let strategy = Strategy::<KabuDB>::new();
 
-    let swap_encoder = MulticallerSwapEncoder::default();
+    let _swap_encoder = MulticallerSwapEncoder::default();
 
     const TARGET_ADDRESS: Address = address!("A69babEF1cA67A37Ffaf7a485DfFF3382056e78C");
 
     let mut required_state = RequiredState::new();
     required_state.add_call(TokenAddressEth::WETH, AbiEncoderHelper::encode_erc20_balance_of(TARGET_ADDRESS));
 
-    // instead fo code above
-    let mut bc_actors =
-        BlockchainActors::new(provider.clone(), swap_encoder.clone(), bc.clone(), bc_state.clone(), strategy.clone(), vec![]);
-    bc_actors
-        .with_nonce_and_balance_monitor_only_once()?
-        .with_signers()?
-        .with_market_state_preloader_virtual(vec![])?
-        .with_preloaded_state(vec![(UniswapV3PoolAddress::USDC_WETH_500, PoolClass::UniswapV3)], Some(required_state))?
-        .with_block_history()?
-        .with_swap_encoder(swap_encoder)?
-        .with_evm_estimator()?;
+    // TODO: Replace with component system instead of actor system
+    // let mut bc_actors =
+    //     BlockchainActors::new(provider.clone(), swap_encoder.clone(), bc.clone(), bc_state.clone(), strategy.clone(), vec![]);
+    // bc_actors
+    //     .with_nonce_and_balance_monitor_only_once()?
+    //     .with_signers()?
+    //     .with_market_state_preloader_virtual(vec![])?
+    //     .with_preloaded_state(vec![(UniswapV3PoolAddress::USDC_WETH_500, PoolClass::UniswapV3)], Some(required_state))?
+    //     .with_block_history()?
+    //     .with_swap_encoder(swap_encoder)?
+    //     .with_evm_estimator()?;
 
     //Start node block player actor
-    if let Err(e) =
-        bc_actors.start(NodeBlockPlayerActor::new(provider.clone(), start_block_number, start_block_number + 200).on_bc(&bc, &bc_state))
-    {
-        panic!("Cannot start block player : {e}");
-    }
+    // if let Err(e) =
+    //     bc_actors.start(NodeBlockPlayerComponent::new(provider.clone(), start_block_number, start_block_number + 200).with_channels(
+    //         bc.mempool(),
+    //         bc_state.market_state(),
+    //         bc.tx_compose_channel(),
+    //         bc.new_block_headers_channel(),
+    //         bc.new_block_with_tx_channel(),
+    //         bc.new_block_logs_channel(),
+    //         bc.new_block_state_update_channel(),
+    //     ))
+    // {
+    //     panic!("Cannot start block player : {e}");
+    // }
 
-    tokio::task::spawn(bc_actors.wait());
+    // tokio::task::spawn(bc_actors.wait());
     let compose_channel = strategy.swap_compose_channel();
 
     let mut header_sub = bc.new_block_headers_channel().subscribe();

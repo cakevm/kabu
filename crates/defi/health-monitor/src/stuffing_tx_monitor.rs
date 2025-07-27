@@ -4,10 +4,13 @@ use alloy_primitives::{Address, TxHash, U256};
 use alloy_provider::Provider;
 use eyre::{eyre, Result};
 use influxdb::{Timestamp, WriteQuery};
+use kabu_core_components::Component;
+use reth_tasks::TaskExecutor;
 use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::sync::broadcast::error::RecvError;
 use tokio::sync::broadcast::Receiver;
+use tokio::sync::{broadcast, RwLock};
 use tracing::{error, info};
 
 use kabu_core_blockchain::Blockchain;
@@ -16,8 +19,6 @@ use kabu_types_entities::LatestBlock;
 use kabu_types_market::Token;
 use kabu_types_swap::Swap;
 
-use kabu_core_actors::{Accessor, Actor, ActorResult, Broadcaster, Consumer, Producer, SharedState, WorkerResult};
-use kabu_core_actors_macros::{Accessor, Consumer, Producer};
 use kabu_types_blockchain::debug_trace_transaction;
 use kabu_types_events::{MarketEvents, MessageTxCompose, TxComposeMessageType};
 
@@ -45,11 +46,11 @@ async fn calc_coinbase_diff<P: Provider<Ethereum> + 'static>(client: P, tx_hash:
 
 pub async fn stuffing_tx_monitor_worker<P: Provider<Ethereum> + Clone + 'static>(
     client: P,
-    latest_block: SharedState<LatestBlock>,
-    tx_compose_channel_rx: Broadcaster<MessageTxCompose>,
-    market_events_rx: Broadcaster<MarketEvents>,
-    influxdb_write_channel_tx: Option<Broadcaster<WriteQuery>>,
-) -> WorkerResult {
+    latest_block: Arc<RwLock<LatestBlock>>,
+    tx_compose_channel_rx: broadcast::Sender<MessageTxCompose>,
+    market_events_rx: broadcast::Sender<MarketEvents>,
+    influxdb_write_channel_tx: Option<broadcast::Sender<WriteQuery>>,
+) -> Result<()> {
     let mut tx_compose_channel_rx: Receiver<MessageTxCompose> = tx_compose_channel_rx.subscribe();
     let mut market_events_rx: Receiver<MarketEvents> = market_events_rx.subscribe();
 
@@ -103,7 +104,6 @@ pub async fn stuffing_tx_monitor_worker<P: Provider<Ethereum> + Clone + 'static>
                                 }
                             }
                             info!("Stuffing txs to check : {} at block {}", txs_to_check.len(), block_number);
-
 
                             let start_time_utc =   chrono::Utc::now();
 
@@ -167,17 +167,16 @@ pub async fn stuffing_tx_monitor_worker<P: Provider<Ethereum> + Clone + 'static>
     }
 }
 
-#[derive(Accessor, Consumer, Producer)]
 pub struct StuffingTxMonitorActor<P> {
     client: P,
-    #[accessor]
-    latest_block: Option<SharedState<LatestBlock>>,
-    #[consumer]
-    tx_compose_channel_rx: Option<Broadcaster<MessageTxCompose>>,
-    #[consumer]
-    market_events_rx: Option<Broadcaster<MarketEvents>>,
-    #[producer]
-    influxdb_write_channel_tx: Option<Broadcaster<WriteQuery>>,
+
+    latest_block: Option<Arc<RwLock<LatestBlock>>>,
+
+    tx_compose_channel_rx: Option<broadcast::Sender<MessageTxCompose>>,
+
+    market_events_rx: Option<broadcast::Sender<MarketEvents>>,
+
+    influxdb_write_channel_tx: Option<broadcast::Sender<WriteQuery>>,
 }
 
 impl<P: Provider<Ethereum> + Send + Sync + Clone + 'static> StuffingTxMonitorActor<P> {
@@ -191,6 +190,18 @@ impl<P: Provider<Ethereum> + Send + Sync + Clone + 'static> StuffingTxMonitorAct
         }
     }
 
+    pub fn with_latest_block(self, latest_block: Arc<RwLock<LatestBlock>>) -> Self {
+        Self { latest_block: Some(latest_block), ..self }
+    }
+
+    pub fn with_tx_compose_channel(self, tx_compose_channel: broadcast::Sender<MessageTxCompose>) -> Self {
+        Self { tx_compose_channel_rx: Some(tx_compose_channel), ..self }
+    }
+
+    pub fn with_market_events(self, market_events: broadcast::Sender<MarketEvents>) -> Self {
+        Self { market_events_rx: Some(market_events), ..self }
+    }
+
     pub fn on_bc(self, bc: &Blockchain) -> Self {
         Self {
             latest_block: Some(bc.latest_block()),
@@ -202,19 +213,34 @@ impl<P: Provider<Ethereum> + Send + Sync + Clone + 'static> StuffingTxMonitorAct
     }
 }
 
-impl<P> Actor for StuffingTxMonitorActor<P>
+impl<P> Component for StuffingTxMonitorActor<P>
 where
     P: Provider<Ethereum> + Send + Sync + Clone + 'static,
 {
-    fn start(&self) -> ActorResult {
-        let task = tokio::task::spawn(stuffing_tx_monitor_worker(
-            self.client.clone(),
-            self.latest_block.clone().unwrap(),
-            self.tx_compose_channel_rx.clone().unwrap(),
-            self.market_events_rx.clone().unwrap(),
-            self.influxdb_write_channel_tx.clone(),
-        ));
-        Ok(vec![task])
+    fn spawn(self, executor: TaskExecutor) -> Result<()> {
+        let latest_block = self.latest_block.clone().ok_or_else(|| eyre!("latest_block not set"))?;
+        let tx_compose_channel_rx = self.tx_compose_channel_rx.clone().ok_or_else(|| eyre!("tx_compose_channel_rx not set"))?;
+        let market_events_rx = self.market_events_rx.clone().ok_or_else(|| eyre!("market_events_rx not set"))?;
+        let influxdb_write_channel_tx = self.influxdb_write_channel_tx.clone();
+
+        executor.spawn(async move {
+            if let Err(e) = stuffing_tx_monitor_worker(
+                self.client.clone(),
+                latest_block,
+                tx_compose_channel_rx,
+                market_events_rx,
+                influxdb_write_channel_tx,
+            )
+            .await
+            {
+                tracing::error!("Stuffing tx monitor worker failed: {}", e);
+            }
+        });
+        Ok(())
+    }
+
+    fn spawn_boxed(self: Box<Self>, executor: TaskExecutor) -> Result<()> {
+        (*self).spawn(executor)
     }
 
     fn name(&self) -> &'static str {

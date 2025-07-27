@@ -1,3 +1,5 @@
-pub use mempool_actor::MempoolActor;
+pub use mempool_builder::MempoolBuilder;
+pub use mempool_component::MempoolComponent;
 
-mod mempool_actor;
+mod mempool_builder;
+mod mempool_component;

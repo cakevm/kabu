@@ -1,46 +1,40 @@
 use revm::{Database, DatabaseCommit, DatabaseRef};
 use std::any::type_name;
 use std::marker::PhantomData;
+use std::sync::Arc;
 
 use crate::compose::replayer_compose_worker;
 use crate::worker::node_player_worker;
 use alloy_network::{Ethereum, Network};
 use alloy_primitives::BlockNumber;
 use alloy_provider::Provider;
-use kabu_core_actors::{Accessor, Actor, ActorResult, Broadcaster, Consumer, Producer, SharedState, WorkerResult};
-use kabu_core_actors_macros::{Accessor, Consumer, Producer};
-use kabu_core_blockchain::{Blockchain, BlockchainState};
+use eyre::Result;
+use kabu_core_components::Component;
 use kabu_evm_db::{DatabaseKabuExt, KabuDBError};
 use kabu_node_debug_provider::DebugProviderExt;
 use kabu_types_blockchain::Mempool;
 use kabu_types_blockchain::{KabuDataTypes, KabuDataTypesEthereum};
 use kabu_types_events::{MessageBlock, MessageBlockHeader, MessageBlockLogs, MessageBlockStateUpdate, MessageTxCompose};
 use kabu_types_market::MarketState;
-use tokio::task::JoinHandle;
+use reth_tasks::TaskExecutor;
+use tokio::sync::{broadcast, RwLock};
+use tracing::error;
 
-#[derive(Producer, Consumer, Accessor)]
-pub struct NodeBlockPlayerActor<P, N, DB: Send + Sync + Clone + 'static> {
+pub struct NodeBlockPlayerComponent<P, N, DB: Send + Sync + Clone + 'static> {
     client: P,
     start_block: BlockNumber,
     end_block: BlockNumber,
-    #[accessor]
-    mempool: Option<SharedState<Mempool>>,
-    #[accessor]
-    market_state: Option<SharedState<MarketState<DB>>>,
-    #[consumer]
-    compose_channel: Option<Broadcaster<MessageTxCompose<KabuDataTypesEthereum>>>,
-    #[producer]
-    block_header_channel: Option<Broadcaster<MessageBlockHeader>>,
-    #[producer]
-    block_with_tx_channel: Option<Broadcaster<MessageBlock>>,
-    #[producer]
-    block_logs_channel: Option<Broadcaster<MessageBlockLogs>>,
-    #[producer]
-    block_state_update_channel: Option<Broadcaster<MessageBlockStateUpdate>>,
+    mempool: Option<Arc<RwLock<Mempool>>>,
+    market_state: Option<Arc<RwLock<MarketState<DB>>>>,
+    compose_channel: Option<broadcast::Sender<MessageTxCompose<KabuDataTypesEthereum>>>,
+    block_header_channel: Option<broadcast::Sender<MessageBlockHeader>>,
+    block_with_tx_channel: Option<broadcast::Sender<MessageBlock>>,
+    block_logs_channel: Option<broadcast::Sender<MessageBlockLogs>>,
+    block_state_update_channel: Option<broadcast::Sender<MessageBlockStateUpdate>>,
     _n: PhantomData<N>,
 }
 
-impl<P, N, DB> NodeBlockPlayerActor<P, N, DB>
+impl<P, N, DB> NodeBlockPlayerComponent<P, N, DB>
 where
     N: Network,
     P: Provider<N> + DebugProviderExt<N> + Send + Sync + Clone + 'static,
@@ -53,8 +47,8 @@ where
         + Clone
         + 'static,
 {
-    pub fn new(client: P, start_block: BlockNumber, end_block: BlockNumber) -> NodeBlockPlayerActor<P, N, DB> {
-        NodeBlockPlayerActor {
+    pub fn new(client: P, start_block: BlockNumber, end_block: BlockNumber) -> NodeBlockPlayerComponent<P, N, DB> {
+        NodeBlockPlayerComponent {
             client,
             start_block,
             end_block,
@@ -69,48 +63,73 @@ where
         }
     }
 
-    pub fn on_bc<LDT: KabuDataTypes>(self, bc: &Blockchain, state: &BlockchainState<DB, LDT>) -> Self {
+    #[allow(clippy::too_many_arguments)]
+    pub fn with_channels<LDT: KabuDataTypes>(
+        self,
+        mempool: Arc<RwLock<Mempool>>,
+        market_state: Arc<RwLock<MarketState<DB>>>,
+        compose_channel: broadcast::Sender<MessageTxCompose<KabuDataTypesEthereum>>,
+        block_header_channel: broadcast::Sender<MessageBlockHeader>,
+        block_with_tx_channel: broadcast::Sender<MessageBlock>,
+        block_logs_channel: broadcast::Sender<MessageBlockLogs>,
+        block_state_update_channel: broadcast::Sender<MessageBlockStateUpdate>,
+    ) -> Self {
         Self {
-            mempool: Some(bc.mempool()),
-            block_header_channel: Some(bc.new_block_headers_channel()),
-            block_with_tx_channel: Some(bc.new_block_with_tx_channel()),
-            block_logs_channel: Some(bc.new_block_logs_channel()),
-            block_state_update_channel: Some(bc.new_block_state_update_channel()),
-            market_state: Some(state.market_state_commit()),
-            compose_channel: Some(bc.tx_compose_channel()),
+            mempool: Some(mempool),
+            market_state: Some(market_state),
+            compose_channel: Some(compose_channel),
+            block_header_channel: Some(block_header_channel),
+            block_with_tx_channel: Some(block_with_tx_channel),
+            block_logs_channel: Some(block_logs_channel),
+            block_state_update_channel: Some(block_state_update_channel),
             ..self
         }
     }
 }
 
-impl<P, N, DB> Actor for NodeBlockPlayerActor<P, N, DB>
+impl<P, N, DB> Component for NodeBlockPlayerComponent<P, N, DB>
 where
     P: Provider<Ethereum> + DebugProviderExt<Ethereum> + Send + Sync + Clone + 'static,
-    N: Send + Sync,
+    N: Send + Sync + 'static,
     DB: Database<Error = KabuDBError> + DatabaseRef<Error = KabuDBError> + DatabaseCommit + DatabaseKabuExt + Send + Sync + Clone + 'static,
 {
-    fn start(&self) -> ActorResult {
-        let mut handles: Vec<JoinHandle<WorkerResult>> = Vec::new();
+    fn spawn(self, executor: TaskExecutor) -> Result<()> {
+        let name = self.name();
+
         if let Some(mempool) = self.mempool.clone() {
             if let Some(compose_channel) = self.compose_channel.clone() {
-                let handle = tokio::task::spawn(replayer_compose_worker(mempool, compose_channel));
-                handles.push(handle);
+                let compose_rx = compose_channel.subscribe();
+                executor.spawn_critical("replayer_compose_worker", async move {
+                    if let Err(e) = replayer_compose_worker(mempool, compose_rx).await {
+                        error!("replayer_compose_worker failed: {}", e);
+                    }
+                });
             }
         }
 
-        let handle = tokio::task::spawn(node_player_worker(
-            self.client.clone(),
-            self.start_block,
-            self.end_block,
-            self.mempool.clone(),
-            self.market_state.clone(),
-            self.block_header_channel.clone(),
-            self.block_with_tx_channel.clone(),
-            self.block_logs_channel.clone(),
-            self.block_state_update_channel.clone(),
-        ));
-        handles.push(handle);
-        Ok(handles)
+        executor.spawn_critical(name, async move {
+            if let Err(e) = node_player_worker(
+                self.client.clone(),
+                self.start_block,
+                self.end_block,
+                self.mempool.clone(),
+                self.market_state.clone(),
+                self.block_header_channel.clone(),
+                self.block_with_tx_channel.clone(),
+                self.block_logs_channel.clone(),
+                self.block_state_update_channel.clone(),
+            )
+            .await
+            {
+                error!("node_player_worker failed: {}", e);
+            }
+        });
+
+        Ok(())
+    }
+
+    fn spawn_boxed(self: Box<Self>, executor: TaskExecutor) -> Result<()> {
+        (*self).spawn(executor)
     }
 
     fn name(&self) -> &'static str {

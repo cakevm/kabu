@@ -9,10 +9,9 @@ rust-version.workspace = true
 version.workspace = true
 
 [dependencies]
-kabu-core-actors.workspace = true
 kabu-core-blockchain.workspace = true
 kabu-evm-utils.workspace = true
-kabu-node-actor-config.workspace = true
+kabu-node-config.workspace = true
 kabu-types-blockchain.workspace = true
 kabu-types-events.workspace = true
 

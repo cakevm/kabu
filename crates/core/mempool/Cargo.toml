@@ -9,17 +9,15 @@ rust-version.workspace = true
 version.workspace = true
 
 [dependencies]
-kabu-core-actors.workspace = true
-kabu-core-actors-macros.workspace = true
-kabu-core-blockchain.workspace = true
-kabu-types-blockchain.workspace = true
-kabu-types-events.workspace = true
-
-chrono.workspace = true
 eyre.workspace = true
 influxdb.workspace = true
+kabu-core-blockchain.workspace = true
+kabu-core-components = { path = "../components" }
+kabu-types-blockchain.workspace = true
+kabu-types-events.workspace = true
 tokio.workspace = true
 tracing.workspace = true
 
-#alloy
-alloy-primitives.workspace = true
+
+# reth
+reth-tasks.workspace = true

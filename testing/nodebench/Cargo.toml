@@ -10,10 +10,8 @@ exclude.workspace = true
 
 [dependencies]
 kabu-core-blockchain.workspace = true
-kabu-core-blockchain-actors.workspace = true
 kabu-evm-db.workspace = true
 kabu-execution-multicaller.workspace = true
-kabu-node-actor-config.workspace = true
 kabu-types-blockchain.workspace = true
 kabu-types-events.workspace = true
 

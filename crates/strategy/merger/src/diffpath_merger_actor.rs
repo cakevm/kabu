@@ -2,14 +2,13 @@ use alloy_network::TransactionResponse;
 use alloy_primitives::{Address, TxHash};
 use alloy_rpc_types::Transaction;
 use eyre::{OptionExt, Result};
+use kabu_core_components::Component;
 use lazy_static::lazy_static;
+use reth_tasks::TaskExecutor;
 use revm::{Database, DatabaseCommit, DatabaseRef};
-use tokio::sync::broadcast::error::RecvError;
-use tokio::sync::broadcast::Receiver;
+use tokio::sync::{broadcast, broadcast::error::RecvError, broadcast::Receiver};
 use tracing::{debug, error, info};
 
-use kabu_core_actors::{Actor, ActorResult, Broadcaster, Consumer, Producer, WorkerResult};
-use kabu_core_actors_macros::{Accessor, Consumer, Producer};
 use kabu_core_blockchain::{Blockchain, Strategy};
 use kabu_evm_utils::NWETH;
 use kabu_types_events::{MarketEvents, MessageSwapCompose, SwapComposeData, SwapComposeMessage, TxComposeData};
@@ -36,10 +35,10 @@ fn get_merge_list<'a, DB: Clone + Send + Sync + 'static>(
 }
 
 async fn diff_path_merger_worker<DB>(
-    market_events_rx: Broadcaster<MarketEvents>,
-    compose_channel_rx: Broadcaster<MessageSwapCompose<DB>>,
-    compose_channel_tx: Broadcaster<MessageSwapCompose<DB>>,
-) -> WorkerResult
+    market_events_rx: broadcast::Sender<MarketEvents>,
+    compose_channel_rx: broadcast::Sender<MessageSwapCompose<DB>>,
+    compose_channel_tx: broadcast::Sender<MessageSwapCompose<DB>>,
+) -> Result<()>
 where
     DB: DatabaseRef + Database + DatabaseCommit + Send + Sync + Clone + 'static,
 {
@@ -74,7 +73,6 @@ where
                     }
                 }
             }
-
 
             msg = compose_channel_rx.recv() => {
                 let msg : Result<MessageSwapCompose<DB>, RecvError> = msg;
@@ -139,19 +137,27 @@ where
 
             }
 
-
         }
     }
 }
 
-#[derive(Consumer, Producer, Accessor, Default)]
 pub struct DiffPathMergerActor<DB: Clone + Send + Sync + 'static> {
-    #[consumer]
-    market_events: Option<Broadcaster<MarketEvents>>,
-    #[consumer]
-    compose_channel_rx: Option<Broadcaster<MessageSwapCompose<DB>>>,
-    #[producer]
-    compose_channel_tx: Option<Broadcaster<MessageSwapCompose<DB>>>,
+    market_events: Option<broadcast::Sender<MarketEvents>>,
+
+    compose_channel_rx: Option<broadcast::Sender<MessageSwapCompose<DB>>>,
+
+    compose_channel_tx: Option<broadcast::Sender<MessageSwapCompose<DB>>>,
+
+    _db: std::marker::PhantomData<DB>,
+}
+
+impl<DB> Default for DiffPathMergerActor<DB>
+where
+    DB: DatabaseRef + Database + DatabaseCommit + Send + Sync + Clone + Default + 'static,
+{
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl<DB> DiffPathMergerActor<DB>
@@ -159,7 +165,15 @@ where
     DB: DatabaseRef + Database + DatabaseCommit + Send + Sync + Clone + Default + 'static,
 {
     pub fn new() -> Self {
-        Self::default()
+        Self { market_events: None, compose_channel_rx: None, compose_channel_tx: None, _db: std::marker::PhantomData }
+    }
+
+    pub fn with_market_events_channel(self, market_events: broadcast::Sender<MarketEvents>) -> Self {
+        Self { market_events: Some(market_events), ..self }
+    }
+
+    pub fn with_compose_channel(self, compose_channel: broadcast::Sender<MessageSwapCompose<DB>>) -> Self {
+        Self { compose_channel_rx: Some(compose_channel.clone()), compose_channel_tx: Some(compose_channel), ..self }
     }
 
     pub fn on_bc(self, bc: &Blockchain) -> Self {
@@ -175,17 +189,27 @@ where
     }
 }
 
-impl<DB> Actor for DiffPathMergerActor<DB>
+impl<DB> Component for DiffPathMergerActor<DB>
 where
     DB: DatabaseRef + Database + DatabaseCommit + Send + Sync + Clone + Default + 'static,
 {
-    fn start(&self) -> ActorResult {
-        let task = tokio::task::spawn(diff_path_merger_worker(
-            self.market_events.clone().unwrap(),
-            self.compose_channel_rx.clone().unwrap(),
-            self.compose_channel_tx.clone().unwrap(),
-        ));
-        Ok(vec![task])
+    fn spawn(self, executor: TaskExecutor) -> Result<()> {
+        let name = self.name();
+
+        executor.spawn_critical(name, async move {
+            if let Err(e) =
+                diff_path_merger_worker(self.market_events.unwrap(), self.compose_channel_rx.unwrap(), self.compose_channel_tx.unwrap())
+                    .await
+            {
+                error!("Diff path merger worker failed: {}", e);
+            }
+        });
+
+        Ok(())
+    }
+
+    fn spawn_boxed(self: Box<Self>, executor: TaskExecutor) -> Result<()> {
+        (*self).spawn(executor)
     }
 
     fn name(&self) -> &'static str {

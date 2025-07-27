@@ -1,5 +1,5 @@
 mod evm;
 mod hardhat;
 
-pub use evm::EvmEstimatorActor;
+pub use evm::EvmEstimatorComponent;
 pub use hardhat::HardhatEstimatorActor;

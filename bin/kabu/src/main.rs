@@ -6,7 +6,7 @@ use clap::{CommandFactory, FromArgMatches, Parser};
 use kabu::core::blockchain::{Blockchain, BlockchainState, Strategy};
 use kabu::core::topology::TopologyConfig;
 use kabu::evm::db::{AlloyDB, KabuDB};
-use kabu::node::actor_config::NodeBlockActorConfig;
+use kabu::node::config::NodeBlockActorConfig;
 use kabu::node::exex::mempool_worker;
 use kabu::types::blockchain::KabuDataTypesEthereum;
 use kabu_types_market::MarketState;
@@ -68,6 +68,7 @@ fn main() -> eyre::Result<()> {
                     topology_config,
                     kabu_args.kabu_config.clone(),
                     true,
+                    None, // Task executor will be created internally
                 )
                 .await
                 {
@@ -96,9 +97,17 @@ fn main() -> eyre::Result<()> {
 
                 let strategy = Strategy::<KabuDB>::new();
 
-                if let Err(e) =
-                    kabu_runtime::start_kabu(provider, bc_clone, bc_state, strategy, topology_config, kabu_args.kabu_config.clone(), false)
-                        .await
+                if let Err(e) = kabu_runtime::start_kabu(
+                    provider,
+                    bc_clone,
+                    bc_state,
+                    strategy,
+                    topology_config,
+                    kabu_args.kabu_config.clone(),
+                    false,
+                    None,
+                )
+                .await
                 {
                     error!("Error starting kabu: {:#?}", e);
                     panic!("{}", e)

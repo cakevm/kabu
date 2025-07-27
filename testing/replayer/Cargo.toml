@@ -10,7 +10,6 @@ exclude.workspace = true
 
 [dependencies]
 kabu-core-blockchain.workspace = true
-kabu-core-blockchain-actors.workspace = true
 kabu-defi-abi.workspace = true
 kabu-defi-address-book.workspace = true
 kabu-defi-pools.workspace = true
@@ -18,7 +17,7 @@ kabu-evm-db.workspace = true
 kabu-evm-utils.workspace = true
 kabu-execution-multicaller.workspace = true
 kabu-node-debug-provider.workspace = true
-kabu-node-player.workspace = true
+kabu-types-blockchain.workspace = true
 kabu-types-events.workspace = true
 kabu-types-market.workspace = true
 kabu-types-swap.workspace = true

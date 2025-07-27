@@ -1,7 +1,7 @@
 use crate::router::router;
 use axum::Router;
-use kabu_core_actors::{Actor, ActorResult, WorkerResult};
-use kabu_core_actors_macros::Consumer;
+use kabu_core_components::Component;
+
 use kabu_core_blockchain::{Blockchain, BlockchainState};
 use kabu_rpc_state::AppState;
 use kabu_storage_db::DbPool;
@@ -20,7 +20,7 @@ pub async fn start_web_server_worker<S, DB>(
     state: BlockchainState<DB, KabuDataTypesEthereum>,
     db_pool: DbPool,
     shutdown_token: CancellationToken,
-) -> WorkerResult
+) -> eyre::Result<()>
 where
     DB: DatabaseRef<Error = kabu_evm_db::KabuDBError> + DatabaseCommit + Send + Sync + Clone + Default + 'static,
     S: Clone + Send + Sync + 'static,
@@ -42,10 +42,9 @@ where
         })
         .await?;
 
-    Ok("Webserver shutdown".to_string())
+    Ok(())
 }
 
-#[derive(Consumer)]
 pub struct WebServerActor<S, DB: Clone + Send + Sync + 'static> {
     host: String,
     extra_router: Router<S>,
@@ -70,22 +69,27 @@ where
     }
 }
 
-impl<S, DB> Actor for WebServerActor<S, DB>
+impl<S, DB> Component for WebServerActor<S, DB>
 where
     S: Clone + Send + Sync + 'static,
-    Router: From<Router<S>>,
     DB: DatabaseRef<Error = kabu_evm_db::KabuDBError> + DatabaseCommit + Send + Sync + Clone + Default + 'static,
+    Router: From<Router<S>>,
 {
-    fn start(&self) -> ActorResult {
-        let task = tokio::spawn(start_web_server_worker(
-            self.host.clone(),
-            self.extra_router.clone(),
-            self.bc.clone().unwrap(),
-            self.state.clone().unwrap(),
-            self.db_pool.clone(),
-            self.shutdown_token.clone(),
-        ));
-        Ok(vec![task])
+    fn spawn(self, executor: reth_tasks::TaskExecutor) -> eyre::Result<()> {
+        let name = self.name();
+        let bc = self.bc.ok_or_else(|| eyre::eyre!("Blockchain not set"))?;
+        let state = self.state.ok_or_else(|| eyre::eyre!("State not set"))?;
+
+        executor.spawn_critical(name, async move {
+            if let Err(e) = start_web_server_worker(self.host, self.extra_router, bc, state, self.db_pool, self.shutdown_token).await {
+                tracing::error!("Web server worker failed: {}", e);
+            }
+        });
+        Ok(())
+    }
+
+    fn spawn_boxed(self: Box<Self>, executor: reth_tasks::TaskExecutor) -> eyre::Result<()> {
+        (*self).spawn(executor)
     }
 
     fn name(&self) -> &'static str {

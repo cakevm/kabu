@@ -1,7 +1,9 @@
+use reth_tasks::TaskExecutor;
 use std::collections::HashMap;
 use std::marker::PhantomData;
 use std::ops::Deref;
 use std::sync::Arc;
+use tokio::sync::{broadcast, RwLock};
 
 use alloy_eips::BlockNumberOrTag;
 use alloy_network::Network;
@@ -11,15 +13,8 @@ use alloy_rpc_types::state::StateOverride;
 use alloy_rpc_types::{BlockOverrides, Transaction, TransactionRequest};
 use alloy_rpc_types_trace::geth::GethDebugTracingCallOptions;
 use eyre::{eyre, Result};
-use lazy_static::lazy_static;
-use revm::{Context, Database, DatabaseCommit, DatabaseRef, MainBuilder, MainContext};
-use tokio::sync::broadcast::error::RecvError;
-use tokio::sync::RwLock;
-use tracing::{debug, error, info, trace};
-
-use kabu_core_actors::{subscribe, Accessor, Actor, ActorResult, Broadcaster, Consumer, Producer, SharedState, WorkerResult};
-use kabu_core_actors_macros::{Accessor, Consumer, Producer};
 use kabu_core_blockchain::{Blockchain, BlockchainState, Strategy};
+use kabu_core_components::Component;
 use kabu_evm_db::{DatabaseHelpers, KabuDBError};
 use kabu_evm_utils::evm_env::tx_req_to_env;
 use kabu_evm_utils::evm_transact;
@@ -29,8 +24,12 @@ use kabu_types_entities::{DataFetcher, FetchState, LatestBlock};
 use kabu_types_events::{MarketEvents, MessageSwapCompose, SwapComposeData, SwapComposeMessage, TxComposeData};
 use kabu_types_market::MarketState;
 use kabu_types_swap::Swap;
+use lazy_static::lazy_static;
 use revm::context::{BlockEnv, ContextTr};
 use revm::context_interface::block::BlobExcessGasAndPrice;
+use revm::{Context, Database, DatabaseCommit, DatabaseRef, MainBuilder, MainContext};
+use tokio::sync::broadcast::error::RecvError;
+use tracing::{debug, error, info, trace};
 
 lazy_static! {
     static ref COINBASE: Address = "0x1f9090aaE28b8a3dCeaDf281B0F12828e676c326".parse().unwrap();
@@ -69,10 +68,10 @@ async fn same_path_merger_task<P, N, DB>(
     client: P,
     stuffing_txes: Vec<Transaction>,
     pre_states: Arc<RwLock<DataFetcher<TxHash, GethStateUpdate>>>,
-    market_state: SharedState<MarketState<DB>>,
+    market_state: Arc<RwLock<MarketState<DB>>>,
     call_opts: GethDebugTracingCallOptions,
     request: SwapComposeData<DB>,
-    swap_request_tx: Broadcaster<MessageSwapCompose<DB>>,
+    swap_request_tx: broadcast::Sender<MessageSwapCompose<DB>>,
 ) -> Result<()>
 where
     N: Network<TransactionRequest = TransactionRequest>,
@@ -255,15 +254,12 @@ async fn same_path_merger_worker<
     DB: DatabaseRef<Error = KabuDBError> + Database<Error = KabuDBError> + DatabaseCommit + Send + Sync + Clone + 'static,
 >(
     client: P,
-    latest_block: SharedState<LatestBlock>,
-    market_state: SharedState<MarketState<DB>>,
-    market_events_rx: Broadcaster<MarketEvents>,
-    compose_channel_rx: Broadcaster<MessageSwapCompose<DB>>,
-    compose_channel_tx: Broadcaster<MessageSwapCompose<DB>>,
-) -> WorkerResult {
-    subscribe!(market_events_rx);
-    subscribe!(compose_channel_rx);
-
+    latest_block: Arc<RwLock<LatestBlock>>,
+    market_state: Arc<RwLock<MarketState<DB>>>,
+    mut market_events_rx: broadcast::Receiver<MarketEvents>,
+    mut compose_channel_rx: broadcast::Receiver<MessageSwapCompose<DB>>,
+    compose_channel_tx: broadcast::Sender<MessageSwapCompose<DB>>,
+) {
     let mut swap_paths: HashMap<TxHash, Vec<SwapComposeData<DB>>> = HashMap::new();
 
     let prestate = Arc::new(RwLock::new(DataFetcher::<TxHash, GethStateUpdate>::new()));
@@ -364,24 +360,18 @@ async fn same_path_merger_worker<
     }
 }
 
-#[derive(Consumer, Producer, Accessor)]
-pub struct SamePathMergerActor<P, N, DB: Send + Sync + Clone + 'static> {
+pub struct SamePathMergerComponent<P, N, DB: Send + Sync + Clone + 'static> {
     client: P,
     //encoder: SwapStepEncoder,
-    #[accessor]
-    market_state: Option<SharedState<MarketState<DB>>>,
-    #[accessor]
-    latest_block: Option<SharedState<LatestBlock>>,
-    #[consumer]
-    market_events: Option<Broadcaster<MarketEvents>>,
-    #[consumer]
-    compose_channel_rx: Option<Broadcaster<MessageSwapCompose<DB>>>,
-    #[producer]
-    compose_channel_tx: Option<Broadcaster<MessageSwapCompose<DB>>>,
+    market_state: Option<Arc<RwLock<MarketState<DB>>>>,
+    latest_block: Option<Arc<RwLock<LatestBlock>>>,
+    market_events: Option<broadcast::Sender<MarketEvents>>,
+    compose_channel_rx: Option<broadcast::Sender<MessageSwapCompose<DB>>>,
+    compose_channel_tx: Option<broadcast::Sender<MessageSwapCompose<DB>>>,
     _n: PhantomData<N>,
 }
 
-impl<P, N, DB> SamePathMergerActor<P, N, DB>
+impl<P, N, DB> SamePathMergerComponent<P, N, DB>
 where
     N: Network,
     P: Provider<N> + DebugProviderExt<N> + Send + Sync + Clone + 'static,
@@ -399,6 +389,22 @@ where
         }
     }
 
+    pub fn with_market_state(self, market_state: Arc<RwLock<MarketState<DB>>>) -> Self {
+        Self { market_state: Some(market_state), ..self }
+    }
+
+    pub fn with_latest_block(self, latest_block: Arc<RwLock<LatestBlock>>) -> Self {
+        Self { latest_block: Some(latest_block), ..self }
+    }
+
+    pub fn with_market_events_channel(self, market_events: broadcast::Sender<MarketEvents>) -> Self {
+        Self { market_events: Some(market_events), ..self }
+    }
+
+    pub fn with_compose_channel(self, compose_channel: broadcast::Sender<MessageSwapCompose<DB>>) -> Self {
+        Self { compose_channel_rx: Some(compose_channel.clone()), compose_channel_tx: Some(compose_channel), ..self }
+    }
+
     pub fn on_bc<LDT: KabuDataTypes>(self, bc: &Blockchain, state: &BlockchainState<DB, LDT>, strategy: &Strategy<DB>) -> Self {
         Self {
             market_state: Some(state.market_state_commit()),
@@ -411,25 +417,41 @@ where
     }
 }
 
-impl<P, N, DB> Actor for SamePathMergerActor<P, N, DB>
+impl<P, N, DB> Component for SamePathMergerComponent<P, N, DB>
 where
     N: Network<TransactionRequest = TransactionRequest>,
     P: Provider<N> + DebugProviderExt<N> + Send + Sync + Clone + 'static,
     DB: DatabaseRef<Error = KabuDBError> + Database<Error = KabuDBError> + DatabaseCommit + Send + Sync + Clone + 'static,
 {
-    fn start(&self) -> ActorResult {
-        let task = tokio::task::spawn(same_path_merger_worker(
-            self.client.clone(),
-            self.latest_block.clone().unwrap(),
-            self.market_state.clone().unwrap(),
-            self.market_events.clone().unwrap(),
-            self.compose_channel_rx.clone().unwrap(),
-            self.compose_channel_tx.clone().unwrap(),
-        ));
-        Ok(vec![task])
+    fn spawn(self, executor: TaskExecutor) -> Result<()> {
+        let name = self.name();
+
+        let market_events_rx = self.market_events.ok_or_else(|| eyre!("market_events not set"))?.subscribe();
+        let compose_channel_rx = self.compose_channel_rx.ok_or_else(|| eyre!("compose_channel_rx not set"))?.subscribe();
+        let compose_channel_tx = self.compose_channel_tx.ok_or_else(|| eyre!("compose_channel_tx not set"))?;
+        let latest_block = self.latest_block.ok_or_else(|| eyre!("latest_block not set"))?;
+        let market_state = self.market_state.ok_or_else(|| eyre!("market_state not set"))?;
+
+        executor.spawn_critical(
+            name,
+            same_path_merger_worker(
+                self.client.clone(),
+                latest_block,
+                market_state,
+                market_events_rx,
+                compose_channel_rx,
+                compose_channel_tx,
+            ),
+        );
+
+        Ok(())
+    }
+
+    fn spawn_boxed(self: Box<Self>, executor: TaskExecutor) -> Result<()> {
+        (*self).spawn(executor)
     }
 
     fn name(&self) -> &'static str {
-        "SamePathMergerActor"
+        "SamePathMergerComponent"
     }
 }

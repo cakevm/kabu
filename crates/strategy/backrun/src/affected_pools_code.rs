@@ -3,7 +3,8 @@ use alloy_evm::EvmEnv;
 use alloy_network::Network;
 use alloy_provider::Provider;
 use eyre::eyre;
-use kabu_core_actors::SharedState;
+use tokio::sync::RwLock;
+
 use kabu_defi_pools::protocols::{UniswapV2Protocol, UniswapV3Protocol};
 use kabu_defi_pools::state_readers::UniswapV3EvmStateReader;
 use kabu_defi_pools::{MaverickPool, PancakeV3Pool, UniswapV2Pool, UniswapV3Pool};
@@ -18,7 +19,7 @@ use tracing::{debug, error};
 
 pub async fn get_affected_pools_from_code<P, N>(
     client: P,
-    market: SharedState<Market>,
+    market: Arc<RwLock<Market>>,
     state_update: &GethStateUpdateVec,
     evm_env: &EvmEnv,
 ) -> eyre::Result<BTreeMap<PoolWrapper, Vec<SwapDirection>>>

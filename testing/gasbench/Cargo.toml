@@ -25,7 +25,6 @@ alloy-provider.workspace = true
 alloy-rpc-types.workspace = true
 revm.workspace = true
 
-kabu-core-actors.workspace = true
 kabu-defi-address-book.workspace = true
 kabu-defi-market.workspace = true
 kabu-defi-pools.workspace = true

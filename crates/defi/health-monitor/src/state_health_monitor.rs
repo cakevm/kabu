@@ -1,4 +1,8 @@
+use kabu_core_components::Component;
+use reth_tasks::TaskExecutor;
 use std::collections::HashMap;
+use std::sync::Arc;
+use tokio::sync::{broadcast, RwLock};
 
 use alloy_eips::BlockNumberOrTag;
 use alloy_network::Ethereum;
@@ -9,8 +13,6 @@ use tokio::sync::broadcast::error::RecvError;
 use tokio::sync::broadcast::Receiver;
 use tracing::{error, info, warn};
 
-use kabu_core_actors::{Accessor, Actor, ActorResult, Broadcaster, Consumer, SharedState, WorkerResult};
-use kabu_core_actors_macros::{Accessor, Consumer};
 use kabu_core_blockchain::{Blockchain, BlockchainState};
 use kabu_evm_db::DatabaseKabuExt;
 use kabu_types_blockchain::KabuDataTypes;
@@ -21,7 +23,7 @@ use revm::DatabaseRef;
 async fn verify_pool_state_task<P: Provider<Ethereum> + 'static, DB: DatabaseKabuExt>(
     client: P,
     address: PoolId,
-    market_state: SharedState<MarketState<DB>>,
+    market_state: Arc<RwLock<MarketState<DB>>>,
 ) -> Result<()> {
     info!("Verifying state {address:?}");
     let address = match address {
@@ -61,10 +63,10 @@ pub async fn state_health_monitor_worker<
     DB: DatabaseRef + DatabaseKabuExt + Send + Sync + Clone + 'static,
 >(
     client: P,
-    market_state: SharedState<MarketState<DB>>,
-    tx_compose_channel_rx: Broadcaster<MessageTxCompose>,
-    market_events_rx: Broadcaster<MarketEvents>,
-) -> WorkerResult {
+    market_state: Arc<RwLock<MarketState<DB>>>,
+    tx_compose_channel_rx: broadcast::Sender<MessageTxCompose>,
+    market_events_rx: broadcast::Sender<MarketEvents>,
+) -> Result<()> {
     let mut tx_compose_channel_rx: Receiver<MessageTxCompose> = tx_compose_channel_rx.subscribe();
     let mut market_events_rx: Receiver<MarketEvents> = market_events_rx.subscribe();
 
@@ -126,15 +128,14 @@ pub async fn state_health_monitor_worker<
     }
 }
 
-#[derive(Accessor, Consumer)]
 pub struct StateHealthMonitorActor<P, DB: Clone + Send + Sync + 'static> {
     client: P,
-    #[accessor]
-    market_state: Option<SharedState<MarketState<DB>>>,
-    #[consumer]
-    tx_compose_channel_rx: Option<Broadcaster<MessageTxCompose>>,
-    #[consumer]
-    market_events_rx: Option<Broadcaster<MarketEvents>>,
+
+    market_state: Option<Arc<RwLock<MarketState<DB>>>>,
+
+    tx_compose_channel_rx: Option<broadcast::Sender<MessageTxCompose>>,
+
+    market_events_rx: Option<broadcast::Sender<MarketEvents>>,
 }
 
 impl<P, DB> StateHealthMonitorActor<P, DB>
@@ -156,19 +157,26 @@ where
     }
 }
 
-impl<P, DB> Actor for StateHealthMonitorActor<P, DB>
+impl<P, DB> Component for StateHealthMonitorActor<P, DB>
 where
     P: Provider<Ethereum> + Send + Sync + Clone + 'static,
     DB: DatabaseRef + DatabaseKabuExt + Send + Sync + Clone + 'static,
 {
-    fn start(&self) -> ActorResult {
-        let task = tokio::task::spawn(state_health_monitor_worker(
-            self.client.clone(),
-            self.market_state.clone().unwrap(),
-            self.tx_compose_channel_rx.clone().unwrap(),
-            self.market_events_rx.clone().unwrap(),
-        ));
-        Ok(vec![task])
+    fn spawn(self, executor: TaskExecutor) -> Result<()> {
+        let market_state = self.market_state.clone().ok_or_else(|| eyre::eyre!("market_state not set"))?;
+        let tx_compose_channel_rx = self.tx_compose_channel_rx.clone().ok_or_else(|| eyre::eyre!("tx_compose_channel_rx not set"))?;
+        let market_events_rx = self.market_events_rx.clone().ok_or_else(|| eyre::eyre!("market_events_rx not set"))?;
+
+        executor.spawn(async move {
+            if let Err(e) = state_health_monitor_worker(self.client.clone(), market_state, tx_compose_channel_rx, market_events_rx).await {
+                tracing::error!("State health monitor worker failed: {}", e);
+            }
+        });
+        Ok(())
+    }
+
+    fn spawn_boxed(self: Box<Self>, executor: TaskExecutor) -> Result<()> {
+        (*self).spawn(executor)
     }
 
     fn name(&self) -> &'static str {

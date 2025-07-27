@@ -1,15 +1,15 @@
 use alloy::network::Ethereum;
 use alloy::primitives::Address;
 use alloy::providers::Provider;
-use axum::Router;
 use eyre::OptionExt;
-use kabu::core::blockchain::{Blockchain, BlockchainState, Strategy};
-use kabu::core::blockchain_actors::BlockchainActors;
+use kabu::core::blockchain::{AppState, Blockchain, BlockchainState, EventChannels, Strategy};
+use kabu::core::components::{BuilderContext, KabuRuntime, RuntimeState};
 use kabu::core::topology::{BroadcasterConfig, EncoderConfig, TopologyConfig};
 use kabu::defi::pools::PoolsLoadingConfig;
 use kabu::evm::db::{DatabaseKabuExt, KabuDBError};
 use kabu::execution::multicaller::MulticallerSwapEncoder;
-use kabu::node::actor_config::NodeBlockActorConfig;
+use kabu::kabu_node::KabuNode;
+use kabu::node::config::NodeBlockActorConfig;
 use kabu::node::debug_provider::DebugProviderExt;
 use kabu::node::exex::kabu_exex;
 use kabu::storage::db::init_db_pool;
@@ -20,11 +20,14 @@ use kabu::types::entities::BlockHistoryState;
 use kabu_types_market::PoolClass;
 use reth::api::NodeTypes;
 use reth::revm::{Database, DatabaseCommit, DatabaseRef};
+use reth::tasks::{TaskExecutor, TaskManager};
 use reth_exex::ExExContext;
 use reth_node_api::FullNodeComponents;
 use reth_primitives::EthPrimitives;
 use std::env;
 use std::future::Future;
+use std::sync::Arc;
+use tokio::sync::RwLock;
 use tracing::info;
 
 pub async fn init<Node>(
@@ -38,14 +41,16 @@ where
     Ok(kabu_exex(ctx, bc, config.clone()))
 }
 
+#[allow(clippy::too_many_arguments)]
 pub async fn start_kabu<P, DB>(
     provider: P,
-    bc: Blockchain,
+    _bc: Blockchain,
     bc_state: BlockchainState<DB, KabuDataTypesEthereum>,
     strategy: Strategy<DB>,
     topology_config: TopologyConfig,
     kabu_config_filepath: String,
     is_exex: bool,
+    task_executor: Option<TaskExecutor>,
 ) -> eyre::Result<()>
 where
     P: Provider<Ethereum> + DebugProviderExt<Ethereum> + Send + Sync + Clone + 'static,
@@ -61,24 +66,22 @@ where
         + 'static,
 {
     let chain_id = provider.get_chain_id().await?;
+    info!(chain_id = ?chain_id, "Starting Kabu with component architecture");
 
-    info!(chain_id = ?chain_id, "Starting Kabu" );
-
+    // Parse configuration
     let (_encoder_name, encoder) = topology_config.encoders.iter().next().ok_or_eyre("NO_ENCODER")?;
-
-    let multicaller_address: Option<Address> = match encoder {
-        EncoderConfig::SwapStep(e) => e.address.parse().ok(),
+    let multicaller_address: Address = match encoder {
+        EncoderConfig::SwapStep(e) => e.address.parse()?,
     };
-    let multicaller_address = multicaller_address.ok_or_eyre("MULTICALLER_ADDRESS_NOT_SET")?;
-    let private_key_encrypted = hex::decode(env::var("DATA")?)?;
+    let _private_key_encrypted = hex::decode(env::var("DATA")?)?;
     info!(address=?multicaller_address, "Multicaller");
 
-    let webserver_host = topology_config.webserver.unwrap_or_default().host;
+    let _webserver_host = topology_config.webserver.unwrap_or_default().host;
     let db_url = topology_config.database.unwrap().url;
-    let db_pool = init_db_pool(db_url).await?;
+    let _db_pool = init_db_pool(db_url).await?;
 
     // Get flashbots relays from config
-    let relays = topology_config
+    let _relays = topology_config
         .actors
         .broadcaster
         .as_ref()
@@ -88,53 +91,93 @@ where
         })
         .unwrap_or_default();
 
-    let pools_config =
+    let _pools_config =
         PoolsLoadingConfig::disable_all(PoolsLoadingConfig::default()).enable(PoolClass::UniswapV2).enable(PoolClass::UniswapV3);
 
     let backrun_config: BackrunConfigSection = load_from_file::<BackrunConfigSection>(kabu_config_filepath.into()).await?;
-    let backrun_config: BackrunConfig = backrun_config.backrun_strategy;
+    let _backrun_config: BackrunConfig = backrun_config.backrun_strategy;
 
     let swap_encoder = MulticallerSwapEncoder::default_with_address(multicaller_address);
 
-    let mut bc_actors = BlockchainActors::new(provider.clone(), swap_encoder.clone(), bc.clone(), bc_state, strategy, relays);
-    bc_actors
-        .mempool()?
-        .with_wait_for_node_sync()? // wait for node to sync before
-        .initialize_signers_with_encrypted_key(private_key_encrypted)? // initialize signer with encrypted key
-        .with_block_history()? // collect blocks
-        .with_price_station()? // calculate price fo tokens
-        .with_health_monitor_pools()? // monitor pools health to disable empty
-        //.with_health_monitor_state()? // monitor state health
-        .with_health_monitor_stuffing_tx()? // collect stuffing tx information
-        .with_swap_encoder(swap_encoder)? // convert swaps to opcodes and passes to estimator
-        .with_evm_estimator()? // estimate gas, add tips
-        .with_signers()? // start signer actor that signs transactions before broadcasting
-        .with_flashbots_broadcaster( true)? // broadcast signed txes to flashbots
-        .with_market_state_preloader()? // preload contracts to market state
-        .with_nonce_and_balance_monitor()? // start monitoring balances of
-        .with_pool_history_loader(pools_config.clone())? // load pools used in latest 10000 blocks
-        //.with_curve_pool_protocol_loader()? // load curve + steth + wsteth
-        .with_new_pool_loader(pools_config.clone())? // load new pools
-        .with_pool_loader(pools_config.clone())?
-        .with_swap_path_merger()? // load merger for multiple swap paths
-        .with_diff_path_merger()? // load merger for different swap paths
-        .with_same_path_merger()? // load merger for same swap paths with different stuffing txes
-        .with_backrun_block(backrun_config.clone())? // load backrun searcher for incoming block
-        .with_backrun_mempool(backrun_config)? // load backrun searcher for mempool txes
-        .with_web_server(webserver_host, Router::new(), db_pool)? // start web server
-    ;
+    // Convert old Blockchain to new AppState and EventChannels
+    let app_state = AppState::new(chain_id);
 
+    let mut channels = EventChannels::default();
+    if topology_config.influxdb.is_some() {
+        channels = channels.with_influxdb();
+    }
+
+    // Create runtime state
+    let runtime_state = RuntimeState {
+        provider: provider.clone(),
+        app_state: app_state.clone(),
+        blockchain_state: bc_state.clone(),
+        channels: channels.clone(),
+        strategy: strategy.clone(),
+        signers: Arc::new(RwLock::new(kabu::types::entities::TxSigners::new())),
+        encoder: swap_encoder.clone(),
+    };
+
+    // Use provided task executor or create a new one
+    let executor = match task_executor {
+        Some(executor) => executor,
+        None => {
+            let task_manager = TaskManager::new(tokio::runtime::Handle::current());
+            task_manager.executor()
+        }
+    };
+
+    let runtime = KabuRuntime::new(runtime_state.clone(), executor);
+
+    // Build MEV bot components using the new architecture
+    let mev_components = KabuNode::components();
+
+    // Build and spawn all components
+    let ctx = BuilderContext::new(runtime.state().clone());
+    mev_components.build_and_spawn(ctx, runtime.executor().clone()).await?;
+
+    // Add additional components based on configuration
     if !is_exex {
-        bc_actors.with_block_events(NodeBlockActorConfig::all_enabled())?.with_remote_mempool(provider.clone())?;
+        // Add remote mempool monitoring
+        // runtime.component_manager().spawn(RemoteMempoolComponent::new(provider.clone()));
     }
 
-    if let Some(influxdb_config) = topology_config.influxdb {
-        bc_actors
-            .with_influxdb_writer(influxdb_config.url, influxdb_config.database, influxdb_config.tags)?
-            .with_block_latency_recorder()?;
+    if let Some(_influxdb_config) = topology_config.influxdb {
+        // Add metrics recording
+        // runtime.component_manager().spawn(
+        //     MetricsComponent::new(influxdb_config.url, influxdb_config.database, influxdb_config.tags)
+        // );
     }
 
-    bc_actors.wait().await;
-
+    // Keep runtime alive
+    // TODO: Implement proper shutdown mechanism
+    tokio::signal::ctrl_c().await?;
     Ok(())
 }
+
+// Example of how the old actor-based methods map to new component builders
+//
+// Old:
+// bc_actors
+//     .mempool()?
+//     .with_wait_for_node_sync()?
+//     .initialize_signers_with_encrypted_key(key)?
+//     .with_block_history()?
+//     .with_price_station()?
+//     .with_health_monitor_pools()?
+//     .with_swap_encoder(encoder)?
+//     .with_evm_estimator()?
+//     .with_signers()?
+//     .with_flashbots_broadcaster(true)?
+//     .with_market_state_preloader()?
+//     .with_pool_loader(pools_config)?
+//     .with_backrun_block(backrun_config)?
+//
+// New:
+// MevBotComponentsBuilder::new()
+//     .pool_loaders(PoolLoaderBuilder::new().with_all_default())
+//     .price_monitor(PriceMonitorBuilder::new())
+//     .block_monitor(BlockMonitorBuilder::new().all_enabled())
+//     .strategy_runner(StrategyRunnerBuilder::new().with_backrun(max_gas))
+//     .signer(SignerBuilder::new().with_key(key).with_flashbots())
+//     .health_monitor(HealthMonitorBuilder::new().with_pool_monitoring())

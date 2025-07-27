@@ -9,9 +9,8 @@ rust-version.workspace = true
 version.workspace = true
 
 [dependencies]
-kabu-core-actors.workspace = true
-kabu-core-actors-macros.workspace = true
 kabu-core-blockchain.workspace = true
+kabu-core-components = { workspace = true }
 kabu-defi-abi.workspace = true
 kabu-defi-address-book.workspace = true
 kabu-defi-pools.workspace = true
@@ -29,6 +28,7 @@ influxdb.workspace = true
 lazy_static.workspace = true
 num_cpus.workspace = true
 rayon.workspace = true
+reth-tasks.workspace = true
 revm.workspace = true
 serde.workspace = true
 tokio.workspace = true

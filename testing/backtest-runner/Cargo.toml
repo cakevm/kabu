@@ -29,10 +29,14 @@ alloy-provider.workspace = true
 alloy-rpc-types.workspace = true
 alloy-rpc-types-eth.workspace = true
 
+kabu-core-components.workspace = true
+kabu-node-config.workspace = true
+kabu-types-blockchain.workspace = true
+reth-tasks.workspace = true
+
 [dev-dependencies]
 chrono.workspace = true
 criterion = { version = "0.5.1", features = ["async_tokio"] }
-kabu-types-blockchain.workspace = true
 num_cpus.workspace = true
 rand.workspace = true
 rayon.workspace = true

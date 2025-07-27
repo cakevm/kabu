@@ -1,6 +1,8 @@
 use alloy_rpc_types::Header;
 use eyre::Result;
-use kabu_core_actors::SharedState;
+use std::sync::Arc;
+use tokio::sync::RwLock;
+
 use kabu_evm_db::KabuDBError;
 use kabu_evm_utils::evm_env::header_to_block_env;
 use kabu_types_blockchain::Mempool;
@@ -9,8 +11,8 @@ use revm::{Database, DatabaseCommit, DatabaseRef};
 use tracing::debug;
 
 pub(crate) async fn replayer_mempool_task<DB>(
-    mempool: SharedState<Mempool>,
-    market_state: SharedState<MarketState<DB>>,
+    mempool: Arc<RwLock<Mempool>>,
+    market_state: Arc<RwLock<MarketState<DB>>>,
     header: Header,
 ) -> Result<()>
 where

@@ -9,18 +9,18 @@ use alloy_rpc_types::{TransactionInput, TransactionRequest};
 use eyre::{eyre, Result};
 use influxdb::{Timestamp, WriteQuery};
 use std::marker::PhantomData;
-use tokio::sync::broadcast::error::RecvError;
+use tokio::sync::{broadcast, broadcast::error::RecvError};
 use tracing::{debug, error, info, trace};
 
 use kabu_core_blockchain::{Blockchain, Strategy};
 use kabu_evm_utils::{evm_access_list, NWETH};
 use kabu_types_swap::{EstimationError, Swap, SwapEncoder};
 
-use kabu_core_actors::{subscribe, Actor, ActorResult, Broadcaster, Consumer, Producer, WorkerResult};
-use kabu_core_actors_macros::{Consumer, Producer};
+use kabu_core_components::Component;
 use kabu_evm_db::{AlloyDB, DatabaseKabuExt, KabuDBError};
 use kabu_evm_utils::evm_env::tx_req_to_env;
 use kabu_types_events::{HealthEvent, MessageHealthEvent, MessageSwapCompose, SwapComposeData, SwapComposeMessage, TxComposeData, TxState};
+use reth_tasks::TaskExecutor;
 use revm::context::BlockEnv;
 use revm::context_interface::block::BlobExcessGasAndPrice;
 use revm::{Database, DatabaseCommit, DatabaseRef};
@@ -29,9 +29,9 @@ async fn estimator_task<N, DB>(
     client: Option<impl Provider<N> + 'static>,
     swap_encoder: impl SwapEncoder,
     estimate_request: SwapComposeData<DB>,
-    compose_channel_tx: Broadcaster<MessageSwapCompose<DB>>,
-    health_monitor_channel_tx: Option<Broadcaster<MessageHealthEvent>>,
-    influxdb_write_channel_tx: Option<Broadcaster<WriteQuery>>,
+    compose_channel_tx: broadcast::Sender<MessageSwapCompose<DB>>,
+    health_monitor_channel_tx: Option<broadcast::Sender<MessageHealthEvent>>,
+    influxdb_write_channel_tx: Option<broadcast::Sender<WriteQuery>>,
 ) -> Result<()>
 where
     N: Network,
@@ -251,17 +251,14 @@ where
 async fn estimator_worker<N, DB>(
     client: Option<impl Provider<N> + Clone + 'static>,
     encoder: impl SwapEncoder + Send + Sync + Clone + 'static,
-    compose_channel_rx: Broadcaster<MessageSwapCompose<DB>>,
-    compose_channel_tx: Broadcaster<MessageSwapCompose<DB>>,
-    health_monitor_channel_tx: Option<Broadcaster<MessageHealthEvent>>,
-    influxdb_write_channel_tx: Option<Broadcaster<WriteQuery>>,
-) -> WorkerResult
-where
+    mut compose_channel_rx: broadcast::Receiver<MessageSwapCompose<DB>>,
+    compose_channel_tx: broadcast::Sender<MessageSwapCompose<DB>>,
+    health_monitor_channel_tx: Option<broadcast::Sender<MessageHealthEvent>>,
+    influxdb_write_channel_tx: Option<broadcast::Sender<WriteQuery>>,
+) where
     N: Network,
     DB: DatabaseRef<Error = KabuDBError> + Database<Error = KabuDBError> + DatabaseCommit + DatabaseKabuExt + Send + Sync + Clone + 'static,
 {
-    subscribe!(compose_channel_rx);
-
     loop {
         tokio::select! {
             msg = compose_channel_rx.recv() => {
@@ -297,22 +294,17 @@ where
     }
 }
 
-#[derive(Consumer, Producer)]
-pub struct EvmEstimatorActor<P, N, E, DB: Clone + Send + Sync + 'static> {
+pub struct EvmEstimatorComponent<P, N, E, DB: Clone + Send + Sync + 'static> {
     encoder: E,
     client: Option<P>,
-    #[consumer]
-    compose_channel_rx: Option<Broadcaster<MessageSwapCompose<DB>>>,
-    #[producer]
-    compose_channel_tx: Option<Broadcaster<MessageSwapCompose<DB>>>,
-    #[producer]
-    health_monitor_channel_tx: Option<Broadcaster<MessageHealthEvent>>,
-    #[producer]
-    influxdb_write_channel_tx: Option<Broadcaster<WriteQuery>>,
+    compose_channel_rx: Option<broadcast::Sender<MessageSwapCompose<DB>>>,
+    compose_channel_tx: Option<broadcast::Sender<MessageSwapCompose<DB>>>,
+    health_monitor_channel_tx: Option<broadcast::Sender<MessageHealthEvent>>,
+    influxdb_write_channel_tx: Option<broadcast::Sender<WriteQuery>>,
     _n: PhantomData<N>,
 }
 
-impl<P, N, E, DB> EvmEstimatorActor<P, N, E, DB>
+impl<P, N, E, DB> EvmEstimatorComponent<P, N, E, DB>
 where
     N: Network,
     P: Provider<Ethereum>,
@@ -352,27 +344,45 @@ where
             ..self
         }
     }
+
+    pub fn with_swap_compose_channel(self, channel: broadcast::Sender<MessageSwapCompose<DB>>) -> Self {
+        Self { compose_channel_tx: Some(channel.clone()), compose_channel_rx: Some(channel), ..self }
+    }
 }
 
-impl<P, N, E, DB> Actor for EvmEstimatorActor<P, N, E, DB>
+impl<P, N, E, DB> Component for EvmEstimatorComponent<P, N, E, DB>
 where
     N: Network,
     P: Provider<N> + Send + Sync + Clone + 'static,
     E: SwapEncoder + Clone + Send + Sync + 'static,
     DB: DatabaseRef<Error = KabuDBError> + Database<Error = KabuDBError> + DatabaseCommit + DatabaseKabuExt + Send + Sync + Clone,
 {
-    fn start(&self) -> ActorResult {
-        let task = tokio::task::spawn(estimator_worker(
-            self.client.clone(),
-            self.encoder.clone(),
-            self.compose_channel_rx.clone().unwrap(),
-            self.compose_channel_tx.clone().unwrap(),
-            self.health_monitor_channel_tx.clone(),
-            self.influxdb_write_channel_tx.clone(),
-        ));
-        Ok(vec![task])
+    fn spawn(self, executor: TaskExecutor) -> Result<()> {
+        let name = self.name();
+
+        let compose_channel_rx = self.compose_channel_rx.ok_or_else(|| eyre!("compose_channel_rx not set"))?.subscribe();
+        let compose_channel_tx = self.compose_channel_tx.ok_or_else(|| eyre!("compose_channel_tx not set"))?;
+
+        executor.spawn_critical(
+            name,
+            estimator_worker(
+                self.client.clone(),
+                self.encoder.clone(),
+                compose_channel_rx,
+                compose_channel_tx,
+                self.health_monitor_channel_tx.clone(),
+                self.influxdb_write_channel_tx.clone(),
+            ),
+        );
+
+        Ok(())
     }
+
+    fn spawn_boxed(self: Box<Self>, executor: TaskExecutor) -> Result<()> {
+        (*self).spawn(executor)
+    }
+
     fn name(&self) -> &'static str {
-        "EvmEstimatorActor"
+        "EvmEstimatorComponent"
     }
 }

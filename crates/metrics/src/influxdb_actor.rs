@@ -1,11 +1,10 @@
-use async_trait::async_trait;
-use eyre::eyre;
+use eyre::{eyre, Result};
 use influxdb::{Client, ReadQuery, WriteQuery};
-use kabu_core_actors::{Actor, ActorResult, Broadcaster, Consumer, WorkerResult};
-use kabu_core_actors_macros::Consumer;
-use kabu_core_blockchain::Blockchain;
+use kabu_core_components::Component;
+use reth_tasks::TaskExecutor;
 use std::collections::HashMap;
 use std::time::Duration;
+use tokio::sync::broadcast;
 use tokio::time::timeout;
 use tracing::{error, info, warn};
 
@@ -13,8 +12,8 @@ pub async fn start_influxdb_worker(
     url: String,
     database: String,
     tags: HashMap<String, String>,
-    event_receiver: Broadcaster<WriteQuery>,
-) -> WorkerResult {
+    mut event_receiver: broadcast::Receiver<WriteQuery>,
+) {
     let client = Client::new(url, database.clone());
     let create_db_stmt = format!("CREATE DATABASE {database}");
     let result = client.query(ReadQuery::new(create_db_stmt)).await;
@@ -22,7 +21,7 @@ pub async fn start_influxdb_worker(
         Ok(_) => info!("Database created with name: {}", database),
         Err(e) => info!("Database creation failed or already exists: {:?}", e),
     }
-    let mut event_receiver = event_receiver.subscribe();
+    // event_receiver is already a Receiver
     loop {
         let event_result = event_receiver.recv().await;
         match event_result {
@@ -47,7 +46,7 @@ pub async fn start_influxdb_worker(
             Err(e) => match e {
                 tokio::sync::broadcast::error::RecvError::Closed => {
                     error!("InfluxDB channel closed");
-                    return Err(eyre!("INFLUXDB_CHANNEL_CLOSED"));
+                    break;
                 }
                 tokio::sync::broadcast::error::RecvError::Lagged(lagged) => {
                     warn!("InfluxDB lagged: {:?}", lagged);
@@ -58,45 +57,41 @@ pub async fn start_influxdb_worker(
     }
 }
 
-#[derive(Consumer)]
-pub struct InfluxDbWriterActor {
+pub struct InfluxDbWriterComponent {
     url: String,
     database: String,
     tags: HashMap<String, String>,
-    #[consumer]
-    influxdb_write_channel_rx: Option<Broadcaster<WriteQuery>>,
+    influxdb_write_channel_rx: Option<broadcast::Sender<WriteQuery>>,
 }
 
-impl InfluxDbWriterActor {
+impl InfluxDbWriterComponent {
     pub fn new(url: String, database: String, tags: HashMap<String, String>) -> Self {
         Self { url, database, tags, influxdb_write_channel_rx: None }
     }
 
-    pub fn on_bc(self, bc: &Blockchain) -> Self {
-        Self { influxdb_write_channel_rx: bc.influxdb_write_channel(), ..self }
+    pub fn with_channel(self, channel: Option<broadcast::Sender<WriteQuery>>) -> Self {
+        Self { influxdb_write_channel_rx: channel, ..self }
     }
 }
 
-#[async_trait]
-impl Actor for InfluxDbWriterActor {
-    fn start(&self) -> ActorResult {
-        let influxdb_write_channel_rx = match &self.influxdb_write_channel_rx {
-            Some(rx) => rx.clone(),
-            None => {
-                error!("InfluxDB write channel is not set.");
-                return Err(eyre!("INFLUXDB_WRITE_CHANNEL_NOT_SET"));
-            }
-        };
-        let task = tokio::task::spawn(start_influxdb_worker(
-            self.url.clone(),
-            self.database.clone(),
-            self.tags.clone(),
-            influxdb_write_channel_rx.clone(),
-        ));
-        Ok(vec![task])
+impl Component for InfluxDbWriterComponent {
+    fn spawn(self, executor: TaskExecutor) -> Result<()> {
+        let name = self.name();
+
+        let influxdb_write_channel_rx = self.influxdb_write_channel_rx.ok_or_else(|| eyre!("InfluxDB write channel is not set"))?;
+
+        let event_receiver = influxdb_write_channel_rx.subscribe();
+
+        executor.spawn_critical(name, start_influxdb_worker(self.url, self.database, self.tags, event_receiver));
+
+        Ok(())
+    }
+
+    fn spawn_boxed(self: Box<Self>, executor: TaskExecutor) -> Result<()> {
+        (*self).spawn(executor)
     }
 
     fn name(&self) -> &'static str {
-        "InfluxDbWriterActor"
+        "InfluxDbWriterComponent"
     }
 }

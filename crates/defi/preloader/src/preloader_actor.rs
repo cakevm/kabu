@@ -1,6 +1,10 @@
+use kabu_core_components::Component;
+use reth_tasks::TaskExecutor;
 use std::collections::btree_map::Entry;
 use std::collections::BTreeMap;
 use std::marker::PhantomData;
+use std::sync::Arc;
+use tokio::sync::RwLock;
 
 use alloy_eips::{BlockId, BlockNumberOrTag};
 use alloy_network::Network;
@@ -8,8 +12,7 @@ use alloy_primitives::{Address, Bytes, U256};
 use alloy_provider::Provider;
 use alloy_rpc_types_trace::geth::AccountState;
 use eyre::{eyre, Result};
-use kabu_core_actors::{Accessor, Actor, ActorResult, SharedState, WorkerResult};
-use kabu_core_actors_macros::Accessor;
+
 use kabu_core_blockchain::{Blockchain, BlockchainState};
 use kabu_defi_address_book::TokenAddressEth;
 use kabu_evm_utils::{BalanceCheater, NWETH};
@@ -32,7 +35,7 @@ where
 }
 
 async fn set_monitor_token_balance(
-    account_nonce_balance_state: Option<SharedState<AccountNonceAndBalanceState>>,
+    account_nonce_balance_state: Option<Arc<RwLock<AccountNonceAndBalanceState>>>,
     owner: Address,
     token: Address,
     balance: U256,
@@ -47,7 +50,7 @@ async fn set_monitor_token_balance(
     }
 }
 
-async fn set_monitor_nonce(account_nonce_balance_state: Option<SharedState<AccountNonceAndBalanceState>>, owner: Address, nonce: u64) {
+async fn set_monitor_nonce(account_nonce_balance_state: Option<Arc<RwLock<AccountNonceAndBalanceState>>>, owner: Address, nonce: u64) {
     if let Some(account_nonce_balance) = account_nonce_balance_state {
         debug!("set_monitor_nonce {} {}", owner, nonce);
         let mut account_nonce_balance_guard = account_nonce_balance.write().await;
@@ -62,9 +65,9 @@ pub async fn preload_market_state<P, N, DB>(
     copied_accounts_vec: Vec<Address>,
     new_accounts_vec: Vec<(Address, u64, U256, Option<Bytes>)>,
     token_balances_vec: Vec<(Address, Address, U256)>,
-    market_state: SharedState<MarketState<DB>>,
-    account_nonce_balance_state: Option<SharedState<AccountNonceAndBalanceState>>,
-) -> WorkerResult
+    market_state: Arc<RwLock<MarketState<DB>>>,
+    account_nonce_balance_state: Option<Arc<RwLock<AccountNonceAndBalanceState>>>,
+) -> Result<()>
 where
     N: Network,
     P: Provider<N> + Send + Sync + Clone + 'static,
@@ -119,21 +122,20 @@ where
     }
     market_state_guard.apply_geth_update(state);
 
-    Ok("DONE".to_string())
+    Ok(())
 }
 
 #[allow(dead_code)]
-#[derive(Accessor)]
 pub struct MarketStatePreloadedOneShotActor<P, N, DB> {
     name: &'static str,
     client: P,
     copied_accounts: Vec<Address>,
     new_accounts: Vec<(Address, u64, U256, Option<Bytes>)>,
     token_balances: Vec<(Address, Address, U256)>,
-    #[accessor]
-    market_state: Option<SharedState<MarketState<DB>>>,
-    #[accessor]
-    account_nonce_balance_state: Option<SharedState<AccountNonceAndBalanceState>>,
+
+    market_state: Option<Arc<RwLock<MarketState<DB>>>>,
+
+    account_nonce_balance_state: Option<Arc<RwLock<AccountNonceAndBalanceState>>>,
     _n: PhantomData<N>,
 }
 
@@ -169,7 +171,7 @@ where
         Self { account_nonce_balance_state: Some(bc.nonce_and_balance()), market_state: Some(state.market_state_commit()), ..self }
     }
 
-    pub fn with_signers(self, tx_signers: SharedState<TxSigners>) -> Self {
+    pub fn with_signers(self, tx_signers: Arc<RwLock<TxSigners>>) -> Self {
         match tx_signers.try_read() {
             Ok(signers) => {
                 let mut addresses = self.copied_accounts;
@@ -202,6 +204,10 @@ where
         Self { new_accounts, ..self }
     }
 
+    pub fn with_market_state(self, market_state: Arc<RwLock<MarketState<DB>>>) -> Self {
+        Self { market_state: Some(market_state), ..self }
+    }
+
     pub fn with_token_balance(self, token: Address, owner: Address, balance: U256) -> Self {
         let mut token_balances = self.token_balances;
         token_balances.push((token, owner, balance));
@@ -209,30 +215,33 @@ where
     }
 }
 
-impl<P, N, DB> Actor for MarketStatePreloadedOneShotActor<P, N, DB>
+impl<P, N, DB> Component for MarketStatePreloadedOneShotActor<P, N, DB>
 where
     N: Network,
     P: Provider<N> + Send + Sync + Clone + 'static,
     DB: DatabaseRef + Database + DatabaseCommit + Send + Sync + Clone + 'static,
 {
-    fn start_and_wait(&self) -> Result<()> {
-        let rt = tokio::runtime::Runtime::new()?; // we need a different runtime to wait for the result
-        let handler = rt.spawn(preload_market_state(
-            self.client.clone(),
-            self.copied_accounts.clone(),
-            self.new_accounts.clone(),
-            self.token_balances.clone(),
-            self.market_state.clone().unwrap(),
-            self.account_nonce_balance_state.clone(),
-        ));
-
-        self.wait(Ok(vec![handler]))?;
-        rt.shutdown_background();
+    fn spawn(self, executor: TaskExecutor) -> Result<()> {
+        let market_state = self.market_state.clone().ok_or_else(|| eyre!("market_state not set"))?;
+        executor.spawn(async move {
+            if let Err(e) = preload_market_state(
+                self.client.clone(),
+                self.copied_accounts.clone(),
+                self.new_accounts.clone(),
+                self.token_balances.clone(),
+                market_state,
+                self.account_nonce_balance_state.clone(),
+            )
+            .await
+            {
+                tracing::error!("Preload market state failed: {}", e);
+            }
+        });
         Ok(())
     }
 
-    fn start(&self) -> ActorResult {
-        Err(eyre!("NEED_TO_BE_WAITED"))
+    fn spawn_boxed(self: Box<Self>, executor: TaskExecutor) -> Result<()> {
+        (*self).spawn(executor)
     }
 
     fn name(&self) -> &'static str {

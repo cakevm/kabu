@@ -1,3 +1,3 @@
-mod swap_router_actor;
+mod swap_router_component;
 
-pub use swap_router_actor::SwapRouterActor;
+pub use swap_router_component::{SwapRouterComponent, SwapRouterComponentBuilder};

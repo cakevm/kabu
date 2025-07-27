@@ -1,15 +1,18 @@
 use alloy_network::Network;
 use alloy_primitives::Address;
 use alloy_provider::Provider;
+use eyre::Result;
+use kabu_core_components::Component;
+use reth_tasks::TaskExecutor;
 use revm::DatabaseRef;
 use revm::{Database, DatabaseCommit};
 use std::marker::PhantomData;
 use std::sync::Arc;
+use tokio::sync::RwLock;
 use tracing::{debug, error, info};
 
 use crate::pool_loader_actor::fetch_and_add_pool_by_pool_id;
-use kabu_core_actors::{Accessor, Actor, ActorResult, SharedState, WorkerResult};
-use kabu_core_actors_macros::{Accessor, Consumer};
+
 use kabu_core_blockchain::{Blockchain, BlockchainState};
 use kabu_evm_db::KabuDBError;
 use kabu_node_debug_provider::DebugProviderExt;
@@ -23,9 +26,9 @@ async fn required_pools_loader_worker<P, N, DB, LDT>(
     pool_loaders: Arc<PoolLoaders<P, N, LDT>>,
     pools: Vec<(PoolId, PoolClass)>,
     required_state: Option<RequiredState>,
-    market: SharedState<Market>,
-    market_state: SharedState<MarketState<DB>>,
-) -> WorkerResult
+    market: Arc<RwLock<Market>>,
+    market_state: Arc<RwLock<MarketState<DB>>>,
+) -> Result<String>
 where
     N: Network<TransactionRequest = LDT::TransactionRequest>,
     P: Provider<N> + DebugProviderExt<N> + Send + Sync + Clone + 'static,
@@ -78,7 +81,6 @@ where
     Ok("required_pools_loader_worker".to_string())
 }
 
-#[derive(Accessor, Consumer)]
 pub struct RequiredPoolLoaderActor<P, N, DB, LDT>
 where
     N: Network,
@@ -90,10 +92,10 @@ where
     pool_loaders: Arc<PoolLoaders<P, N, LDT>>,
     pools: Vec<(PoolId, PoolClass)>,
     required_state: Option<RequiredState>,
-    #[accessor]
-    market: Option<SharedState<Market>>,
-    #[accessor]
-    market_state: Option<SharedState<MarketState<DB>>>,
+
+    market: Option<Arc<RwLock<Market>>>,
+
+    market_state: Option<Arc<RwLock<MarketState<DB>>>>,
     _n: PhantomData<N>,
 }
 
@@ -114,7 +116,7 @@ where
         Self { pools, ..self }
     }
 
-    pub fn on_bc(self, bc: &Blockchain, state: &BlockchainState<DB, LDT>) -> Self {
+    pub fn on_bc(self, bc: &Blockchain<LDT>, state: &BlockchainState<DB, LDT>) -> Self {
         Self { market: Some(bc.market()), market_state: Some(state.market_state_commit()), ..self }
     }
 
@@ -123,24 +125,33 @@ where
     }
 }
 
-impl<P, N, DB, LDT> Actor for RequiredPoolLoaderActor<P, N, DB, LDT>
+impl<P, N, DB, LDT> Component for RequiredPoolLoaderActor<P, N, DB, LDT>
 where
     N: Network<TransactionRequest = LDT::TransactionRequest>,
     P: Provider<N> + DebugProviderExt<N> + Send + Sync + Clone + 'static,
     DB: Database<Error = KabuDBError> + DatabaseRef<Error = KabuDBError> + DatabaseCommit + Send + Sync + Clone + 'static,
     LDT: KabuDataTypes + 'static,
 {
-    fn start(&self) -> ActorResult {
-        let task = tokio::task::spawn(required_pools_loader_worker(
-            self.client.clone(),
-            self.pool_loaders.clone(),
-            self.pools.clone(),
-            self.required_state.clone(),
-            self.market.clone().unwrap(),
-            self.market_state.clone().unwrap(),
-        ));
+    fn spawn(self, executor: TaskExecutor) -> Result<()> {
+        let _name = self.name();
+        let client = self.client;
+        let pool_loaders = self.pool_loaders;
+        let pools = self.pools;
+        let required_state = self.required_state;
+        let market = self.market.ok_or_else(|| eyre::eyre!("market not set"))?;
+        let market_state = self.market_state.ok_or_else(|| eyre::eyre!("market_state not set"))?;
 
-        Ok(vec![task])
+        executor.spawn(async move {
+            if let Err(e) = required_pools_loader_worker(client, pool_loaders, pools, required_state, market, market_state).await {
+                error!("Required pools loader worker failed: {}", e);
+            }
+        });
+
+        Ok(())
+    }
+
+    fn spawn_boxed(self: Box<Self>, executor: TaskExecutor) -> Result<()> {
+        (*self).spawn(executor)
     }
 
     fn name(&self) -> &'static str {

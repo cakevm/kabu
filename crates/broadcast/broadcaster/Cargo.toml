@@ -9,9 +9,7 @@ rust-version.workspace = true
 version.workspace = true
 
 [dependencies]
-kabu-core-actors.workspace = true
-kabu-core-actors-macros.workspace = true
-kabu-core-blockchain.workspace = true
+kabu-core-components = { workspace = true }
 kabu-types-events.workspace = true
 
 eyre.workspace = true
@@ -24,3 +22,6 @@ alloy-primitives.workspace = true
 alloy-provider.workspace = true
 alloy-rpc-types-mev.workspace = true
 alloy-signer-local.workspace = true
+
+# reth
+reth-tasks.workspace = true

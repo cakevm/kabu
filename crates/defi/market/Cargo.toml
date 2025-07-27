@@ -9,9 +9,8 @@ rust-version.workspace = true
 version.workspace = true
 
 [dependencies]
-kabu-core-actors.workspace = true
-kabu-core-actors-macros.workspace = true
 kabu-core-blockchain.workspace = true
+kabu-core-components = { workspace = true }
 kabu-evm-db.workspace = true
 kabu-node-debug-provider.workspace = true
 kabu-types-blockchain.workspace = true
@@ -19,8 +18,8 @@ kabu-types-events.workspace = true
 kabu-types-market.workspace = true
 
 eyre.workspace = true
+reth-tasks.workspace = true
 tokio.workspace = true
-tokio-stream.workspace = true
 tracing.workspace = true
 
 

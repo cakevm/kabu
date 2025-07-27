@@ -4,7 +4,9 @@ use alloy_network::Ethereum;
 use alloy_primitives::BlockNumber;
 use alloy_provider::Provider;
 use alloy_rpc_types::{BlockTransactions, Filter};
-use kabu_core_actors::{Broadcaster, SharedState, WorkerResult};
+use std::sync::Arc;
+use tokio::sync::{broadcast, RwLock};
+
 use kabu_evm_db::{DatabaseKabuExt, KabuDBError};
 use kabu_node_debug_provider::DebugProviderExt;
 use kabu_types_blockchain::{debug_trace_block, KabuDataTypesEthereum, Mempool};
@@ -23,13 +25,13 @@ pub async fn node_player_worker<P, DB>(
     provider: P,
     start_block: BlockNumber,
     end_block: BlockNumber,
-    mempool: Option<SharedState<Mempool>>,
-    market_state: Option<SharedState<MarketState<DB>>>,
-    new_block_headers_channel: Option<Broadcaster<MessageBlockHeader>>,
-    new_block_with_tx_channel: Option<Broadcaster<MessageBlock>>,
-    new_block_logs_channel: Option<Broadcaster<MessageBlockLogs>>,
-    new_block_state_update_channel: Option<Broadcaster<MessageBlockStateUpdate>>,
-) -> WorkerResult
+    mempool: Option<Arc<RwLock<Mempool>>>,
+    market_state: Option<Arc<RwLock<MarketState<DB>>>>,
+    new_block_headers_channel: Option<broadcast::Sender<MessageBlockHeader>>,
+    new_block_with_tx_channel: Option<broadcast::Sender<MessageBlock>>,
+    new_block_logs_channel: Option<broadcast::Sender<MessageBlockLogs>>,
+    new_block_state_update_channel: Option<broadcast::Sender<MessageBlockStateUpdate>>,
+) -> eyre::Result<()>
 where
     P: Provider<Ethereum> + DebugProviderExt<Ethereum> + Send + Sync + Clone + 'static,
     DB: Database<Error = KabuDBError> + DatabaseRef<Error = KabuDBError> + DatabaseCommit + Send + Sync + Clone + DatabaseKabuExt + 'static,
@@ -181,5 +183,5 @@ where
         tokio::time::sleep(Duration::from_millis(1000)).await;
     }
 
-    Ok("Node block player worker finished".to_string())
+    Ok(())
 }

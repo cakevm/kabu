@@ -1,13 +1,15 @@
-use kabu_core_actors::{Broadcaster, SharedState, WorkerResult};
 use kabu_evm_utils::reth_types::decode_into_transaction;
 use kabu_types_blockchain::Mempool;
 use kabu_types_events::{MessageTxCompose, RlpState, TxComposeMessageType};
+use std::sync::Arc;
 use tokio::select;
+use tokio::sync::{broadcast, RwLock};
 use tracing::{error, info};
 
-pub(crate) async fn replayer_compose_worker(mempool: SharedState<Mempool>, compose_channel: Broadcaster<MessageTxCompose>) -> WorkerResult {
-    let mut compose_channel_rx = compose_channel.subscribe();
-
+pub(crate) async fn replayer_compose_worker(
+    mempool: Arc<RwLock<Mempool>>,
+    mut compose_channel_rx: broadcast::Receiver<MessageTxCompose>,
+) -> eyre::Result<()> {
     loop {
         select! {
             msg = compose_channel_rx.recv() => {

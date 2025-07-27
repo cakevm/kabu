@@ -1,3 +1,3 @@
-mod accounts_actor;
+mod account_monitor_component;
 
-pub use accounts_actor::NonceAndBalanceMonitorActor;
+pub use account_monitor_component::{AccountMonitorComponent, AccountMonitorComponentBuilder};

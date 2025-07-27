@@ -1,3 +1,3 @@
-pub use flashbots::{FlashbotsBroadcastActor, RelayConfig};
+pub use flashbots::{FlashbotsBroadcastComponent, RelayConfig};
 
 mod flashbots;

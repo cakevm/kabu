@@ -4,21 +4,23 @@ use alloy_primitives::U256;
 use chrono::TimeDelta;
 use eyre::{eyre, Result};
 use influxdb::{Timestamp, WriteQuery};
+use kabu_core_components::Component;
 use rayon::prelude::*;
 use rayon::{ThreadPool, ThreadPoolBuilder};
+use reth_tasks::TaskExecutor;
 use revm::context::{BlockEnv, CfgEnv};
 use revm::context_interface::block::BlobExcessGasAndPrice;
 use revm::{Database, DatabaseCommit, DatabaseRef};
 use std::collections::{BTreeMap, HashSet};
 use std::sync::Arc;
 use tokio::sync::broadcast::error::RecvError;
+use tokio::sync::{broadcast, RwLock};
 #[cfg(not(debug_assertions))]
 use tracing::warn;
 use tracing::{debug, error, info};
 
 use crate::{BackrunConfig, SwapCalculator};
-use kabu_core_actors::{subscribe, Accessor, Actor, ActorResult, Broadcaster, Consumer, Producer, SharedState, WorkerResult};
-use kabu_core_actors_macros::{Accessor, Consumer, Producer};
+
 use kabu_core_blockchain::{Blockchain, Strategy};
 use kabu_evm_db::{DatabaseHelpers, KabuDBError};
 use kabu_types_blockchain::KabuDataTypes;
@@ -37,10 +39,10 @@ async fn state_change_arb_searcher_task<
     thread_pool: Arc<ThreadPool>,
     backrun_config: BackrunConfig,
     state_update_event: StateUpdateEvent<DB, LDT>,
-    market: SharedState<Market>,
-    swap_request_tx: Broadcaster<MessageSwapCompose<DB, LDT>>,
-    pool_health_monitor_tx: Broadcaster<MessageHealthEvent>,
-    influxdb_write_channel_tx: Option<Broadcaster<WriteQuery>>,
+    market: Arc<RwLock<Market>>,
+    swap_request_tx: broadcast::Sender<MessageSwapCompose<DB, LDT>>,
+    pool_health_monitor_tx: broadcast::Sender<MessageHealthEvent>,
+    influxdb_write_channel_tx: Option<broadcast::Sender<WriteQuery>>,
 ) -> Result<()> {
     debug!("Message received {} stuffing : {:?}", state_update_event.origin, state_update_event.stuffing_tx_hash());
 
@@ -232,16 +234,16 @@ async fn state_change_arb_searcher_task<
 
 pub async fn state_change_arb_searcher_worker<
     DB: DatabaseRef<Error = KabuDBError> + Database<Error = KabuDBError> + DatabaseCommit + Send + Sync + Clone + Default + 'static,
-    LDT: KabuDataTypes,
+    LDT: KabuDataTypes + 'static,
 >(
     backrun_config: BackrunConfig,
-    market: SharedState<Market>,
-    search_request_rx: Broadcaster<StateUpdateEvent<DB, LDT>>,
-    swap_request_tx: Broadcaster<MessageSwapCompose<DB, LDT>>,
-    pool_health_monitor_tx: Broadcaster<MessageHealthEvent>,
-    influxdb_write_channel_tx: Option<Broadcaster<WriteQuery>>,
-) -> WorkerResult {
-    subscribe!(search_request_rx);
+    market: Arc<RwLock<Market>>,
+    search_request_rx: broadcast::Receiver<StateUpdateEvent<DB, LDT>>,
+    swap_request_tx: broadcast::Sender<MessageSwapCompose<DB, LDT>>,
+    pool_health_monitor_tx: broadcast::Sender<MessageHealthEvent>,
+    influxdb_write_channel_tx: Option<broadcast::Sender<WriteQuery>>,
+) -> Result<()> {
+    let mut search_request_receiver = search_request_rx.resubscribe();
 
     let cpus = num_cpus::get();
     let tasks = (cpus * 5) / 10;
@@ -250,7 +252,7 @@ pub async fn state_change_arb_searcher_worker<
 
     loop {
         tokio::select! {
-                msg = search_request_rx.recv() => {
+                msg = search_request_receiver.recv() => {
                 let pool_update_msg : Result<StateUpdateEvent<DB, LDT>, RecvError> = msg;
                 if let Ok(msg) = pool_update_msg {
                     tokio::task::spawn(
@@ -270,19 +272,18 @@ pub async fn state_change_arb_searcher_worker<
     }
 }
 
-#[derive(Accessor, Consumer, Producer)]
 pub struct StateChangeArbSearcherActor<DB: Clone + Send + Sync + 'static, LDT: KabuDataTypes + 'static> {
     backrun_config: BackrunConfig,
-    #[accessor]
-    market: Option<SharedState<Market>>,
-    #[consumer]
-    state_update_rx: Option<Broadcaster<StateUpdateEvent<DB, LDT>>>,
-    #[producer]
-    compose_tx: Option<Broadcaster<MessageSwapCompose<DB, LDT>>>,
-    #[producer]
-    pool_health_monitor_tx: Option<Broadcaster<MessageHealthEvent>>,
-    #[producer]
-    influxdb_write_channel_tx: Option<Broadcaster<WriteQuery>>,
+
+    market: Option<Arc<RwLock<Market>>>,
+
+    state_update_rx: Option<broadcast::Sender<StateUpdateEvent<DB, LDT>>>,
+
+    swap_tx: Option<broadcast::Sender<MessageSwapCompose<DB, LDT>>>,
+
+    pool_health_monitor_tx: Option<broadcast::Sender<MessageHealthEvent>>,
+
+    influxdb_write_channel_tx: Option<broadcast::Sender<WriteQuery>>,
 }
 
 impl<
@@ -295,7 +296,7 @@ impl<
             backrun_config,
             market: None,
             state_update_rx: None,
-            compose_tx: None,
+            swap_tx: None,
             pool_health_monitor_tx: None,
             influxdb_write_channel_tx: None,
         }
@@ -305,29 +306,69 @@ impl<
         Self {
             market: Some(bc.market()),
             pool_health_monitor_tx: Some(bc.health_monitor_channel()),
-            compose_tx: Some(strategy.swap_compose_channel()),
+            swap_tx: Some(strategy.swap_compose_channel()),
             state_update_rx: Some(strategy.state_update_channel()),
             influxdb_write_channel_tx: bc.influxdb_write_channel(),
             ..self
         }
     }
+
+    pub fn with_channels(
+        self,
+        state_update_rx: broadcast::Sender<StateUpdateEvent<DB, LDT>>,
+        swap_tx: broadcast::Sender<MessageSwapCompose<DB, LDT>>,
+        pool_health_monitor_tx: broadcast::Sender<MessageHealthEvent>,
+        influxdb_write_channel_tx: Option<broadcast::Sender<WriteQuery>>,
+    ) -> Self {
+        Self {
+            state_update_rx: Some(state_update_rx),
+            swap_tx: Some(swap_tx),
+            pool_health_monitor_tx: Some(pool_health_monitor_tx),
+            influxdb_write_channel_tx,
+            ..self
+        }
+    }
+
+    pub fn with_market(self, market: Arc<RwLock<Market>>) -> Self {
+        Self { market: Some(market), ..self }
+    }
 }
 
-impl<
-        DB: DatabaseRef<Error = KabuDBError> + Database<Error = KabuDBError> + DatabaseCommit + Send + Sync + Clone + Default + 'static,
-        LDT: KabuDataTypes + 'static,
-    > Actor for StateChangeArbSearcherActor<DB, LDT>
+impl<DB, LDT> Component for StateChangeArbSearcherActor<DB, LDT>
+where
+    DB: Database<Error = KabuDBError> + DatabaseRef<Error = KabuDBError> + DatabaseCommit + Send + Sync + Clone + Default + 'static,
+    LDT: KabuDataTypes + 'static,
 {
-    fn start(&self) -> ActorResult {
-        let task = tokio::task::spawn(state_change_arb_searcher_worker(
-            self.backrun_config.clone(),
-            self.market.clone().unwrap(),
-            self.state_update_rx.clone().unwrap(),
-            self.compose_tx.clone().unwrap(),
-            self.pool_health_monitor_tx.clone().unwrap(),
-            self.influxdb_write_channel_tx.clone(),
-        ));
-        Ok(vec![task])
+    fn spawn(self, executor: TaskExecutor) -> Result<()> {
+        let name = self.name();
+
+        let state_update_rx = self.state_update_rx.ok_or_else(|| eyre!("state_update_rx not set"))?.subscribe();
+        let swap_tx = self.swap_tx.ok_or_else(|| eyre!("swap_tx not set"))?;
+        let market = self.market.ok_or_else(|| eyre!("market not set"))?;
+        let pool_health_monitor_tx = self.pool_health_monitor_tx.ok_or_else(|| eyre!("pool_health_monitor_tx not set"))?;
+        let influxdb_write_channel = self.influxdb_write_channel_tx;
+        let backrun_config = self.backrun_config.clone();
+
+        executor.spawn_critical(name, async move {
+            if let Err(e) = state_change_arb_searcher_worker(
+                backrun_config,
+                market,
+                state_update_rx,
+                swap_tx,
+                pool_health_monitor_tx,
+                influxdb_write_channel,
+            )
+            .await
+            {
+                error!("state_change_arb_searcher_worker failed: {}", e);
+            }
+        });
+
+        Ok(())
+    }
+
+    fn spawn_boxed(self: Box<Self>, executor: TaskExecutor) -> Result<()> {
+        (*self).spawn(executor)
     }
 
     fn name(&self) -> &'static str {

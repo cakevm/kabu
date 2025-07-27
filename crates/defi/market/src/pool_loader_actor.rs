@@ -1,17 +1,17 @@
+use kabu_core_components::Component;
+use reth_tasks::TaskExecutor;
 use std::collections::{BTreeMap, HashMap};
 use std::marker::PhantomData;
 use std::sync::Arc;
+use tokio::sync::{broadcast, RwLock};
 
 use alloy_network::Network;
 use alloy_primitives::Address;
 use alloy_provider::Provider;
 use alloy_rpc_types::TransactionRequest;
-use eyre::Result;
+use eyre::{eyre, Result};
 use tracing::{debug, error, info};
 
-use kabu_core_actors::{run_sync, subscribe, Actor, ActorResult, Broadcaster, Producer, SharedState, WorkerResult};
-use kabu_core_actors::{Accessor, Consumer};
-use kabu_core_actors_macros::{Accessor, Consumer, Producer};
 use kabu_core_blockchain::{Blockchain, BlockchainState};
 use kabu_node_debug_provider::DebugProviderExt;
 use kabu_types_events::{LoomTask, MarketEvents};
@@ -30,11 +30,11 @@ pub async fn pool_loader_worker<P, PL, N, DB>(
     client: P,
     pool_loaders: Arc<PoolLoaders<PL, N>>,
     pools_config: PoolsLoadingConfig,
-    market: SharedState<Market>,
-    market_state: SharedState<MarketState<DB>>,
-    tasks_rx: Broadcaster<LoomTask>,
-    market_events_tx: Broadcaster<MarketEvents>,
-) -> WorkerResult
+    market: Arc<RwLock<Market>>,
+    market_state: Arc<RwLock<MarketState<DB>>>,
+    tasks_rx: broadcast::Sender<LoomTask>,
+    market_events_tx: broadcast::Sender<MarketEvents>,
+) -> Result<()>
 where
     N: Network<TransactionRequest = TransactionRequest>,
     P: Provider<N> + DebugProviderExt<N> + Send + Sync + Clone + 'static,
@@ -44,9 +44,9 @@ where
     let mut processed_pools = HashMap::new();
     let semaphore = std::sync::Arc::new(Semaphore::new(pools_config.threads().unwrap_or(MAX_CONCURRENT_TASKS)));
 
-    subscribe!(tasks_rx);
+    let mut tasks_receiver = tasks_rx.subscribe();
     loop {
-        if let Ok(task) = tasks_rx.recv().await {
+        if let Ok(task) = tasks_receiver.recv().await {
             let LoomTask::FetchAndAddPools(pools) = task;
 
             for (pool_id, pool_class) in pools {
@@ -77,7 +77,10 @@ where
                             {
                                 Ok((pool_id, swap_path_idx_vec)) => {
                                     info!(%pool_id, %pool_class, "Pool loaded successfully");
-                                    run_sync!(market_events_tx_clone.send(MarketEvents::NewPoolLoaded { pool_id, swap_path_idx_vec }))
+                                    if let Err(e) = market_events_tx_clone.send(MarketEvents::NewPoolLoaded { pool_id, swap_path_idx_vec })
+                                    {
+                                        error!("Failed to send market event: {}", e);
+                                    }
                                 }
                                 Err(error) => {
                                     error!(%error, %pool_id, %pool_class, "failed fetch_and_add_pool_by_address");
@@ -99,8 +102,8 @@ where
 /// Fetch pool data, add it to the market and fetch the required state
 pub async fn fetch_and_add_pool_by_pool_id<P, PL, N, DB, LDT>(
     client: P,
-    market: SharedState<Market>,
-    market_state: SharedState<MarketState<DB>>,
+    market: Arc<RwLock<Market>>,
+    market_state: Arc<RwLock<MarketState<DB>>>,
     pool_loaders: Arc<PoolLoaders<PL, N, LDT>>,
     pool_id: PoolId,
     pool_class: PoolClass,
@@ -120,8 +123,8 @@ where
 
 pub async fn fetch_state_and_add_pool<P, N, DB, LDT>(
     client: P,
-    market: SharedState<Market>,
-    market_state: SharedState<MarketState<DB>>,
+    market: Arc<RwLock<Market>>,
+    market_state: Arc<RwLock<MarketState<DB>>>,
     pool_wrapped: PoolWrapper,
 ) -> Result<(PoolId, Vec<usize>)>
 where
@@ -198,7 +201,6 @@ where
     }
 }
 
-#[derive(Accessor, Consumer, Producer)]
 pub struct PoolLoaderActor<P, PL, N, DB>
 where
     N: Network,
@@ -209,14 +211,14 @@ where
     client: P,
     pool_loaders: Arc<PoolLoaders<PL, N>>,
     pools_config: PoolsLoadingConfig,
-    #[accessor]
-    market: Option<SharedState<Market>>,
-    #[accessor]
-    market_state: Option<SharedState<MarketState<DB>>>,
-    #[consumer]
-    tasks_rx: Option<Broadcaster<LoomTask>>,
-    #[producer]
-    market_events_channel_tx: Option<Broadcaster<MarketEvents>>,
+
+    market: Option<Arc<RwLock<Market>>>,
+
+    market_state: Option<Arc<RwLock<MarketState<DB>>>>,
+
+    tasks_rx: Option<broadcast::Sender<LoomTask>>,
+
+    market_events_channel_tx: Option<broadcast::Sender<MarketEvents>>,
     _n: PhantomData<N>,
 }
 
@@ -251,24 +253,39 @@ where
     }
 }
 
-impl<P, PL, N, DB> Actor for PoolLoaderActor<P, PL, N, DB>
+impl<P, PL, N, DB> Component for PoolLoaderActor<P, PL, N, DB>
 where
     N: Network<TransactionRequest = TransactionRequest>,
     P: Provider<N> + DebugProviderExt<N> + Send + Sync + Clone + 'static,
     PL: Provider<N> + Send + Sync + Clone + 'static,
     DB: Database + DatabaseRef + DatabaseCommit + Default + Send + Sync + Clone + 'static,
 {
-    fn start(&self) -> ActorResult {
-        let task = tokio::task::spawn(pool_loader_worker(
-            self.client.clone(),
-            self.pool_loaders.clone(),
-            self.pools_config.clone(),
-            self.market.clone().unwrap(),
-            self.market_state.clone().unwrap(),
-            self.tasks_rx.clone().unwrap(),
-            self.market_events_channel_tx.clone().unwrap(),
-        ));
-        Ok(vec![task])
+    fn spawn(self, executor: TaskExecutor) -> Result<()> {
+        let name = self.name();
+
+        let tasks_rx = self.tasks_rx.ok_or_else(|| eyre!("tasks_rx not set"))?;
+
+        executor.spawn_critical(name, async move {
+            if let Err(e) = pool_loader_worker(
+                self.client.clone(),
+                self.pool_loaders.clone(),
+                self.pools_config.clone(),
+                self.market.clone().unwrap(),
+                self.market_state.clone().unwrap(),
+                tasks_rx,
+                self.market_events_channel_tx.clone().unwrap(),
+            )
+            .await
+            {
+                error!("Pool loader worker failed: {}", e);
+            }
+        });
+
+        Ok(())
+    }
+
+    fn spawn_boxed(self: Box<Self>, executor: TaskExecutor) -> Result<()> {
+        (*self).spawn(executor)
     }
 
     fn name(&self) -> &'static str {

@@ -23,7 +23,6 @@ use kabu_defi_address_book::UniswapV2PoolAddress;
 use kabu_types_market::{Market, MarketState, PoolId, PoolWrapper, SwapDirection};
 use kabu_types_swap::{Swap, SwapAmountType, SwapLine};
 
-use kabu_core_actors::SharedState;
 use kabu_defi_preloader::preload_market_state;
 use kabu_evm_db::KabuDBType;
 use kabu_evm_utils::{BalanceCheater, NWETH};
@@ -32,6 +31,7 @@ use kabu_execution_multicaller::{
     MulticallerDeployer, MulticallerEncoder, MulticallerSwapEncoder, ProtocolABIEncoderV2, SwapLineEncoder, SwapStepEncoder,
 };
 use revm::database::CacheDB;
+use tokio::sync::RwLock;
 
 mod cli;
 mod dto;
@@ -77,9 +77,9 @@ async fn main() -> Result<()> {
 
     let market_state_instance = MarketState::new(cache_db.clone());
 
-    let market_instance = SharedState::new(market_instance);
+    let market_instance = Arc::new(RwLock::new(market_instance));
 
-    let market_state_instance = SharedState::new(market_state_instance);
+    let market_state_instance = Arc::new(RwLock::new(market_state_instance));
 
     let abi_encoder = ProtocolABIEncoderV2::default();
 

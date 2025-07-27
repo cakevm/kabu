@@ -1,0 +1,42 @@
+[package]
+name = "kabu-core-block-history"
+edition.workspace = true
+exclude.workspace = true
+homepage.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+version.workspace = true
+
+[dependencies]
+kabu-core-blockchain.workspace = true
+kabu-core-components = { workspace = true }
+kabu-evm-db.workspace = true
+kabu-node-debug-provider.workspace = true
+kabu-types-blockchain.workspace = true
+kabu-types-entities.workspace = true
+kabu-types-events.workspace = true
+kabu-types-market.workspace = true
+
+
+eyre.workspace = true
+tokio.workspace = true
+tracing.workspace = true
+
+alloy-json-rpc.workspace = true
+alloy-network.workspace = true
+alloy-primitives.workspace = true
+alloy-provider.workspace = true
+alloy-rpc-types.workspace = true
+
+reth-tasks.workspace = true
+revm.workspace = true
+
+[dev-dependencies]
+kabu-evm-db.workspace = true
+kabu-evm-utils.workspace = true
+
+alloy-eips.workspace = true
+alloy-node-bindings.workspace = true
+alloy-rpc-client.workspace = true
+env_logger.workspace = true

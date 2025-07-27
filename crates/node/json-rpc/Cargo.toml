@@ -9,10 +9,8 @@ rust-version.workspace = true
 version.workspace = true
 
 [dependencies]
-kabu-core-actors.workspace = true
-kabu-core-actors-macros.workspace = true
-kabu-core-blockchain.workspace = true
-kabu-node-actor-config.workspace = true
+kabu-core-components = { workspace = true }
+kabu-node-config.workspace = true
 kabu-node-debug-provider.workspace = true
 kabu-types-blockchain.workspace = true
 kabu-types-events.workspace = true
@@ -20,11 +18,11 @@ kabu-types-events.workspace = true
 chrono.workspace = true
 eyre.workspace = true
 futures.workspace = true
+reth-tasks.workspace = true
 tokio.workspace = true
 tracing.workspace = true
 
 # alloy
-alloy-json-rpc.workspace = true
 alloy-network.workspace = true
 alloy-primitives.workspace = true
 alloy-provider.workspace = true

@@ -1,32 +1,32 @@
 use alloy_primitives::{hex, Bytes, B256};
 use eyre::eyre;
-use tracing::{error, info};
+use kabu_core_components::Component;
+use std::sync::Arc;
+use tokio::sync::RwLock;
+use tracing::info;
 
-use kabu_core_actors::{Accessor, Actor, ActorResult, SharedState, WorkerResult};
-use kabu_core_actors_macros::Accessor;
 use kabu_core_blockchain::Blockchain;
 use kabu_types_blockchain::{KabuDataTypes, KabuDataTypesEthereum};
 use kabu_types_entities::{AccountNonceAndBalanceState, KeyStore, LoomTxSigner, TxSigners};
 
 /// The one-shot actor adds a new signer to the signers and monitor list after and stops.
-#[derive(Accessor)]
 pub struct InitializeSignersOneShotBlockingActor<LDT: KabuDataTypes> {
     key: Option<Vec<u8>>,
-    #[accessor]
-    signers: Option<SharedState<TxSigners<LDT>>>,
-    #[accessor]
-    monitor: Option<SharedState<AccountNonceAndBalanceState>>,
+
+    signers: Option<Arc<RwLock<TxSigners<LDT>>>>,
+
+    monitor: Option<Arc<RwLock<AccountNonceAndBalanceState>>>,
 }
 
 async fn initialize_signers_one_shot_worker(
     key: Vec<u8>,
-    signers: SharedState<TxSigners<KabuDataTypesEthereum>>,
-    monitor: SharedState<AccountNonceAndBalanceState>,
-) -> WorkerResult {
+    signers: Arc<RwLock<TxSigners<KabuDataTypesEthereum>>>,
+    monitor: Arc<RwLock<AccountNonceAndBalanceState>>,
+) -> eyre::Result<()> {
     let new_signer = signers.write().await.add_privkey(Bytes::from(key));
     monitor.write().await.add_account(new_signer.address());
     info!("New signer added {:?}", new_signer.address());
-    Ok("Signer added".to_string())
+    Ok(())
 }
 
 impl<LDT: KabuDataTypes> InitializeSignersOneShotBlockingActor<LDT> {
@@ -60,38 +60,32 @@ impl<LDT: KabuDataTypes> InitializeSignersOneShotBlockingActor<LDT> {
         Self { monitor: Some(bc.nonce_and_balance()), ..self }
     }
 
-    pub fn with_signers(self, signers: SharedState<TxSigners<LDT>>) -> Self {
+    pub fn with_signers(self, signers: Arc<RwLock<TxSigners<LDT>>>) -> Self {
         Self { signers: Some(signers), ..self }
+    }
+
+    pub fn with_monitor(self, monitor: Arc<RwLock<AccountNonceAndBalanceState>>) -> Self {
+        Self { monitor: Some(monitor), ..self }
     }
 }
 
-impl Actor for InitializeSignersOneShotBlockingActor<KabuDataTypesEthereum> {
-    fn start_and_wait(&self) -> eyre::Result<()> {
-        let key = match self.key.clone() {
-            Some(key) => key,
-            _ => {
-                error!("No signer keys found");
-                return Err(eyre!("NO_SIGNER_KEY"));
+impl Component for InitializeSignersOneShotBlockingActor<KabuDataTypesEthereum> {
+    fn spawn(self, executor: reth_tasks::TaskExecutor) -> eyre::Result<()> {
+        let name = self.name();
+        let key = self.key.ok_or_else(|| eyre!("No signer keys found"))?;
+        let signers = self.signers.ok_or_else(|| eyre!("Signers not initialized"))?;
+        let monitor = self.monitor.ok_or_else(|| eyre!("Monitor not initialized"))?;
+
+        executor.spawn_critical(name, async move {
+            if let Err(e) = initialize_signers_one_shot_worker(key, signers, monitor).await {
+                tracing::error!("Initialize signers failed: {}", e);
             }
-        };
-        let (signers, monitor) = match (self.signers.clone(), self.monitor.clone()) {
-            (Some(signers), Some(monitor)) => (signers, monitor),
-            _ => {
-                error!("Signers or monitor not initialized");
-                return Err(eyre!("SIGNERS_OR_MONITOR_NOT_INITIALIZED"));
-            }
-        };
-
-        let rt = tokio::runtime::Runtime::new()?; // we need a different runtime to wait for the result
-        let handle = rt.spawn(async { initialize_signers_one_shot_worker(key, signers, monitor).await });
-
-        self.wait(Ok(vec![handle]))?;
-        rt.shutdown_background();
-
+        });
         Ok(())
     }
-    fn start(&self) -> ActorResult {
-        Err(eyre!("NEED_TO_BE_WAITED"))
+
+    fn spawn_boxed(self: Box<Self>, executor: reth_tasks::TaskExecutor) -> eyre::Result<()> {
+        (*self).spawn(executor)
     }
 
     fn name(&self) -> &'static str {

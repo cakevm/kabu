@@ -1,0 +1,26 @@
+[package]
+name = "kabu-core-components"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+homepage.workspace = true
+repository.workspace = true
+
+[dependencies]
+kabu-core-blockchain = { workspace = true }
+kabu-evm-db = { workspace = true }
+kabu-types-blockchain = { workspace = true }
+kabu-types-entities = { workspace = true }
+kabu-types-events = { workspace = true }
+
+eyre = { workspace = true }
+tokio = { workspace = true }
+tracing = { workspace = true }
+
+# reth
+reth-tasks = { workspace = true }
+
+# alloy
+alloy-network = { workspace = true }
+alloy-provider = { workspace = true }

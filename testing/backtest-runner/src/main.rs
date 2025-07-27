@@ -9,11 +9,10 @@ use alloy_rpc_types::{BlockId, BlockNumberOrTag};
 use alloy_rpc_types_eth::TransactionTrait;
 use clap::Parser;
 use eyre::{OptionExt, Result};
-use kabu::broadcast::accounts::{InitializeSignersOneShotBlockingActor, NonceAndBalanceMonitorActor, TxSignersActor};
-use kabu::broadcast::broadcaster::{FlashbotsBroadcastActor, RelayConfig};
-use kabu::core::actors::{Accessor, Actor, Broadcaster, Consumer, Producer, SharedState};
-use kabu::core::block_history::BlockHistoryActor;
-use kabu::core::router::SwapRouterActor;
+use kabu::broadcast::accounts::{AccountMonitorComponent, InitializeSignersOneShotBlockingActor, SignersComponent};
+use kabu::broadcast::broadcaster::{FlashbotsBroadcastComponent, RelayConfig};
+use kabu::core::block_history::BlockHistoryComponent;
+use kabu::core::router::SwapRouterComponent;
 use kabu::defi::address_book::TokenAddressEth;
 use kabu::defi::health_monitor::StuffingTxMonitorActor;
 use kabu::defi::market::{fetch_and_add_pool_by_pool_id, fetch_state_and_add_pool};
@@ -23,13 +22,12 @@ use kabu::defi::preloader::MarketStatePreloadedOneShotActor;
 use kabu::defi::price::PriceActor;
 use kabu::evm::db::KabuDBType;
 use kabu::evm::utils::NWETH;
-use kabu::execution::estimator::EvmEstimatorActor;
+use kabu::execution::estimator::EvmEstimatorComponent;
 use kabu::execution::multicaller::{MulticallerDeployer, MulticallerSwapEncoder};
-use kabu::node::actor_config::NodeBlockActorConfig;
 use kabu::node::debug_provider::AnvilDebugProviderFactory;
-use kabu::node::json_rpc::NodeBlockActor;
-use kabu::strategy::backrun::{BackrunConfig, StateChangeArbActor};
-use kabu::strategy::merger::{ArbSwapPathMergerActor, DiffPathMergerActor, SamePathMergerActor};
+use kabu::node::json_rpc::BlockProcessingComponent;
+use kabu::strategy::backrun::{BackrunConfig, StateChangeArbComponent};
+use kabu::strategy::merger::{ArbSwapPathMergerActor, DiffPathMergerActor, SamePathMergerComponent};
 use kabu::types::blockchain::{debug_trace_block, ChainParameters, KabuDataTypesEthereum, Mempool};
 use kabu::types::entities::{AccountNonceAndBalanceState, BlockHistory, LatestBlock, TxSigners};
 use kabu::types::events::{
@@ -38,11 +36,15 @@ use kabu::types::events::{
 };
 use kabu::types::market::{Market, MarketState, PoolClass, PoolId, Token};
 use kabu::types::swap::Swap;
+use kabu_core_components::Component;
+use kabu_node_config::NodeBlockActorConfig;
+use reth_tasks::TaskManager;
 use std::env;
 use std::fmt::{Display, Formatter};
 use std::process::exit;
 use std::sync::Arc;
 use std::time::Duration;
+use tokio::sync::{broadcast, RwLock};
 use tracing::{debug, error, info};
 use tracing_subscriber::layer::SubscriberExt;
 use tracing_subscriber::util::SubscriberInitExt;
@@ -172,28 +174,31 @@ async fn main() -> Result<()> {
 
     let mempool_instance = Mempool::<KabuDataTypesEthereum>::new();
 
-    info!("Creating channels");
-    let new_block_headers_channel: Broadcaster<MessageBlockHeader> = Broadcaster::new(10);
-    let new_block_with_tx_channel: Broadcaster<MessageBlock> = Broadcaster::new(10);
-    let new_block_state_update_channel: Broadcaster<MessageBlockStateUpdate> = Broadcaster::new(10);
-    let new_block_logs_channel: Broadcaster<MessageBlockLogs> = Broadcaster::new(10);
+    info!("Creating channels and task executor");
+    // Create TaskExecutor using TaskManager for testing
+    let task_manager = TaskManager::new(tokio::runtime::Handle::current());
+    let task_executor = task_manager.executor();
+    let (new_block_headers_channel, _) = broadcast::channel::<MessageBlockHeader<KabuDataTypesEthereum>>(10);
+    let (new_block_with_tx_channel, _) = broadcast::channel::<MessageBlock<KabuDataTypesEthereum>>(10);
+    let (new_block_state_update_channel, _) = broadcast::channel::<MessageBlockStateUpdate<KabuDataTypesEthereum>>(10);
+    let (new_block_logs_channel, _) = broadcast::channel::<MessageBlockLogs<KabuDataTypesEthereum>>(10);
 
-    let market_events_channel: Broadcaster<MarketEvents> = Broadcaster::new(100);
-    let mempool_events_channel: Broadcaster<MempoolEvents> = Broadcaster::new(500);
-    let pool_health_monitor_channel: Broadcaster<MessageHealthEvent> = Broadcaster::new(100);
+    let (market_events_channel, _) = broadcast::channel::<MarketEvents>(100);
+    let (mempool_events_channel, _) = broadcast::channel::<MempoolEvents>(500);
+    let (pool_health_monitor_channel, _) = broadcast::channel::<MessageHealthEvent>(100);
 
-    let market_instance = SharedState::new(market_instance);
-    let market_state = SharedState::new(market_state_instance);
-    let mempool_instance = SharedState::new(mempool_instance);
-    let block_history_state = SharedState::new(BlockHistory::new(10));
+    let market_instance = Arc::new(RwLock::new(market_instance));
+    let market_state = Arc::new(RwLock::new(market_state_instance));
+    let mempool_instance = Arc::new(RwLock::new(mempool_instance));
+    let block_history_state = Arc::new(RwLock::new(BlockHistory::new(10)));
 
     let tx_signers = TxSigners::new();
     let accounts_state = AccountNonceAndBalanceState::new();
 
-    let tx_signers = SharedState::new(tx_signers);
-    let accounts_state = SharedState::new(accounts_state);
+    let tx_signers = Arc::new(RwLock::new(tx_signers));
+    let accounts_state = Arc::new(RwLock::new(accounts_state));
 
-    let latest_block = SharedState::new(LatestBlock::new(block_number, block_header.hash));
+    let latest_block = Arc::new(RwLock::new(LatestBlock::new(block_number, block_header.hash)));
 
     let (_, post) = debug_trace_block(client.clone(), BlockId::Number(BlockNumberOrTag::Number(block_number)), true).await?;
     latest_block.write().await.update(
@@ -207,14 +212,17 @@ async fn main() -> Result<()> {
 
     info!("Starting initialize signers actor");
 
-    let mut initialize_signers_actor = InitializeSignersOneShotBlockingActor::new(Some(priv_key));
-    match initialize_signers_actor.access(tx_signers.clone()).access(accounts_state.clone()).start_and_wait() {
+    let initialize_signers_actor =
+        InitializeSignersOneShotBlockingActor::new(Some(priv_key)).with_signers(tx_signers.clone()).with_monitor(accounts_state.clone());
+    match initialize_signers_actor.spawn(task_executor.clone()) {
         Err(e) => {
             error!("{}", e);
             panic!("Cannot initialize signers");
         }
         _ => info!("Signers have been initialized"),
     }
+    // Give it a moment to complete
+    tokio::time::sleep(Duration::from_millis(100)).await;
 
     for (token_name, token_config) in test_config.tokens {
         let symbol = token_config.symbol.unwrap_or(token_config.address.to_checksum(None));
@@ -237,60 +245,58 @@ async fn main() -> Result<()> {
         market_instance.write().await.add_token(token);
     }
 
-    info!("Starting market state preload actor");
-    let mut market_state_preload_actor = MarketStatePreloadedOneShotActor::new(client.clone())
+    info!("Starting market state preload component");
+    let market_state_preload_component = MarketStatePreloadedOneShotActor::new(client.clone())
         .with_copied_account(multicaller_encoder.get_contract_address())
-        .with_signers(tx_signers.clone());
-    match market_state_preload_actor.access(market_state.clone()).start_and_wait() {
+        .with_signers(tx_signers.clone())
+        .with_market_state(market_state.clone());
+    match market_state_preload_component.spawn(task_executor.clone()) {
         Err(e) => {
             error!("{}", e)
         }
         _ => {
-            info!("Market state preload actor started successfully")
+            info!("Market state preload component started successfully")
         }
     }
 
-    info!("Starting node actor");
-    let mut node_block_actor = NodeBlockActor::new(client.clone(), NodeBlockActorConfig::all_enabled());
-    match node_block_actor
-        .produce(new_block_headers_channel.clone())
-        .produce(new_block_with_tx_channel.clone())
-        .produce(new_block_logs_channel.clone())
-        .produce(new_block_state_update_channel.clone())
-        .start()
-    {
+    info!("Starting node component");
+    let node_block_component = BlockProcessingComponent::new(client.clone(), NodeBlockActorConfig::all_enabled()).with_channels(
+        Some(new_block_headers_channel.clone()),
+        Some(new_block_with_tx_channel.clone()),
+        Some(new_block_logs_channel.clone()),
+        Some(new_block_state_update_channel.clone()),
+    );
+    match node_block_component.spawn(task_executor.clone()) {
         Err(e) => {
             error!("{}", e)
         }
         _ => {
-            info!("Node actor started successfully")
+            info!("Node component started successfully")
         }
     }
 
-    info!("Starting nonce and balance monitor actor");
-    let mut nonce_and_balance_monitor = NonceAndBalanceMonitorActor::new(client.clone());
-    match nonce_and_balance_monitor
-        .access(accounts_state.clone())
-        .access(latest_block.clone())
-        .consume(market_events_channel.clone())
-        .start()
-    {
+    info!("Starting account monitor component");
+    let account_monitor_component =
+        AccountMonitorComponent::new(client.clone(), accounts_state.clone(), tx_signers.clone(), Duration::from_secs(1));
+    match account_monitor_component.spawn(task_executor.clone()) {
         Err(e) => {
             error!("{}", e);
-            panic!("Cannot initialize nonce and balance monitor");
+            panic!("Cannot initialize account monitor");
         }
-        _ => info!("Nonce monitor has been initialized"),
+        _ => info!("Account monitor has been initialized"),
     }
 
-    info!("Starting price actor");
-    let mut price_actor = PriceActor::new(client.clone()).only_once();
-    match price_actor.access(market_instance.clone()).start_and_wait() {
+    info!("Starting price component");
+    let price_component = PriceActor::new(client.clone()).only_once().with_market(market_instance.clone());
+    match price_component.spawn(task_executor.clone()) {
         Err(e) => {
             error!("{}", e);
-            panic!("Cannot initialize price actor");
+            panic!("Cannot initialize price component");
         }
-        _ => info!("Price actor has been initialized"),
+        _ => info!("Price component has been initialized"),
     }
+    // Give it a moment to complete since it runs only once
+    tokio::time::sleep(Duration::from_millis(500)).await;
 
     let pool_loaders =
         Arc::new(PoolLoadersBuilder::<_, _, KabuDataTypesEthereum>::default_pool_loaders(client.clone(), PoolsLoadingConfig::default()));
@@ -338,49 +344,47 @@ async fn main() -> Result<()> {
         );
     }
 
-    info!("Starting block history actor");
-    let mut block_history_actor = BlockHistoryActor::new(client.clone());
-    match block_history_actor
-        .access(latest_block.clone())
-        .access(market_state.clone())
-        .access(block_history_state.clone())
-        .consume(new_block_headers_channel.clone())
-        .consume(new_block_with_tx_channel.clone())
-        .consume(new_block_logs_channel.clone())
-        .consume(new_block_state_update_channel.clone())
-        .produce(market_events_channel.clone())
-        .start()
-    {
+    info!("Starting block history component");
+    let block_history_component = BlockHistoryComponent::new(client.clone()).with_channels(
+        ChainParameters::ethereum(),
+        latest_block.clone(),
+        market_state.clone(),
+        block_history_state.clone(),
+        new_block_headers_channel.clone(),
+        new_block_with_tx_channel.clone(),
+        new_block_logs_channel.clone(),
+        new_block_state_update_channel.clone(),
+        market_events_channel.clone(),
+    );
+    match block_history_component.spawn(task_executor.clone()) {
         Err(e) => {
             error!("{}", e)
         }
         _ => {
-            info!("Block history actor started successfully")
+            info!("Block history component started successfully")
         }
     }
 
-    let swap_compose_channel: Broadcaster<MessageSwapCompose<KabuDBType>> = Broadcaster::new(100);
-    let tx_compose_channel: Broadcaster<MessageTxCompose> = Broadcaster::new(100);
+    let (swap_compose_channel, _) = broadcast::channel::<MessageSwapCompose<KabuDBType>>(100);
+    let (tx_compose_channel, _) = broadcast::channel::<MessageTxCompose>(100);
 
-    // Start estimator actor
-    let mut estimator_actor = EvmEstimatorActor::new_with_provider(multicaller_encoder.clone(), Some(client.clone()));
-    match estimator_actor.consume(swap_compose_channel.clone()).produce(swap_compose_channel.clone()).start() {
+    // Start estimator component
+    let estimator_component = EvmEstimatorComponent::new_with_provider(multicaller_encoder.clone(), Some(client.clone()))
+        .with_swap_compose_channel(swap_compose_channel.clone());
+    match estimator_component.spawn(task_executor.clone()) {
         Err(e) => error!("{e}"),
         _ => {
-            info!("Estimate actor started successfully")
+            info!("Estimator component started successfully")
         }
     }
 
-    let mut health_monitor_actor = StuffingTxMonitorActor::new(client.clone());
-    match health_monitor_actor
-        .access(latest_block.clone())
-        .consume(market_events_channel.clone())
-        .consume(tx_compose_channel.clone())
-        .start()
-    {
+    let health_monitor_component = StuffingTxMonitorActor::new(client.clone())
+        .with_latest_block(latest_block.clone())
+        .with_tx_compose_channel(tx_compose_channel.clone())
+        .with_market_events(market_events_channel.clone());
+    match health_monitor_component.spawn(task_executor.clone()) {
         Ok(_) => {
-            //tasks.extend(r);
-            info!("Stuffing tx monitor actor started")
+            info!("Stuffing tx monitor component started")
         }
         Err(e) => {
             panic!("StuffingTxMonitorActor error {e}")
@@ -389,141 +393,130 @@ async fn main() -> Result<()> {
 
     // Start actor that encodes paths found
     if test_config.modules.encoder {
-        info!("Starting swap router actor");
+        info!("Starting swap router component");
 
-        let mut swap_router_actor = SwapRouterActor::new();
+        let swap_router_component = SwapRouterComponent::new(tx_signers.clone(), accounts_state.clone(), swap_compose_channel.clone());
 
-        match swap_router_actor
-            .access(tx_signers.clone())
-            .access(accounts_state.clone())
-            .consume(swap_compose_channel.clone())
-            .produce(swap_compose_channel.clone())
-            .produce(tx_compose_channel.clone())
-            .start()
-        {
+        match swap_router_component.spawn(task_executor.clone()) {
             Err(e) => {
                 error!("{}", e)
             }
             _ => {
-                info!("Swap router actor started successfully")
+                info!("Swap router component started successfully")
             }
         }
     }
 
     // Start signer actor that signs paths before broadcasting
     if test_config.modules.signer {
-        info!("Starting signers actor");
-        let mut signers_actor = TxSignersActor::new();
-        match signers_actor.consume(tx_compose_channel.clone()).produce(tx_compose_channel.clone()).start() {
+        info!("Starting signers component");
+        let signers_component = SignersComponent::<_, _, KabuDBType, KabuDataTypesEthereum>::new(
+            client.clone(),
+            tx_signers.clone(),
+            accounts_state.clone(),
+            120, // gas_price_buffer
+        )
+        .with_channels(swap_compose_channel.clone(), swap_compose_channel.clone());
+        match signers_component.spawn(task_executor.clone()) {
             Err(e) => {
                 error!("{}", e);
                 panic!("Cannot start signers");
             }
-            _ => info!("Signers actor started"),
+            _ => info!("Signers component started"),
         }
     }
 
     // Start state change arb actor
     if test_config.modules.arb_block || test_config.modules.arb_mempool {
-        info!("Starting state change arb actor");
-        let mut state_change_arb_actor = StateChangeArbActor::new(
+        info!("Starting state change arb component");
+        let state_change_arb_component = StateChangeArbComponent::<_, _, KabuDBType, KabuDataTypesEthereum>::new(
             client.clone(),
             test_config.modules.arb_block,
             test_config.modules.arb_mempool,
             BackrunConfig::new_dumb(),
-        );
-        match state_change_arb_actor
-            .access(mempool_instance.clone())
-            .access(latest_block.clone())
-            .access(market_instance.clone())
-            .access(market_state.clone())
-            .access(block_history_state.clone())
-            .consume(market_events_channel.clone())
-            .consume(mempool_events_channel.clone())
-            .produce(swap_compose_channel.clone())
-            .produce(pool_health_monitor_channel.clone())
-            .start()
-        {
+        )
+        .with_market(market_instance.clone())
+        .with_mempool(mempool_instance.clone())
+        .with_latest_block(latest_block.clone())
+        .with_market_state(market_state.clone())
+        .with_block_history(block_history_state.clone())
+        .with_mempool_events_channel(mempool_events_channel.clone())
+        .with_market_events_channel(market_events_channel.clone())
+        .with_swap_compose_channel(swap_compose_channel.clone())
+        .with_pool_health_monitor_channel(pool_health_monitor_channel.clone());
+        match state_change_arb_component.spawn(task_executor.clone()) {
             Err(e) => {
                 error!("{}", e)
             }
             _ => {
-                info!("State change arb actor started successfully")
+                info!("State change arb component started successfully")
             }
         }
     }
 
     // Swap path merger tries to build swap steps from swap lines
     if test_config.modules.arb_path_merger {
-        info!("Starting swap path merger actor");
+        info!("Starting swap path merger component");
 
-        let mut swap_path_merger_actor = ArbSwapPathMergerActor::new(multicaller_address);
-        match swap_path_merger_actor
-            .access(latest_block.clone())
-            .consume(swap_compose_channel.clone())
-            .consume(market_events_channel.clone())
-            .produce(swap_compose_channel.clone())
-            .start()
-        {
+        let swap_path_merger_component = ArbSwapPathMergerActor::<KabuDBType>::new(multicaller_address)
+            .with_latest_block(latest_block.clone())
+            .with_market_events_channel(market_events_channel.clone())
+            .with_compose_channel(swap_compose_channel.clone());
+        match swap_path_merger_component.spawn(task_executor.clone()) {
             Err(e) => {
                 error!("{}", e)
             }
             _ => {
-                info!("Swap path merger actor started successfully")
+                info!("Swap path merger component started successfully")
             }
         }
     }
 
     // Same path merger tries to merge different stuffing tx to optimize swap line
     if test_config.modules.same_path_merger {
-        let mut same_path_merger_actor = SamePathMergerActor::new(client.clone());
-        match same_path_merger_actor
-            .access(market_state.clone())
-            .access(latest_block.clone())
-            .consume(swap_compose_channel.clone())
-            .consume(market_events_channel.clone())
-            .produce(swap_compose_channel.clone())
-            .start()
-        {
+        let same_path_merger_component = SamePathMergerComponent::<_, _, KabuDBType>::new(client.clone())
+            .with_market_state(market_state.clone())
+            .with_latest_block(latest_block.clone())
+            .with_market_events_channel(market_events_channel.clone())
+            .with_compose_channel(swap_compose_channel.clone());
+        match same_path_merger_component.spawn(task_executor.clone()) {
             Err(e) => {
                 error!("{}", e)
             }
             _ => {
-                info!("Same path merger actor started successfully")
+                info!("Same path merger component started successfully")
             }
         }
     }
     if test_config.modules.flashbots {
         let relays = vec![RelayConfig { id: 1, url: mock_server.as_ref().unwrap().uri(), name: "relay".to_string(), no_sign: Some(false) }];
-        let mut flashbots_broadcast_actor = FlashbotsBroadcastActor::new(None, true)?.with_relays(relays)?;
-        match flashbots_broadcast_actor.consume(tx_compose_channel.clone()).start() {
+        let flashbots_broadcast_component =
+            FlashbotsBroadcastComponent::new(None, true)?.with_relays(relays)?.with_channel(tx_compose_channel.clone());
+        match flashbots_broadcast_component.spawn(task_executor.clone()) {
             Err(e) => {
                 error!("{}", e)
             }
             _ => {
-                info!("Flashbots broadcast actor started successfully")
+                info!("Flashbots broadcast component started successfully")
             }
         }
     }
 
-    // Diff path merger tries to merge all found swaplines into one transaction s
-    let mut diff_path_merger_actor = DiffPathMergerActor::new();
-    match diff_path_merger_actor
-        .consume(swap_compose_channel.clone())
-        .consume(market_events_channel.clone())
-        .produce(swap_compose_channel.clone())
-        .start()
-    {
+    // Diff path merger tries to merge all found swaplines into one transaction
+    let diff_path_merger_component = DiffPathMergerActor::<KabuDBType>::new()
+        .with_market_events_channel(market_events_channel.clone())
+        .with_compose_channel(swap_compose_channel.clone());
+    match diff_path_merger_component.spawn(task_executor.clone()) {
         Err(e) => {
             error!("{}", e)
         }
         _ => {
-            info!("Diff path merger actor started successfully")
+            info!("Diff path merger component started successfully")
         }
     }
 
     // #### Blockchain events
-    // we need to wait for all actors to start. For the CI it can be a bit longer
+    // we need to wait for all components to start. For the CI it can be a bit longer
     tokio::time::sleep(Duration::from_secs(args.wait_init)).await;
 
     let next_block_base_fee = ChainParameters::ethereum().calc_next_block_base_fee(

@@ -8,7 +8,6 @@ homepage.workspace = true
 repository.workspace = true
 
 [dependencies]
-kabu-core-actors.workspace = true
 kabu-defi-address-book.workspace = true
 kabu-evm-db.workspace = true
 kabu-types-blockchain.workspace = true
@@ -22,4 +21,5 @@ alloy.workspace = true
 eyre.workspace = true
 influxdb.workspace = true
 revm.workspace = true
+tokio.workspace = true
 tracing.workspace = true

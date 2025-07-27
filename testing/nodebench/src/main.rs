@@ -11,10 +11,10 @@ use clap::Parser;
 use eyre::{eyre, Result};
 use futures::future::join_all;
 use kabu_core_blockchain::{Blockchain, BlockchainState, Strategy};
-use kabu_core_blockchain_actors::BlockchainActors;
+// TODO: Replace with new component-based runtime
+// use kabu_core_components::KabuRuntime;
 use kabu_evm_db::KabuDB;
 use kabu_execution_multicaller::MulticallerSwapEncoder;
-use kabu_node_actor_config::NodeBlockActorConfig;
 use kabu_types_blockchain::KabuDataTypesEthereum;
 use kabu_types_events::MempoolEvents;
 use std::fmt::Formatter;
@@ -222,7 +222,7 @@ impl TxStatCollector {
 
 async fn collect_stat_task(
     id: usize,
-    provider: RootProvider,
+    _provider: RootProvider,
     stat: Arc<RwLock<StatCollector>>,
     warn_up_blocks: usize,
     blocks_needed: usize,
@@ -230,13 +230,14 @@ async fn collect_stat_task(
 ) -> Result<()> {
     let bc = Blockchain::new(1);
 
-    let bc_state = BlockchainState::<KabuDB, KabuDataTypesEthereum>::new();
-    let strategy = Strategy::<KabuDB>::new();
+    let _bc_state = BlockchainState::<KabuDB, KabuDataTypesEthereum>::new();
+    let _strategy = Strategy::<KabuDB>::new();
 
-    let encoder = MulticallerSwapEncoder::default();
+    let _encoder = MulticallerSwapEncoder::default();
 
-    let mut bc_actors = BlockchainActors::new(provider, encoder, bc.clone(), bc_state, strategy, vec![]);
-    bc_actors.with_block_events(NodeBlockActorConfig::all_enabled())?.with_local_mempool_events()?;
+    // TODO: Replace with new component-based runtime
+    // let mut runtime = KabuRuntime::new(provider, encoder, app_state, bc_state, channels, strategy);
+    // bc_actors.with_block_events(NodeBlockActorConfig::all_enabled())?.with_local_mempool_events()?;
 
     let mut blocks_counter: usize = 0;
 

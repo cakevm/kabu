@@ -1,32 +1,32 @@
 use super::affected_pools_state::get_affected_pools_from_state_update;
-use eyre::eyre;
-use kabu_core_actors::{run_sync, subscribe, Accessor, Actor, ActorResult, Broadcaster, Consumer, Producer, SharedState, WorkerResult};
-use kabu_core_actors_macros::{Accessor, Consumer, Producer};
-use kabu_core_blockchain::{Blockchain, BlockchainState, Strategy};
+use eyre::{eyre, Result};
+use kabu_core_components::Component;
 use kabu_types_blockchain::{ChainParameters, KabuDataTypes};
 use kabu_types_entities::BlockHistory;
 use kabu_types_events::{MarketEvents, StateUpdateEvent};
 use kabu_types_market::Market;
+use reth_tasks::TaskExecutor;
 use revm::DatabaseRef;
+use std::sync::Arc;
 use tokio::sync::broadcast::error::RecvError;
+use tokio::sync::{broadcast, RwLock};
 use tracing::error;
 
 pub async fn block_state_change_worker<DB: DatabaseRef + Send + Sync + Clone + 'static, LDT: KabuDataTypes>(
     chain_parameters: ChainParameters,
-    market: SharedState<Market>,
-    block_history: SharedState<BlockHistory<DB, LDT>>,
-    market_events_rx: Broadcaster<MarketEvents>,
-    state_updates_broadcaster: Broadcaster<StateUpdateEvent<DB, LDT>>,
-) -> WorkerResult {
-    subscribe!(market_events_rx);
-
+    market: Arc<RwLock<Market>>,
+    block_history: Arc<RwLock<BlockHistory<DB, LDT>>>,
+    mut market_events_rx: broadcast::Receiver<MarketEvents>,
+    state_updates_broadcaster: broadcast::Sender<StateUpdateEvent<DB, LDT>>,
+) {
     loop {
         let market_event = match market_events_rx.recv().await {
             Ok(market_event) => market_event,
             Err(e) => match e {
                 RecvError::Closed => {
                     error!("Market events txs channel closed");
-                    break Err(eyre!("MARKET_EVENTS_RX_CLOSED"));
+                    error!("MARKET_EVENTS_RX_CLOSED");
+                    break;
                 }
                 RecvError::Lagged(lag) => {
                     error!("Market events txs channel lagged by {} messages", lag);
@@ -78,26 +78,24 @@ pub async fn block_state_change_worker<DB: DatabaseRef + Send + Sync + Clone + '
             "block_searcher".to_string(),
             90_00,
         );
-        run_sync!(state_updates_broadcaster.send(request));
+        match state_updates_broadcaster.send(request) {
+            Ok(_) => {}
+            Err(error) => tracing::error!(%error, "ERROR_RUNNING_SYNC"),
+        }
     }
 }
 
-#[derive(Accessor, Consumer, Producer)]
-pub struct BlockStateChangeProcessorActor<DB: Clone + Send + Sync + 'static, LDT: KabuDataTypes + 'static> {
+pub struct BlockStateChangeProcessorComponent<DB: Clone + Send + Sync + 'static, LDT: KabuDataTypes + 'static> {
     chain_parameters: ChainParameters,
-    #[accessor]
-    market: Option<SharedState<Market>>,
-    #[accessor]
-    block_history: Option<SharedState<BlockHistory<DB, LDT>>>,
-    #[consumer]
-    market_events_rx: Option<Broadcaster<MarketEvents>>,
-    #[producer]
-    state_updates_tx: Option<Broadcaster<StateUpdateEvent<DB, LDT>>>,
+    market: Option<Arc<RwLock<Market>>>,
+    block_history: Option<Arc<RwLock<BlockHistory<DB, LDT>>>>,
+    market_events_rx: Option<broadcast::Sender<MarketEvents>>,
+    state_updates_tx: Option<broadcast::Sender<StateUpdateEvent<DB, LDT>>>,
 }
 
-impl<DB: DatabaseRef + Send + Sync + Clone + 'static, LDT: KabuDataTypes> BlockStateChangeProcessorActor<DB, LDT> {
-    pub fn new() -> BlockStateChangeProcessorActor<DB, LDT> {
-        BlockStateChangeProcessorActor {
+impl<DB: DatabaseRef + Send + Sync + Clone + 'static, LDT: KabuDataTypes> BlockStateChangeProcessorComponent<DB, LDT> {
+    pub fn new() -> BlockStateChangeProcessorComponent<DB, LDT> {
+        BlockStateChangeProcessorComponent {
             chain_parameters: ChainParameters::ethereum(),
             market: None,
             block_history: None,
@@ -106,36 +104,52 @@ impl<DB: DatabaseRef + Send + Sync + Clone + 'static, LDT: KabuDataTypes> BlockS
         }
     }
 
-    pub fn on_bc(self, bc: &Blockchain<LDT>, state: &BlockchainState<DB, LDT>, strategy: &Strategy<DB, LDT>) -> Self {
+    pub fn with_channels(
+        self,
+        chain_parameters: ChainParameters,
+        market: Arc<RwLock<Market>>,
+        block_history: Arc<RwLock<BlockHistory<DB, LDT>>>,
+        market_events_rx: broadcast::Sender<MarketEvents>,
+        state_updates_tx: broadcast::Sender<StateUpdateEvent<DB, LDT>>,
+    ) -> Self {
         Self {
-            chain_parameters: bc.chain_parameters(),
-            market: Some(bc.market()),
-            market_events_rx: Some(bc.market_events_channel()),
-            state_updates_tx: Some(strategy.state_update_channel()),
-            block_history: Some(state.block_history()),
+            chain_parameters,
+            market: Some(market),
+            block_history: Some(block_history),
+            market_events_rx: Some(market_events_rx),
+            state_updates_tx: Some(state_updates_tx),
         }
     }
 }
 
-impl<DB: DatabaseRef + Send + Sync + Clone + 'static, LDT: KabuDataTypes> Default for BlockStateChangeProcessorActor<DB, LDT> {
+impl<DB: DatabaseRef + Send + Sync + Clone + 'static, LDT: KabuDataTypes> Default for BlockStateChangeProcessorComponent<DB, LDT> {
     fn default() -> Self {
         Self::new()
     }
 }
 
-impl<DB: DatabaseRef + Send + Sync + Clone + 'static, LDT: KabuDataTypes> Actor for BlockStateChangeProcessorActor<DB, LDT> {
-    fn start(&self) -> ActorResult {
-        let task = tokio::task::spawn(block_state_change_worker(
-            self.chain_parameters.clone(),
-            self.market.clone().unwrap(),
-            self.block_history.clone().unwrap(),
-            self.market_events_rx.clone().unwrap(),
-            self.state_updates_tx.clone().unwrap(),
-        ));
-        Ok(vec![task])
+impl<DB: DatabaseRef + Send + Sync + Clone + 'static, LDT: KabuDataTypes> Component for BlockStateChangeProcessorComponent<DB, LDT> {
+    fn spawn(self, executor: TaskExecutor) -> Result<()> {
+        let name = self.name();
+
+        let market_events_rx = self.market_events_rx.ok_or_else(|| eyre!("market_events_rx not set"))?.subscribe();
+        let state_updates_tx = self.state_updates_tx.ok_or_else(|| eyre!("state_updates_tx not set"))?;
+        let market = self.market.ok_or_else(|| eyre!("market not set"))?;
+        let block_history = self.block_history.ok_or_else(|| eyre!("block_history not set"))?;
+
+        executor.spawn_critical(
+            name,
+            block_state_change_worker(self.chain_parameters, market, block_history, market_events_rx, state_updates_tx),
+        );
+
+        Ok(())
+    }
+
+    fn spawn_boxed(self: Box<Self>, executor: TaskExecutor) -> Result<()> {
+        (*self).spawn(executor)
     }
 
     fn name(&self) -> &'static str {
-        "BlockStateChangeProcessorActor"
+        "BlockStateChangeProcessorComponent"
     }
 }

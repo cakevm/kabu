@@ -2,25 +2,19 @@
 pub mod broadcast {
     #[cfg(feature = "broadcast-accounts")]
     pub use kabu_broadcast_accounts as accounts;
-    #[cfg(feature = "broadcast-broadcaster")]
     pub use kabu_broadcast_broadcaster as broadcaster;
 }
 
 #[cfg(feature = "core")]
 pub mod core {
-    #[cfg(feature = "core-actors")]
-    pub use kabu_core_actors as actors;
-    #[cfg(feature = "core-actors-macros")]
-    pub use kabu_core_actors_macros as macros;
     #[cfg(feature = "core-block-history")]
     pub use kabu_core_block_history as block_history;
     #[cfg(feature = "core-blockchain")]
     pub use kabu_core_blockchain as blockchain;
-    #[cfg(feature = "core-blockchain-actors")]
-    pub use kabu_core_blockchain_actors as blockchain_actors;
+    #[cfg(feature = "core-components")]
+    pub use kabu_core_components as components;
     #[cfg(feature = "core-mempool")]
     pub use kabu_core_mempool as mempool;
-    #[cfg(feature = "core-router")]
     pub use kabu_core_router as router;
     #[cfg(feature = "core-topology")]
     pub use kabu_core_topology as topology;
@@ -67,8 +61,8 @@ pub use kabu_metrics as metrics;
 
 #[cfg(feature = "node")]
 pub mod node {
-    #[cfg(feature = "node-actor-config")]
-    pub use kabu_node_actor_config as actor_config;
+    #[cfg(feature = "node-config")]
+    pub use kabu_node_config as config;
     #[cfg(feature = "node-debug-provider")]
     pub use kabu_node_debug_provider as debug_provider;
     #[cfg(feature = "node-exex")]
@@ -95,7 +89,6 @@ pub mod storage {
 
 #[cfg(feature = "strategy")]
 pub mod strategy {
-    #[cfg(feature = "strategy-backrun")]
     pub use kabu_strategy_backrun as backrun;
     #[cfg(feature = "strategy-merger")]
     pub use kabu_strategy_merger as merger;
@@ -114,3 +107,6 @@ pub mod types {
     #[cfg(feature = "types-swap")]
     pub use kabu_types_swap as swap;
 }
+
+// Kabu Node Implementation - Concrete MEV component builders
+pub mod kabu_node;

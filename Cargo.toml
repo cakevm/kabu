@@ -5,9 +5,9 @@ members = [
   "bin/keys",
   "crates/broadcast/accounts",
   "crates/broadcast/broadcaster",
-  "crates/core/block-history-actor",
+  "crates/core/block-history",
   "crates/core/blockchain",
-  "crates/core/blockchain-actors",
+  "crates/core/components",
   "crates/core/mempool",
   "crates/core/router",
   "crates/core/topology",
@@ -27,7 +27,7 @@ members = [
   "crates/node/debug-provider",
   "crates/node/exex",
   "crates/node/json-rpc",
-  "crates/node/node-actor-config",
+  "crates/node/node-config",
   "crates/node/node-player",
   "crates/rpc/handler",
   "crates/rpc/state",
@@ -60,11 +60,9 @@ version = "0.6.0"
 kabu-broadcast-accounts = { path = "crates/broadcast/accounts" }
 kabu-broadcast-broadcaster = { path = "crates/broadcast/broadcaster" }
 # core
-kabu-core-actors = { path = "crates/core/actors" }
-kabu-core-actors-macros = { path = "crates/core/actors-macros" }
-kabu-core-block-history = { path = "crates/core/block-history-actor" }
+kabu-core-block-history = { path = "crates/core/block-history" }
 kabu-core-blockchain = { path = "crates/core/blockchain" }
-kabu-core-blockchain-actors = { path = "crates/core/blockchain-actors" }
+kabu-core-components = { path = "crates/core/components" }
 kabu-core-mempool = { path = "crates/core/mempool" }
 kabu-core-router = { path = "crates/core/router" }
 kabu-core-topology = { path = "crates/core/topology" }
@@ -88,7 +86,7 @@ kabu = { path = "bin/kabu" }
 # metrics
 kabu-metrics = { path = "crates/metrics" }
 # node
-kabu-node-actor-config = { path = "crates/node/node-actor-config" }
+kabu-node-config = { path = "crates/node/node-config" }
 kabu-node-debug-provider = { path = "crates/node/debug-provider" }
 kabu-node-exex = { path = "crates/node/exex" }
 kabu-node-json-rpc = { path = "crates/node/json-rpc" }
@@ -226,6 +224,7 @@ reth-node-api = { git = "https://github.com/paradigmxyz/reth", tag = "v1.6.0" }
 reth-node-ethereum = { git = "https://github.com/paradigmxyz/reth", tag = "v1.6.0" }
 reth-primitives = { git = "https://github.com/paradigmxyz/reth", tag = "v1.6.0", features = ["asm-keccak"] }
 reth-provider = { git = "https://github.com/paradigmxyz/reth", tag = "v1.6.0" }
+reth-tasks = { git = "https://github.com/paradigmxyz/reth", tag = "v1.6.0" }
 reth-transaction-pool = { git = "https://github.com/paradigmxyz/reth", tag = "v1.6.0" }
 
 [profile.test]

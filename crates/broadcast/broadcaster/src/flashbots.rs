@@ -5,13 +5,13 @@ use alloy_provider::{ext::MevApi, ProviderBuilder};
 use alloy_rpc_types_mev::EthSendBundle;
 use alloy_signer_local::PrivateKeySigner;
 use eyre::{eyre, Result};
+use reth_tasks::TaskExecutor;
+use tokio::sync::broadcast;
 use tokio::sync::broadcast::error::RecvError;
 use tracing::{debug, error};
 use url::Url;
 
-use kabu_core_actors::{subscribe, Actor, ActorResult, Broadcaster, Consumer, WorkerResult};
-use kabu_core_actors_macros::{Accessor, Consumer};
-use kabu_core_blockchain::Blockchain;
+use kabu_core_components::Component;
 use kabu_types_events::{MessageTxCompose, RlpState, TxComposeData, TxComposeMessageType};
 
 #[derive(Clone)]
@@ -101,11 +101,9 @@ async fn broadcast_task(broadcast_request: TxComposeData, relays: Arc<Vec<Flashb
 
 async fn flashbots_broadcaster_worker(
     relays: Arc<Vec<FlashbotsRelay>>,
-    bundle_rx: Broadcaster<MessageTxCompose>,
+    mut bundle_rx: broadcast::Receiver<MessageTxCompose>,
     allow_broadcast: bool,
-) -> WorkerResult {
-    subscribe!(bundle_rx);
-
+) {
     loop {
         tokio::select! {
             msg = bundle_rx.recv() => {
@@ -132,21 +130,19 @@ async fn flashbots_broadcaster_worker(
     }
 }
 
-#[derive(Accessor, Consumer)]
-pub struct FlashbotsBroadcastActor {
+pub struct FlashbotsBroadcastComponent {
     relays: Arc<Vec<FlashbotsRelay>>,
     signer: Arc<PrivateKeySigner>,
-    #[consumer]
-    tx_compose_channel_rx: Option<Broadcaster<MessageTxCompose>>,
+    tx_compose_channel_rx: Option<broadcast::Sender<MessageTxCompose>>,
     allow_broadcast: bool,
 }
 
-impl FlashbotsBroadcastActor {
+impl FlashbotsBroadcastComponent {
     pub fn new(signer: Option<PrivateKeySigner>, allow_broadcast: bool) -> Result<Self> {
         let signer = Arc::new(signer.unwrap_or(PrivateKeySigner::random()));
         let relays = Arc::new(Vec::new());
 
-        Ok(FlashbotsBroadcastActor { relays, signer, tx_compose_channel_rx: None, allow_broadcast })
+        Ok(FlashbotsBroadcastComponent { relays, signer, tx_compose_channel_rx: None, allow_broadcast })
     }
 
     pub fn with_default_relays(mut self) -> Result<Self> {
@@ -198,22 +194,26 @@ impl FlashbotsBroadcastActor {
         Ok(self)
     }
 
-    pub fn on_bc(self, bc: &Blockchain) -> Self {
-        Self { tx_compose_channel_rx: Some(bc.tx_compose_channel()), ..self }
+    pub fn with_channel(self, channel: broadcast::Sender<MessageTxCompose>) -> Self {
+        Self { tx_compose_channel_rx: Some(channel), ..self }
     }
 }
 
-impl Actor for FlashbotsBroadcastActor {
-    fn start(&self) -> ActorResult {
-        let task = tokio::task::spawn(flashbots_broadcaster_worker(
-            self.relays.clone(),
-            self.tx_compose_channel_rx.clone().unwrap(),
-            self.allow_broadcast,
-        ));
-        Ok(vec![task])
+impl Component for FlashbotsBroadcastComponent {
+    fn spawn(self, executor: TaskExecutor) -> Result<()> {
+        let name = self.name();
+        let bundle_rx = self.tx_compose_channel_rx.ok_or_else(|| eyre!("tx_compose_channel_rx not set"))?.subscribe();
+
+        executor.spawn_critical(name, flashbots_broadcaster_worker(self.relays.clone(), bundle_rx, self.allow_broadcast));
+
+        Ok(())
+    }
+
+    fn spawn_boxed(self: Box<Self>, executor: TaskExecutor) -> Result<()> {
+        (*self).spawn(executor)
     }
 
     fn name(&self) -> &'static str {
-        "FlashbotsBroadcastActor"
+        "FlashbotsBroadcastComponent"
     }
 }

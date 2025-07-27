@@ -4,26 +4,26 @@ use alloy_primitives::{Bytes, TxKind, U256};
 use alloy_provider::Provider;
 use alloy_rpc_types::{TransactionInput, TransactionRequest};
 use eyre::{eyre, Result};
+use kabu_core_components::Component;
 use revm::DatabaseRef;
-use tokio::sync::broadcast::error::RecvError;
+use tokio::sync::{broadcast, broadcast::error::RecvError};
 use tracing::{error, info};
 
-use kabu_core_actors::{subscribe, Actor, ActorResult, Broadcaster, Consumer, Producer, WorkerResult};
-use kabu_core_actors_macros::{Consumer, Producer};
 use kabu_node_debug_provider::DebugProviderExt;
 use kabu_types_events::{MessageSwapCompose, SwapComposeData, SwapComposeMessage, TxComposeData, TxState};
 use kabu_types_swap::SwapEncoder;
+use reth_tasks::TaskExecutor;
 
 async fn estimator_worker<DB: DatabaseRef + Send + Sync + Clone>(
     swap_encoder: impl SwapEncoder,
-    compose_channel_rx: Broadcaster<MessageSwapCompose<DB>>,
-    compose_channel_tx: Broadcaster<MessageSwapCompose<DB>>,
-) -> WorkerResult {
-    subscribe!(compose_channel_rx);
+    compose_channel_rx: broadcast::Sender<MessageSwapCompose<DB>>,
+    compose_channel_tx: broadcast::Sender<MessageSwapCompose<DB>>,
+) -> Result<()> {
+    let mut compose_channel_receiver = compose_channel_rx.subscribe();
 
     loop {
         tokio::select! {
-                    msg = compose_channel_rx.recv() => {
+                    msg = compose_channel_receiver.recv() => {
                         let compose_request_msg : Result<MessageSwapCompose<DB>, RecvError> = msg;
                         match compose_request_msg {
                             Ok(compose_request) =>{
@@ -102,14 +102,13 @@ async fn estimator_worker<DB: DatabaseRef + Send + Sync + Clone>(
 }
 
 #[allow(dead_code)]
-#[derive(Consumer, Producer)]
 pub struct HardhatEstimatorActor<P, E, DB: Send + Sync + Clone + 'static> {
     client: P,
     encoder: E,
-    #[consumer]
-    compose_channel_rx: Option<Broadcaster<MessageSwapCompose<DB>>>,
-    #[producer]
-    compose_channel_tx: Option<Broadcaster<MessageSwapCompose<DB>>>,
+
+    compose_channel_rx: Option<broadcast::Sender<MessageSwapCompose<DB>>>,
+
+    compose_channel_tx: Option<broadcast::Sender<MessageSwapCompose<DB>>>,
 }
 
 impl<P, E, DB> HardhatEstimatorActor<P, E, DB>
@@ -123,19 +122,29 @@ where
     }
 }
 
-impl<P, E, DB> Actor for HardhatEstimatorActor<P, E, DB>
+impl<P, E, DB> Component for HardhatEstimatorActor<P, E, DB>
 where
     P: Provider + DebugProviderExt + Clone + Send + Sync + 'static,
     E: SwapEncoder + Send + Sync + Clone + 'static,
     DB: DatabaseRef + Send + Sync + Clone,
 {
-    fn start(&self) -> ActorResult {
-        let task = tokio::task::spawn(estimator_worker(
-            self.encoder.clone(),
-            self.compose_channel_rx.clone().unwrap(),
-            self.compose_channel_tx.clone().unwrap(),
-        ));
-        Ok(vec![task])
+    fn spawn(self, executor: TaskExecutor) -> Result<()> {
+        let name = self.name();
+
+        let compose_channel_rx = self.compose_channel_rx.ok_or_else(|| eyre!("compose_channel_rx not set"))?;
+        let compose_channel_tx = self.compose_channel_tx.ok_or_else(|| eyre!("compose_channel_tx not set"))?;
+
+        executor.spawn_critical(name, async move {
+            if let Err(e) = estimator_worker(self.encoder.clone(), compose_channel_rx, compose_channel_tx).await {
+                tracing::error!("Estimator worker failed: {}", e);
+            }
+        });
+
+        Ok(())
+    }
+
+    fn spawn_boxed(self: Box<Self>, executor: TaskExecutor) -> Result<()> {
+        (*self).spawn(executor)
     }
 
     fn name(&self) -> &'static str {

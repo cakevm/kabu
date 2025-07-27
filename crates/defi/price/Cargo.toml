@@ -9,13 +9,13 @@ rust-version.workspace = true
 version.workspace = true
 
 [dependencies]
-kabu-core-actors.workspace = true
-kabu-core-actors-macros.workspace = true
 kabu-core-blockchain.workspace = true
+kabu-core-components = { workspace = true }
 kabu-defi-address-book.workspace = true
 kabu-defi-pools.workspace = true
 kabu-types-market.workspace = true
 
+eyre.workspace = true
 tokio.workspace = true
 tracing.workspace = true
 
@@ -23,3 +23,6 @@ tracing.workspace = true
 alloy-network.workspace = true
 alloy-primitives.workspace = true
 alloy-provider.workspace = true
+
+# reth
+reth-tasks.workspace = true

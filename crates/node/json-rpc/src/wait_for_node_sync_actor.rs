@@ -1,9 +1,11 @@
 use alloy_network::Ethereum;
 use alloy_provider::Provider;
 use alloy_rpc_types::SyncStatus;
-use eyre::eyre;
-use kabu_core_actors::{Actor, ActorResult, WorkerResult};
+use kabu_core_components::Component;
+
+use eyre::Result;
 use kabu_node_debug_provider::DebugProviderExt;
+use reth_tasks::TaskExecutor;
 use std::time::Duration;
 use tokio::time::timeout;
 use tracing::{error, info};
@@ -12,7 +14,7 @@ const SYNC_CHECK_INTERVAL: Duration = Duration::from_secs(1);
 const CLIENT_TIMEOUT: Duration = Duration::from_secs(10);
 
 /// Wait for the node to sync. This works only for http/ipc/ws providers.
-async fn wait_for_node_sync_one_shot_worker<P>(client: P) -> WorkerResult
+async fn wait_for_node_sync_one_shot_worker<P>(client: P) -> Result<()>
 where
     P: Provider<Ethereum> + DebugProviderExt<Ethereum> + Send + Sync + Clone + 'static,
 {
@@ -44,7 +46,7 @@ where
         tokio::time::sleep(SYNC_CHECK_INTERVAL).await;
         print_count = if print_count > 4 { 0 } else { print_count + 1 };
     }
-    Ok("Node is sync".to_string())
+    Ok(())
 }
 
 pub struct WaitForNodeSyncOneShotBlockingActor<P> {
@@ -60,23 +62,22 @@ where
     }
 }
 
-impl<P> Actor for WaitForNodeSyncOneShotBlockingActor<P>
+impl<P> Component for WaitForNodeSyncOneShotBlockingActor<P>
 where
     P: Provider<Ethereum> + DebugProviderExt<Ethereum> + Send + Sync + Clone + 'static,
 {
-    fn start_and_wait(&self) -> eyre::Result<()> {
-        let rt = tokio::runtime::Runtime::new()?; // we need a different runtime to wait for the result
-        let client_cloned = self.client.clone();
-        let handle = rt.spawn(async { wait_for_node_sync_one_shot_worker(client_cloned).await });
-
-        self.wait(Ok(vec![handle]))?;
-        rt.shutdown_background();
-
+    fn spawn(self, executor: TaskExecutor) -> Result<()> {
+        let client = self.client;
+        executor.spawn(async move {
+            if let Err(e) = wait_for_node_sync_one_shot_worker(client).await {
+                error!("Wait for node sync failed: {}", e);
+            }
+        });
         Ok(())
     }
 
-    fn start(&self) -> ActorResult {
-        Err(eyre!("NEED_TO_BE_WAITED"))
+    fn spawn_boxed(self: Box<Self>, executor: TaskExecutor) -> Result<()> {
+        (*self).spawn(executor)
     }
 
     fn name(&self) -> &'static str {

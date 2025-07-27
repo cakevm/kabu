@@ -4,10 +4,11 @@ use alloy_primitives::map::HashMap;
 use alloy_primitives::{Address, U256};
 use alloy_rpc_types::Block;
 use futures::TryStreamExt;
-use kabu_core_actors::Broadcaster;
+use tokio::sync::broadcast;
+
 use kabu_core_blockchain::Blockchain;
 use kabu_evm_utils::reth_types::append_all_matching_block_logs_sealed;
-use kabu_node_actor_config::NodeBlockActorConfig;
+use kabu_node_config::NodeBlockActorConfig;
 use kabu_types_blockchain::{GethStateUpdate, KabuDataTypesEthereum, MempoolTx};
 use kabu_types_events::{
     BlockHeaderEventData, BlockLogs, BlockStateUpdate, BlockUpdate, Message, MessageBlock, MessageBlockHeader, MessageBlockLogs,
@@ -27,10 +28,10 @@ use tracing::{debug, error, info};
 
 async fn process_chain(
     chain: Arc<Chain<EthPrimitives>>,
-    block_header_channel: Broadcaster<MessageBlockHeader>,
-    block_with_tx_channel: Broadcaster<MessageBlock>,
-    logs_channel: Broadcaster<MessageBlockLogs>,
-    state_update_channel: Broadcaster<MessageBlockStateUpdate>,
+    block_header_channel: broadcast::Sender<MessageBlockHeader>,
+    block_with_tx_channel: broadcast::Sender<MessageBlock>,
+    logs_channel: broadcast::Sender<MessageBlockLogs>,
+    state_update_channel: broadcast::Sender<MessageBlockStateUpdate>,
     config: &NodeBlockActorConfig,
 ) -> eyre::Result<()> {
     if config.block_header {

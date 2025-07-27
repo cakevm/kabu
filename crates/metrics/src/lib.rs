@@ -1,3 +1,3 @@
 mod influxdb_actor;
 
-pub use influxdb_actor::InfluxDbWriterActor;
+pub use influxdb_actor::InfluxDbWriterComponent;

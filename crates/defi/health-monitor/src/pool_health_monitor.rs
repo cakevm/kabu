@@ -2,17 +2,18 @@ use alloy_primitives::Address;
 use eyre::Result;
 use influxdb::{Timestamp, WriteQuery};
 use std::collections::{HashMap, HashSet};
+use std::sync::Arc;
 use std::time::Duration;
 use tokio::sync::broadcast::error::RecvError;
+use tokio::sync::{broadcast, RwLock};
 use tracing::{debug, error, info};
 
-use kabu_core_actors::{subscribe, Accessor, Actor, ActorResult, Broadcaster, Consumer, Producer, SharedState, WorkerResult};
-use kabu_core_actors_macros::{Accessor, Consumer, Producer};
-use kabu_core_blockchain::Blockchain;
+use kabu_core_components::Component;
 use kabu_defi_address_book::TokenAddressEth;
 use kabu_types_events::{HealthEvent, MessageHealthEvent};
 use kabu_types_market::{Market, PoolId, PoolProtocol};
 use lazy_static::lazy_static;
+use reth_tasks::TaskExecutor;
 
 lazy_static! {
     static ref TRUSTED_TOKENS: HashSet<Address> = HashSet::from_iter(vec![
@@ -28,12 +29,10 @@ lazy_static! {
 }
 
 pub async fn pool_health_monitor_worker(
-    market: SharedState<Market>,
-    pool_health_monitor_rx: Broadcaster<MessageHealthEvent>,
-    influx_channel_tx: Option<Broadcaster<WriteQuery>>,
-) -> WorkerResult {
-    subscribe!(pool_health_monitor_rx);
-
+    market: Arc<RwLock<Market>>,
+    mut pool_health_monitor_rx: broadcast::Receiver<MessageHealthEvent>,
+    influx_channel_tx: Option<broadcast::Sender<WriteQuery>>,
+) {
     let mut pool_errors_map: HashMap<PoolId, u32> = HashMap::new();
     //let mut estimate_errors_map: HashMap<u64, u32> = HashMap::new();
 
@@ -198,41 +197,45 @@ pub async fn pool_health_monitor_worker(
     }
 }
 
-#[derive(Accessor, Consumer, Producer, Default)]
-pub struct PoolHealthMonitorActor {
-    #[accessor]
-    market: Option<SharedState<Market>>,
-    #[consumer]
-    pool_health_update_rx: Option<Broadcaster<MessageHealthEvent>>,
-    #[producer]
-    influxdb_tx: Option<Broadcaster<WriteQuery>>,
+#[derive(Default)]
+pub struct PoolHealthMonitorComponent {
+    market: Option<Arc<RwLock<Market>>>,
+    pool_health_update_rx: Option<broadcast::Sender<MessageHealthEvent>>,
+    influxdb_tx: Option<broadcast::Sender<WriteQuery>>,
 }
 
-impl PoolHealthMonitorActor {
+impl PoolHealthMonitorComponent {
     pub fn new() -> Self {
-        PoolHealthMonitorActor::default()
+        PoolHealthMonitorComponent::default()
     }
 
-    pub fn on_bc(self, bc: &Blockchain) -> Self {
-        Self {
-            market: Some(bc.market()),
-            pool_health_update_rx: Some(bc.health_monitor_channel()),
-            influxdb_tx: bc.influxdb_write_channel(),
-        }
+    pub fn with_channels(
+        self,
+        market: Arc<RwLock<Market>>,
+        pool_health_update_rx: broadcast::Sender<MessageHealthEvent>,
+        influxdb_tx: Option<broadcast::Sender<WriteQuery>>,
+    ) -> Self {
+        Self { market: Some(market), pool_health_update_rx: Some(pool_health_update_rx), influxdb_tx }
     }
 }
 
-impl Actor for PoolHealthMonitorActor {
-    fn start(&self) -> ActorResult {
-        let task = tokio::task::spawn(pool_health_monitor_worker(
-            self.market.clone().unwrap(),
-            self.pool_health_update_rx.clone().unwrap(),
-            self.influxdb_tx.clone(),
-        ));
-        Ok(vec![task])
+impl Component for PoolHealthMonitorComponent {
+    fn spawn(self, executor: TaskExecutor) -> Result<()> {
+        let name = self.name();
+
+        let market = self.market.ok_or_else(|| eyre::eyre!("market not set"))?;
+        let pool_health_update_rx = self.pool_health_update_rx.ok_or_else(|| eyre::eyre!("pool_health_update_rx not set"))?.subscribe();
+
+        executor.spawn_critical(name, pool_health_monitor_worker(market, pool_health_update_rx, self.influxdb_tx));
+
+        Ok(())
+    }
+
+    fn spawn_boxed(self: Box<Self>, executor: TaskExecutor) -> Result<()> {
+        (*self).spawn(executor)
     }
 
     fn name(&self) -> &'static str {
-        "PoolHealthMonitorActor"
+        "PoolHealthMonitorComponent"
     }
 }

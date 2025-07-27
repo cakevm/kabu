@@ -1,3 +1,7 @@
+use std::sync::Arc;
+use tokio::sync::{broadcast, RwLock};
+use std::future::Future;
+use std::pin::Pin;
 use std::collections::HashMap;
 
 use alloy_network::Ethereum;
@@ -8,7 +12,7 @@ use alloy_rpc_types::Header;
 use chrono::Utc;
 use eyre::Result;
 use futures::StreamExt;
-use kabu_core_actors::{run_sync, Broadcaster, WorkerResult};
+
 use kabu_types_blockchain::KabuDataTypesOptimism;
 use kabu_types_events::{BlockHeaderEventData, MessageBlockHeader};
 use op_alloy::network::Optimism;
@@ -16,9 +20,9 @@ use tracing::{error, info};
 
 pub async fn new_op_node_block_header_worker<P>(
     client: P,
-    new_block_header_channel: Broadcaster<Header>,
-    block_header_channel: Broadcaster<MessageBlockHeader<KabuDataTypesOptimism>>,
-) -> WorkerResult
+    new_block_header_channel: broadcast::Sender<Header>,
+    block_header_channel: broadcast::Sender<MessageBlockHeader<KabuDataTypesOptimism>>,
+) -> Result<()>
 where
     P: Provider<Optimism> + Send + Sync + Clone + 'static,
 {

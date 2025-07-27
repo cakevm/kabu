@@ -1,65 +1,71 @@
 use super::{PendingTxStateChangeProcessorActor, StateChangeArbSearcherActor};
-use crate::block_state_change_processor::BlockStateChangeProcessorActor;
+use crate::block_state_change_processor::BlockStateChangeProcessorComponent;
 use crate::BackrunConfig;
 use alloy_network::Network;
 use alloy_provider::Provider;
+use eyre::Result;
 use influxdb::WriteQuery;
-use kabu_core_actors::{Accessor, Actor, ActorResult, Broadcaster, Consumer, Producer, SharedState, WorkerResult};
-use kabu_core_actors_macros::{Accessor, Consumer, Producer};
+use kabu_core_components::Component;
+use kabu_types_blockchain::ChainParameters;
+use reth_tasks::TaskExecutor;
+use std::sync::Arc;
+use tokio::sync::{broadcast, RwLock};
+
 use kabu_evm_db::KabuDBError;
 use kabu_node_debug_provider::DebugProviderExt;
 use kabu_types_blockchain::{KabuDataTypes, Mempool};
 use kabu_types_entities::{BlockHistory, LatestBlock};
-use kabu_types_events::{MarketEvents, MempoolEvents, MessageHealthEvent, MessageSwapCompose};
+use kabu_types_events::{MarketEvents, MempoolEvents, MessageHealthEvent, MessageSwapCompose, StateUpdateEvent};
 use kabu_types_market::{Market, MarketState};
 use revm::{Database, DatabaseCommit, DatabaseRef};
 use std::marker::PhantomData;
-use tokio::task::JoinHandle;
 use tracing::info;
 
-#[derive(Accessor, Consumer, Producer)]
-pub struct StateChangeArbActor<P, N, DB: Clone + Send + Sync + 'static, LDT: KabuDataTypes + 'static> {
+pub struct StateChangeArbComponent<P, N, DB: Clone + Send + Sync + 'static, LDT: KabuDataTypes + 'static> {
     backrun_config: BackrunConfig,
     client: P,
     use_blocks: bool,
     use_mempool: bool,
-    #[accessor]
-    market: Option<SharedState<Market>>,
-    #[accessor]
-    mempool: Option<SharedState<Mempool<LDT>>>,
-    #[accessor]
-    latest_block: Option<SharedState<LatestBlock<LDT>>>,
-    #[accessor]
-    market_state: Option<SharedState<MarketState<DB>>>,
-    #[accessor]
-    block_history: Option<SharedState<BlockHistory<DB, LDT>>>,
-    #[consumer]
-    mempool_events_tx: Option<Broadcaster<MempoolEvents>>,
-    #[consumer]
-    market_events_tx: Option<Broadcaster<MarketEvents>>,
-    #[producer]
-    compose_channel_tx: Option<Broadcaster<MessageSwapCompose<DB, LDT>>>,
-    #[producer]
-    pool_health_monitor_tx: Option<Broadcaster<MessageHealthEvent>>,
-    #[producer]
-    influxdb_write_channel_tx: Option<Broadcaster<WriteQuery>>,
+
+    market: Option<Arc<RwLock<Market>>>,
+
+    mempool: Option<Arc<RwLock<Mempool<LDT>>>>,
+
+    chain_parameters: ChainParameters,
+
+    latest_block: Option<Arc<RwLock<LatestBlock<LDT>>>>,
+
+    market_state: Option<Arc<RwLock<MarketState<DB>>>>,
+
+    block_history: Option<Arc<RwLock<BlockHistory<DB, LDT>>>>,
+
+    mempool_events_tx: Option<broadcast::Sender<MempoolEvents>>,
+
+    market_events_tx: Option<broadcast::Sender<MarketEvents>>,
+
+    swap_compose_channel_tx: Option<broadcast::Sender<MessageSwapCompose<DB, LDT>>>,
+
+    pool_health_monitor_tx: Option<broadcast::Sender<MessageHealthEvent>>,
+
+    influxdb_tx: Option<broadcast::Sender<WriteQuery>>,
 
     _n: PhantomData<N>,
 }
 
-impl<P, N, DB, LDT> StateChangeArbActor<P, N, DB, LDT>
+impl<P, N, DB, LDT> StateChangeArbComponent<P, N, DB, LDT>
 where
     N: Network,
     P: Provider<N> + DebugProviderExt<N> + Send + Sync + Clone + 'static,
     DB: DatabaseRef + Send + Sync + Clone + 'static,
     LDT: KabuDataTypes + 'static,
 {
-    pub fn new(client: P, use_blocks: bool, use_mempool: bool, backrun_config: BackrunConfig) -> StateChangeArbActor<P, N, DB, LDT> {
-        StateChangeArbActor {
+    pub fn new(client: P, use_blocks: bool, use_mempool: bool, backrun_config: BackrunConfig) -> StateChangeArbComponent<P, N, DB, LDT> {
+        StateChangeArbComponent {
             backrun_config,
             client,
             use_blocks,
             use_mempool,
+            chain_parameters: ChainParameters::ethereum(),
             market: None,
             mempool: None,
             latest_block: None,
@@ -67,91 +73,112 @@ where
             market_state: None,
             mempool_events_tx: None,
             market_events_tx: None,
-            compose_channel_tx: None,
+            swap_compose_channel_tx: None,
             pool_health_monitor_tx: None,
-            influxdb_write_channel_tx: None,
+            influxdb_tx: None,
             _n: PhantomData,
         }
     }
+
+    pub fn with_market(self, market: Arc<RwLock<Market>>) -> Self {
+        Self { market: Some(market), ..self }
+    }
+
+    pub fn with_mempool(self, mempool: Arc<RwLock<Mempool<LDT>>>) -> Self {
+        Self { mempool: Some(mempool), ..self }
+    }
+
+    pub fn with_latest_block(self, latest_block: Arc<RwLock<LatestBlock<LDT>>>) -> Self {
+        Self { latest_block: Some(latest_block), ..self }
+    }
+
+    pub fn with_market_state(self, market_state: Arc<RwLock<MarketState<DB>>>) -> Self {
+        Self { market_state: Some(market_state), ..self }
+    }
+
+    pub fn with_block_history(self, block_history: Arc<RwLock<BlockHistory<DB, LDT>>>) -> Self {
+        Self { block_history: Some(block_history), ..self }
+    }
+
+    pub fn with_mempool_events_channel(self, mempool_events_tx: broadcast::Sender<MempoolEvents>) -> Self {
+        Self { mempool_events_tx: Some(mempool_events_tx), ..self }
+    }
+
+    pub fn with_market_events_channel(self, market_events_tx: broadcast::Sender<MarketEvents>) -> Self {
+        Self { market_events_tx: Some(market_events_tx), ..self }
+    }
+
+    pub fn with_swap_compose_channel(self, swap_compose_channel_tx: broadcast::Sender<MessageSwapCompose<DB, LDT>>) -> Self {
+        Self { swap_compose_channel_tx: Some(swap_compose_channel_tx), ..self }
+    }
+
+    pub fn with_pool_health_monitor_channel(self, pool_health_monitor_tx: broadcast::Sender<MessageHealthEvent>) -> Self {
+        Self { pool_health_monitor_tx: Some(pool_health_monitor_tx), ..self }
+    }
+
+    pub fn with_influxdb_channel(self, influxdb_tx: broadcast::Sender<WriteQuery>) -> Self {
+        Self { influxdb_tx: Some(influxdb_tx), ..self }
+    }
 }
 
-impl<P, N, DB, LDT> Actor for StateChangeArbActor<P, N, DB, LDT>
+impl<P, N, DB, LDT> Component for StateChangeArbComponent<P, N, DB, LDT>
 where
     N: Network<TransactionRequest = LDT::TransactionRequest>,
     P: Provider<N> + DebugProviderExt<N> + Send + Sync + Clone + 'static,
     DB: DatabaseRef<Error = KabuDBError> + Database<Error = KabuDBError> + DatabaseCommit + Send + Sync + Clone + Default + 'static,
     LDT: KabuDataTypes + 'static,
 {
-    fn start(&self) -> ActorResult {
-        let searcher_pool_update_channel = Broadcaster::new(100);
-        let mut tasks: Vec<JoinHandle<WorkerResult>> = Vec::new();
+    fn spawn(self, executor: TaskExecutor) -> Result<()> {
+        // Create state update channel for searcher
+        let (searcher_pool_update_channel, _): (broadcast::Sender<StateUpdateEvent<DB, LDT>>, _) = broadcast::channel(100);
 
-        let mut state_update_searcher = StateChangeArbSearcherActor::new(self.backrun_config.clone());
-        let mut searcher_builder = state_update_searcher
-            .access(self.market.clone().unwrap())
-            .consume(searcher_pool_update_channel.clone())
-            .produce(self.compose_channel_tx.clone().unwrap())
-            .produce(self.pool_health_monitor_tx.clone().unwrap());
-
-        if let Some(influx_channel) = self.influxdb_write_channel_tx.clone() {
-            searcher_builder = searcher_builder.produce(influx_channel);
-        }
-
-        match searcher_builder.start() {
-            Err(e) => {
-                panic!("{}", e)
-            }
-            Ok(r) => {
-                tasks.extend(r);
-                info!("State change searcher actor started successfully")
-            }
-        }
+        // Spawn state change searcher
+        let searcher = StateChangeArbSearcherActor::new(self.backrun_config.clone())
+            .with_channels(
+                searcher_pool_update_channel.clone(),
+                self.swap_compose_channel_tx.clone().unwrap(),
+                self.pool_health_monitor_tx.clone().unwrap(),
+                self.influxdb_tx,
+            )
+            .with_market(self.market.clone().unwrap());
+        searcher.spawn(executor.clone())?;
+        info!("State change searcher component started successfully");
 
         if self.mempool_events_tx.is_some() && self.use_mempool {
-            let mut pending_tx_state_processor = PendingTxStateChangeProcessorActor::new(self.client.clone());
-            match pending_tx_state_processor
-                .access(self.mempool.clone().unwrap())
-                .access(self.latest_block.clone().unwrap())
-                .access(self.market.clone().unwrap())
-                .access(self.market_state.clone().unwrap())
-                .consume(self.mempool_events_tx.clone().unwrap())
-                .consume(self.market_events_tx.clone().unwrap())
-                .produce(searcher_pool_update_channel.clone())
-                .start()
-            {
-                Err(e) => {
-                    panic!("{}", e)
-                }
-                Ok(r) => {
-                    tasks.extend(r);
-                    info!("Pending tx state actor started successfully")
-                }
-            }
+            let pending_tx_processor = PendingTxStateChangeProcessorActor::new(self.client.clone())
+                .with_channels(
+                    self.market_events_tx.clone().unwrap(),
+                    self.mempool_events_tx.clone().unwrap(),
+                    searcher_pool_update_channel.clone(),
+                )
+                .with_market(self.market.clone().unwrap())
+                .with_mempool(self.mempool.clone())
+                .with_market_state(self.market_state.clone().unwrap())
+                .with_latest_block(self.latest_block.clone().unwrap());
+            pending_tx_processor.spawn(executor.clone())?;
+            info!("Pending tx state processor component started successfully");
         }
 
         if self.market_events_tx.is_some() && self.use_blocks {
-            let mut block_state_processor = BlockStateChangeProcessorActor::new();
-            match block_state_processor
-                .access(self.market.clone().unwrap())
-                .access(self.block_history.clone().unwrap())
-                .consume(self.market_events_tx.clone().unwrap())
-                .produce(searcher_pool_update_channel.clone())
-                .start()
-            {
-                Err(e) => {
-                    panic!("{}", e)
-                }
-                Ok(r) => {
-                    tasks.extend(r);
-                    info!("Block change state actor started successfully")
-                }
-            }
+            let block_processor = BlockStateChangeProcessorComponent::new().with_channels(
+                self.chain_parameters.clone(),
+                self.market.clone().unwrap(),
+                self.block_history.clone().unwrap(),
+                self.market_events_tx.clone().unwrap(),
+                searcher_pool_update_channel.clone(),
+            );
+            block_processor.spawn(executor.clone())?;
+            info!("Block state change processor component started successfully");
         }
 
-        Ok(tasks)
+        Ok(())
+    }
+
+    fn spawn_boxed(self: Box<Self>, executor: TaskExecutor) -> Result<()> {
+        (*self).spawn(executor)
     }
 
     fn name(&self) -> &'static str {
-        "StateChangeArbActor"
+        "StateChangeArbComponent"
     }
 }

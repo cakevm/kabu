@@ -1,6 +1,5 @@
 use alloy_network::Ethereum;
 use alloy_provider::Provider;
-use kabu_core_actors::SharedState;
 use kabu_defi_address_book::{
     CurveMetapoolAddress, CurvePoolAddress, PancakeV2PoolAddress, PancakeV3PoolAddress, TokenAddressEth, UniswapV2PoolAddress,
     UniswapV3PoolAddress,
@@ -12,8 +11,9 @@ use kabu_types_blockchain::KabuDataTypesEthereum;
 use kabu_types_market::{Market, MarketState, PoolClass, PoolsLoadingConfig, Token};
 use revm::{Database, DatabaseCommit, DatabaseRef};
 use std::sync::Arc;
+use tokio::sync::RwLock;
 
-pub async fn preload_pools<P, DB>(client: P, market: SharedState<Market>, market_state: SharedState<MarketState<DB>>) -> eyre::Result<()>
+pub async fn preload_pools<P, DB>(client: P, market: Arc<RwLock<Market>>, market_state: Arc<RwLock<MarketState<DB>>>) -> eyre::Result<()>
 where
     P: Provider<Ethereum> + DebugProviderExt<Ethereum> + Send + Sync + Clone + 'static,
     DB: DatabaseRef + DatabaseCommit + Database + Send + Sync + Clone + 'static,

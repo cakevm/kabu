@@ -1,4 +1,4 @@
-pub use actor::NodeBlockPlayerActor;
+pub use actor::NodeBlockPlayerComponent;
 
 mod actor;
 mod compose;
