@@ -6,7 +6,7 @@ use reth_tasks::TaskExecutor;
 use revm::{Database, DatabaseCommit, DatabaseRef};
 use std::sync::Arc;
 use tokio::sync::{broadcast, broadcast::error::RecvError, RwLock};
-use tracing::{debug, error, info};
+use tracing::{debug, error};
 
 use kabu_core_blockchain::{Blockchain, Strategy};
 use kabu_evm_db::KabuDBError;
@@ -74,6 +74,7 @@ async fn arb_swap_path_merger_worker<
     let mut compose_channel_receiver = compose_channel_rx.subscribe();
 
     let mut ready_requests: Vec<SwapComposeData<DB>> = Vec::new();
+    let mut processed_swaps = std::collections::HashSet::new();
 
     loop {
         tokio::select! {
@@ -85,6 +86,7 @@ async fn arb_swap_path_merger_worker<
                             MarketEvents::BlockHeaderUpdate{..} =>{
                                 debug!("Cleaning ready requests");
                                 ready_requests = Vec::new();
+                                processed_swaps.clear();
                             }
                             MarketEvents::BlockStateUpdate{..}=>{
                                 debug!("State updated");
@@ -112,7 +114,14 @@ async fn arb_swap_path_merger_worker<
                             _=>continue,
                         };
 
-                        info!("MessageSwapPathEncodeRequest received. stuffing: {:?} swap: {}", compose_data.tx_compose.stuffing_txs_hashes, compose_data.swap);
+                        // Create a unique key for this swap to detect duplicates
+                        let swap_key = format!("{:?}", compose_data.swap);
+
+                        // Skip if we've already processed this exact swap
+                        if processed_swaps.contains(&swap_key) {
+                            debug!("Skipping duplicate swap in merger");
+                            continue;
+                        }
 
                         for req in ready_requests.iter() {
 
@@ -162,8 +171,14 @@ async fn arb_swap_path_merger_worker<
                                 }
                             }
                         }
+                        processed_swaps.insert(swap_key);
                         ready_requests.push(compose_data.clone());
-                        ready_requests.sort_by(|r0,r1| r1.swap.arb_profit().cmp(&r0.swap.arb_profit())  )
+                        ready_requests.sort_by(|r0,r1| r1.swap.arb_profit().cmp(&r0.swap.arb_profit())  );
+
+                        // Keep only top 20 most profitable swaps to prevent O(n²) comparison explosion
+                        if ready_requests.len() > 20 {
+                            ready_requests.truncate(20);
+                        }
 
                     }
                     Err(e)=>{error!("{}",e)}

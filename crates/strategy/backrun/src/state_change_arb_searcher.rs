@@ -104,6 +104,19 @@ async fn state_change_arb_searcher_task<
         );
         return Err(eyre!("NO_SWAP_PATHS"));
     }
+
+    // Log details about the swap paths and affected pools
+    debug!("Affected pools: {} unique pools, generated {} swap paths", state_update_event.directions().len(), swap_path_vec.len());
+
+    // If we have very few pools but many paths, log a warning
+    if state_update_event.directions().len() <= 3 && swap_path_vec.len() > 50 {
+        debug!(
+            "Warning: {} swap paths generated from only {} pools - this may indicate duplicate path generation",
+            swap_path_vec.len(),
+            state_update_event.directions().len()
+        );
+    }
+
     info!("Calculation started: swap_path_vec_len={} elapsed={}", swap_path_vec.len(), start_time.elapsed().as_micros());
 
     let channel_len = swap_path_vec.len();
@@ -161,13 +174,19 @@ async fn state_change_arb_searcher_task<
 
     let mut answers = 0;
 
-    let mut best_answers = BestTxSwapCompose::new_with_pct(U256::from(9000));
+    let mut best_answers = BestTxSwapCompose::new_with_pct(U256::from(5000)); // Only send swaps that are at least 50% as good as the best
 
     let mut failed_pools: HashSet<SwapError> = HashSet::new();
 
     while let Some(swap_line_result) = swap_line_rx.recv().await {
         match swap_line_result {
             Ok(swap_line) => {
+                // Add minimum profit filter: skip if profit is less than 0.001 ETH
+                let min_profit_wei = U256::from(1_000_000_000_000_000u64); // 0.001 ETH
+                if swap_line.abs_profit_eth() < min_profit_wei {
+                    continue;
+                }
+
                 let prepare_request = SwapComposeMessage::Prepare(SwapComposeData {
                     tx_compose: TxComposeData::<LDT> {
                         eoa: backrun_config.eoa(),
@@ -250,11 +269,39 @@ pub async fn state_change_arb_searcher_worker<
     info!("Starting state arb searcher cpus={cpus}, tasks={tasks}");
     let thread_pool = Arc::new(ThreadPoolBuilder::new().num_threads(tasks).build()?);
 
+    // Track recent state updates to prevent duplicate calculations for the same pools
+    let mut recent_pool_updates: HashSet<(u64, Vec<PoolWrapper>)> = HashSet::new();
+    let mut last_block_number = 0u64;
+
     loop {
         tokio::select! {
                 msg = search_request_receiver.recv() => {
                 let pool_update_msg : Result<StateUpdateEvent<DB, LDT>, RecvError> = msg;
                 if let Ok(msg) = pool_update_msg {
+                    // Clear recent updates on new block
+                    if msg.next_block_number != last_block_number {
+                        recent_pool_updates.clear();
+                        last_block_number = msg.next_block_number;
+                    }
+
+                    // Create a sorted list of affected pools for consistent hashing
+                    let mut affected_pools: Vec<PoolWrapper> = msg.directions().keys().cloned().collect();
+                    affected_pools.sort_by_key(|p| p.get_pool_id());
+
+                    let pool_update_key = (msg.next_block_number, affected_pools);
+
+                    // Skip if we've already processed these exact pools in this block
+                    if recent_pool_updates.contains(&pool_update_key) {
+                        debug!(
+                            "Skipping duplicate state update for block {} with {} pools",
+                            msg.next_block_number,
+                            pool_update_key.1.len()
+                        );
+                        continue;
+                    }
+
+                    recent_pool_updates.insert(pool_update_key);
+
                     tokio::task::spawn(
                         state_change_arb_searcher_task(
                             thread_pool.clone(),
