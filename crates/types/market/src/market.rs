@@ -336,7 +336,7 @@ mod tests {
         let mut market = Market::default();
         let pool_address = Address::random();
         let mock_pool = MockPool::new(Address::ZERO, Address::ZERO, pool_address);
-        market.add_pool(mock_pool.clone());
+        let _ = market.add_pool(mock_pool.clone());
 
         let pool = market.get_pool(&PoolId::Address(pool_address));
 
@@ -348,7 +348,7 @@ mod tests {
         let mut market = Market::default();
         let pool_address = Address::random();
         let mock_pool = MockPool::new(Address::ZERO, Address::ZERO, pool_address);
-        market.add_pool(mock_pool.clone());
+        let _ = market.add_pool(mock_pool.clone());
 
         let is_pool = market.is_pool(&PoolId::Address(pool_address));
 
@@ -373,7 +373,7 @@ mod tests {
         let token0 = Address::random();
         let token1 = Address::random();
         let mock_pool = MockPool::new(token0, token1, pool_address);
-        market.add_pool(mock_pool.clone());
+        let _ = market.add_pool(mock_pool.clone());
 
         assert!(!market.is_pool_disabled(&PoolId::Address(pool_address)));
         assert_eq!(market.get_token_token_pools(&token0, &token1).unwrap().len(), 1);

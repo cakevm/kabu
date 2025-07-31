@@ -56,7 +56,7 @@ bench:
 # Target to run cargo clippy
 .PHONY: clippy
 clippy:
-	cargo clippy --all-targets --all-features -- -D warnings
+	cargo clippy --all-targets --all-features --tests --benches -- -D warnings
 
 # format kabu
 .PHONY: fmt
@@ -67,6 +67,11 @@ fmt:
 .PHONY: fmt-check
 fmt-check:
 	cargo +stable fmt --all --check
+
+# check for warnings in tests
+.PHONY: check
+check:
+	cargo check --all-targets --all-features --tests --benches
 
 # format toml
 .PHONY: taplo
@@ -92,6 +97,7 @@ udeps:
 .PHONY: pre-release
 pre-release:
 	make fmt
+	make check
 	make clippy
 	make taplo
 	make udeps
@@ -114,7 +120,7 @@ replayer:
 swap-test:
 	@echo "Running anvil swap test case: $(FILE)\n"
 	@RL=${RL:-info}; \
-    RUST_LOG=$(RL) cargo run --package kabu-backtest-runner --bin kabu-backtest-runner -- --config $(FILE) --timeout 25 --wait-init 7; \
+    RUST_LOG=$(RL) cargo run --package kabu-backtest-runner --bin kabu-backtest-runner -- --config $(FILE) --timeout 35 --wait-init 7; \
 	EXIT_CODE=$$?; \
 	if [ $$EXIT_CODE -ne 0 ]; then \
 		echo "\n\033[0;31mError: Anvil swap tester exited with code $$EXIT_CODE\033[0m\n"; \

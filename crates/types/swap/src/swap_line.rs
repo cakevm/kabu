@@ -534,7 +534,6 @@ impl SwapLine {
 mod tests {
     use super::*;
     use alloy_primitives::utils::parse_units;
-    use alloy_primitives::Address;
     use kabu_defi_address_book::{TokenAddressEth, UniswapV2PoolAddress, UniswapV3PoolAddress};
     use kabu_types_market::mock_pool::MockPool;
     use kabu_types_market::Pool;
