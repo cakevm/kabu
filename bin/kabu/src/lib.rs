@@ -107,6 +107,3 @@ pub mod types {
     #[cfg(feature = "types-swap")]
     pub use kabu_types_swap as swap;
 }
-
-// Kabu Node Implementation - Concrete MEV component builders
-pub mod kabu_node;

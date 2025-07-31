@@ -1,4 +1,4 @@
-use super::{PendingTxStateChangeProcessorActor, StateChangeArbSearcherActor};
+use super::{PendingTxStateChangeProcessorComponent, StateChangeArbSearcherComponent};
 use crate::block_state_change_processor::BlockStateChangeProcessorComponent;
 use crate::BackrunConfig;
 use alloy_network::Network;
@@ -133,7 +133,7 @@ where
         let (searcher_pool_update_channel, _): (broadcast::Sender<StateUpdateEvent<DB, LDT>>, _) = broadcast::channel(100);
 
         // Spawn state change searcher
-        let searcher = StateChangeArbSearcherActor::new(self.backrun_config.clone())
+        let searcher = StateChangeArbSearcherComponent::new(self.backrun_config.clone())
             .with_channels(
                 searcher_pool_update_channel.clone(),
                 self.swap_compose_channel_tx.clone().unwrap(),
@@ -145,7 +145,7 @@ where
         info!("State change searcher component started successfully");
 
         if self.mempool_events_tx.is_some() && self.use_mempool {
-            let pending_tx_processor = PendingTxStateChangeProcessorActor::new(self.client.clone())
+            let pending_tx_processor = PendingTxStateChangeProcessorComponent::new(self.client.clone())
                 .with_channels(
                     self.market_events_tx.clone().unwrap(),
                     self.mempool_events_tx.clone().unwrap(),

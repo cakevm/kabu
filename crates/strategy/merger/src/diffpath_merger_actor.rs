@@ -141,7 +141,7 @@ where
     }
 }
 
-pub struct DiffPathMergerActor<DB: Clone + Send + Sync + 'static> {
+pub struct DiffPathMergerComponent<DB: Clone + Send + Sync + 'static> {
     market_events: Option<broadcast::Sender<MarketEvents>>,
 
     compose_channel_rx: Option<broadcast::Sender<MessageSwapCompose<DB>>>,
@@ -151,7 +151,7 @@ pub struct DiffPathMergerActor<DB: Clone + Send + Sync + 'static> {
     _db: std::marker::PhantomData<DB>,
 }
 
-impl<DB> Default for DiffPathMergerActor<DB>
+impl<DB> Default for DiffPathMergerComponent<DB>
 where
     DB: DatabaseRef + Database + DatabaseCommit + Send + Sync + Clone + Default + 'static,
 {
@@ -160,7 +160,7 @@ where
     }
 }
 
-impl<DB> DiffPathMergerActor<DB>
+impl<DB> DiffPathMergerComponent<DB>
 where
     DB: DatabaseRef + Database + DatabaseCommit + Send + Sync + Clone + Default + 'static,
 {
@@ -189,7 +189,7 @@ where
     }
 }
 
-impl<DB> Component for DiffPathMergerActor<DB>
+impl<DB> Component for DiffPathMergerComponent<DB>
 where
     DB: DatabaseRef + Database + DatabaseCommit + Send + Sync + Clone + Default + 'static,
 {
@@ -213,6 +213,6 @@ where
     }
 
     fn name(&self) -> &'static str {
-        "DiffPathMergerActor"
+        "DiffPathMergerComponent"
     }
 }

@@ -45,7 +45,7 @@ where
     Ok(())
 }
 
-pub struct WebServerActor<S, DB: Clone + Send + Sync + 'static> {
+pub struct WebServerComponent<S, DB: Clone + Send + Sync + 'static> {
     host: String,
     extra_router: Router<S>,
     shutdown_token: CancellationToken,
@@ -54,7 +54,7 @@ pub struct WebServerActor<S, DB: Clone + Send + Sync + 'static> {
     state: Option<BlockchainState<DB, KabuDataTypesEthereum>>,
 }
 
-impl<S, DB> WebServerActor<S, DB>
+impl<S, DB> WebServerComponent<S, DB>
 where
     DB: DatabaseRef<Error = kabu_evm_db::KabuDBError> + Send + Sync + Clone + Default + 'static,
     S: Clone + Send + Sync + 'static,
@@ -69,7 +69,7 @@ where
     }
 }
 
-impl<S, DB> Component for WebServerActor<S, DB>
+impl<S, DB> Component for WebServerComponent<S, DB>
 where
     S: Clone + Send + Sync + 'static,
     DB: DatabaseRef<Error = kabu_evm_db::KabuDBError> + DatabaseCommit + Send + Sync + Clone + Default + 'static,
@@ -93,6 +93,6 @@ where
     }
 
     fn name(&self) -> &'static str {
-        "WebServerActor"
+        "WebServerComponent"
     }
 }

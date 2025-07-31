@@ -31,7 +31,6 @@ jobs:
         with:
           version: nightly
 
-      - run: 'echo "pub const KEY_ENCRYPTION_PWD: [u8; 16] = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0];" > crates/types/entities/src/private.rs'
       - run: make test
 
   swap-test-all:
@@ -55,7 +54,6 @@ jobs:
         with:
           version: nightly
 
-      - run: 'echo "pub const KEY_ENCRYPTION_PWD: [u8; 16] = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0];" > crates/types/entities/src/private.rs'
       - run: make swap-test-all
 
   replayer:
@@ -80,7 +78,6 @@ jobs:
         with:
           version: nightly
 
-      - run: 'echo "pub const KEY_ENCRYPTION_PWD: [u8; 16] = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0];" > crates/types/entities/src/private.rs'
       - run: make replayer
 
   fmt:
@@ -93,7 +90,6 @@ jobs:
           ref: ${{ github.event.pull_request.head.sha || github.ref }}
       - uses: dtolnay/rust-toolchain@stable
 
-      - run: 'echo "pub const KEY_ENCRYPTION_PWD: [u8; 16] = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0];" > crates/types/entities/src/private.rs'
       - run: make fmt-check
 
   taplo:
@@ -127,7 +123,6 @@ jobs:
       - uses: Swatinem/rust-cache@v2
       - name: Install cargo-machete
         run: cargo install cargo-machete --locked
-      - run: 'echo "pub const KEY_ENCRYPTION_PWD: [u8; 16] = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0];" > crates/types/entities/src/private.rs'
       - name: Check for unused dependencies
         run: cargo-machete --with-metadata
 
@@ -145,8 +140,6 @@ jobs:
         with:
           repo-token: ${{ secrets.GITHUB_TOKEN }}
 
-      - run: 'echo "pub const KEY_ENCRYPTION_PWD: [u8; 16] = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0];" > crates/types/entities/src/private.rs'
-      # workaround for latest stable rust
       - run: cargo clippy --all-targets --all-features -- -D warnings
 
   deny:

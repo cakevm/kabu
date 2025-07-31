@@ -126,7 +126,7 @@ where
 }
 
 #[allow(dead_code)]
-pub struct MarketStatePreloadedOneShotActor<P, N, DB> {
+pub struct MarketStatePreloadedOneShotComponent<P, N, DB> {
     name: &'static str,
     client: P,
     copied_accounts: Vec<Address>,
@@ -140,7 +140,7 @@ pub struct MarketStatePreloadedOneShotActor<P, N, DB> {
 }
 
 #[allow(dead_code)]
-impl<P, N, DB> MarketStatePreloadedOneShotActor<P, N, DB>
+impl<P, N, DB> MarketStatePreloadedOneShotComponent<P, N, DB>
 where
     N: Network,
     P: Provider<N> + Send + Sync + Clone + 'static,
@@ -152,7 +152,7 @@ where
 
     pub fn new(client: P) -> Self {
         Self {
-            name: "MarketStatePreloadedOneShotActor",
+            name: "MarketStatePreloadedOneShotComponent",
             client,
             copied_accounts: Vec::new(),
             new_accounts: Vec::new(),
@@ -215,7 +215,7 @@ where
     }
 }
 
-impl<P, N, DB> Component for MarketStatePreloadedOneShotActor<P, N, DB>
+impl<P, N, DB> Component for MarketStatePreloadedOneShotComponent<P, N, DB>
 where
     N: Network,
     P: Provider<N> + Send + Sync + Clone + 'static,
@@ -245,6 +245,6 @@ where
     }
 
     fn name(&self) -> &'static str {
-        "MarketStatePreloadedOneShotActor"
+        "MarketStatePreloadedOneShotComponent"
     }
 }

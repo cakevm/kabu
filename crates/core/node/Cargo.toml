@@ -1,0 +1,57 @@
+[package]
+name = "kabu-core-node"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+homepage.workspace = true
+repository.workspace = true
+
+[dependencies]
+# Core dependencies
+kabu-core-blockchain = { workspace = true }
+kabu-core-components = { workspace = true }
+kabu-core-topology = { workspace = true }
+kabu-evm-db = { workspace = true }
+kabu-types-blockchain = { workspace = true }
+kabu-types-entities = { workspace = true }
+kabu-types-market = { workspace = true }
+
+# Component implementations
+kabu-broadcast-accounts = { workspace = true }
+kabu-broadcast-broadcaster = { workspace = true }
+kabu-core-block-history = { workspace = true }
+kabu-core-router = { workspace = true }
+kabu-defi-market = { workspace = true }
+kabu-defi-pools = { workspace = true }
+kabu-defi-preloader = { workspace = true }
+kabu-defi-price = { workspace = true }
+kabu-execution-estimator = { workspace = true }
+kabu-execution-multicaller = { workspace = true }
+kabu-metrics = { workspace = true }
+kabu-node-config = { workspace = true }
+kabu-node-debug-provider = { workspace = true }
+kabu-node-json-rpc = { workspace = true }
+kabu-rpc-handler = { workspace = true }
+kabu-storage-db = { workspace = true }
+kabu-strategy-backrun = { workspace = true }
+kabu-strategy-merger = { workspace = true }
+
+# Optional dependencies
+kabu-defi-health-monitor = { workspace = true, optional = true }
+
+# External dependencies
+alloy-network = { workspace = true }
+alloy-primitives = { workspace = true }
+alloy-provider = { workspace = true }
+axum = { workspace = true }
+eyre = { workspace = true }
+reth = { workspace = true }
+reth-tasks = { workspace = true }
+tokio = { workspace = true }
+tokio-util = { workspace = true }
+tracing = { workspace = true }
+
+[features]
+default = ["defi-health-monitor"]
+defi-health-monitor = ["dep:kabu-defi-health-monitor"]

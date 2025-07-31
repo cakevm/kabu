@@ -6,7 +6,7 @@ use tokio::sync::broadcast;
 use tracing::{debug, error, info};
 
 use kabu_core_components::Component;
-use kabu_node_config::NodeBlockActorConfig;
+use kabu_node_config::NodeBlockComponentConfig;
 use kabu_types_blockchain::KabuDataTypes;
 use kabu_types_events::{MessageBlock, MessageBlockHeader, MessageBlockLogs, MessageBlockStateUpdate};
 use reth_tasks::TaskExecutor;
@@ -16,7 +16,7 @@ pub struct BlockProcessingComponent<P, N, LDT: KabuDataTypes + 'static> {
     /// JSON-RPC provider for fetching blockchain data
     client: P,
     /// Configuration for block processing
-    config: NodeBlockActorConfig,
+    config: NodeBlockComponentConfig,
     /// Channel to send new block headers
     block_headers_tx: Option<broadcast::Sender<MessageBlockHeader<LDT>>>,
     /// Channel to send new blocks with transactions
@@ -35,7 +35,7 @@ where
     N: Network + 'static,
     LDT: KabuDataTypes + 'static,
 {
-    pub fn new(client: P, config: NodeBlockActorConfig) -> Self {
+    pub fn new(client: P, config: NodeBlockComponentConfig) -> Self {
         Self {
             client,
             config,
@@ -234,15 +234,15 @@ where
 
 /// Builder for BlockProcessingComponent
 pub struct BlockProcessingComponentBuilder {
-    config: NodeBlockActorConfig,
+    config: NodeBlockComponentConfig,
 }
 
 impl BlockProcessingComponentBuilder {
     pub fn new() -> Self {
-        Self { config: NodeBlockActorConfig::all_enabled() }
+        Self { config: NodeBlockComponentConfig::all_enabled() }
     }
 
-    pub fn with_config(mut self, config: NodeBlockActorConfig) -> Self {
+    pub fn with_config(mut self, config: NodeBlockComponentConfig) -> Self {
         self.config = config;
         self
     }

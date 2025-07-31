@@ -142,6 +142,42 @@ pub trait MevNodeComponentsBuilder<State>: Send {
     fn health_monitor_builder(&self) -> Self::HealthMonitor;
 }
 
+/// Builder for initialization components (one-shot actors that set up initial state)
+pub trait InitializerBuilder<State>: Send {
+    /// The initializer component type
+    type Initializer: Component;
+
+    /// Build the initializer component
+    fn build_initializer(self, ctx: &BuilderContext<State>) -> impl Future<Output = Result<Self::Initializer>> + Send;
+}
+
+/// Builder for merger components (combines multiple strategies or paths)
+pub trait MergerBuilder<State>: Send {
+    /// The merger component type
+    type Merger: Component;
+
+    /// Build the merger component
+    fn build_merger(self, ctx: &BuilderContext<State>) -> impl Future<Output = Result<Self::Merger>> + Send;
+}
+
+/// Builder for web server components
+pub trait WebServerBuilder<State>: Send {
+    /// The web server component type
+    type WebServer: Component;
+
+    /// Build the web server component
+    fn build_web_server(self, ctx: &BuilderContext<State>) -> impl Future<Output = Result<Self::WebServer>> + Send;
+}
+
+/// Builder for monitoring components (influxdb, metrics)
+pub trait MonitoringBuilder<State>: Send {
+    /// The monitoring component type
+    type Monitoring: Component;
+
+    /// Build the monitoring component
+    fn build_monitoring(self, ctx: &BuilderContext<State>) -> impl Future<Output = Result<Self::Monitoring>> + Send;
+}
+
 /// Combined builder trait for basic node components (for simpler nodes)
 pub trait NodeComponentsBuilder<State>: Send {
     /// Pool component builder

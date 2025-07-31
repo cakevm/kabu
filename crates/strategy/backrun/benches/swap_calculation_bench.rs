@@ -8,8 +8,9 @@ use kabu_node_debug_provider::AnvilDebugProviderFactory;
 use kabu_strategy_backrun::SwapCalculator;
 use kabu_types_blockchain::KabuDataTypesEthereum;
 use kabu_types_market::required_state::RequiredStateReader;
+use kabu_types_market::swap_path::SwapPath;
 use kabu_types_market::{Market, PoolClass, PoolId, PoolWrapper, Token};
-use kabu_types_swap::{SwapLine, SwapPath};
+use kabu_types_swap::SwapLine;
 use std::collections::BTreeMap;
 use std::env;
 

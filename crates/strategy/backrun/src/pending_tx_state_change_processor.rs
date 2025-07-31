@@ -337,7 +337,7 @@ where
     }
 }
 
-pub struct PendingTxStateChangeProcessorActor<P, N, DB: Clone + Send + Sync + 'static, LDT: KabuDataTypes + 'static> {
+pub struct PendingTxStateChangeProcessorComponent<P, N, DB: Clone + Send + Sync + 'static, LDT: KabuDataTypes + 'static> {
     client: P,
 
     market: Option<Arc<RwLock<Market>>>,
@@ -356,15 +356,15 @@ pub struct PendingTxStateChangeProcessorActor<P, N, DB: Clone + Send + Sync + 's
     _n: PhantomData<N>,
 }
 
-impl<P, N, DB, LDT> PendingTxStateChangeProcessorActor<P, N, DB, LDT>
+impl<P, N, DB, LDT> PendingTxStateChangeProcessorComponent<P, N, DB, LDT>
 where
     N: Network,
     P: Provider<N> + DebugProviderExt<N> + Send + Sync + Clone + 'static,
     DB: DatabaseRef + Send + Sync + Clone + 'static,
     LDT: KabuDataTypes + 'static,
 {
-    pub fn new(client: P) -> PendingTxStateChangeProcessorActor<P, N, DB, LDT> {
-        PendingTxStateChangeProcessorActor {
+    pub fn new(client: P) -> PendingTxStateChangeProcessorComponent<P, N, DB, LDT> {
+        PendingTxStateChangeProcessorComponent {
             client,
             market: None,
             mempool: None,
@@ -421,7 +421,7 @@ where
     }
 }
 
-impl<P, N, DB, LDT> Component for PendingTxStateChangeProcessorActor<P, N, DB, LDT>
+impl<P, N, DB, LDT> Component for PendingTxStateChangeProcessorComponent<P, N, DB, LDT>
 where
     N: Network<TransactionRequest = LDT::TransactionRequest>,
     P: Provider<N> + DebugProviderExt<N> + Send + Sync + Clone + 'static,
@@ -464,6 +464,6 @@ where
     }
 
     fn name(&self) -> &'static str {
-        "PendingTxStateChangeProcessorActor"
+        "PendingTxStateChangeProcessorComponent"
     }
 }

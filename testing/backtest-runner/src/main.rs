@@ -9,7 +9,7 @@ use alloy_rpc_types::{BlockId, BlockNumberOrTag};
 use alloy_rpc_types_eth::TransactionTrait;
 use clap::Parser;
 use eyre::{OptionExt, Result};
-use kabu::broadcast::accounts::{AccountMonitorComponent, InitializeSignersOneShotBlockingActor, SignersComponent};
+use kabu::broadcast::accounts::{AccountMonitorComponent, InitializeSignersOneShotBlockingComponent, SignersComponent};
 use kabu::broadcast::broadcaster::{FlashbotsBroadcastComponent, RelayConfig};
 use kabu::core::block_history::BlockHistoryComponent;
 use kabu::core::router::SwapRouterComponent;
@@ -18,8 +18,8 @@ use kabu::defi::health_monitor::StuffingTxMonitorActor;
 use kabu::defi::market::{fetch_and_add_pool_by_pool_id, fetch_state_and_add_pool};
 use kabu::defi::pools::protocols::CurveProtocol;
 use kabu::defi::pools::{CurvePool, PoolLoadersBuilder, PoolsLoadingConfig};
-use kabu::defi::preloader::MarketStatePreloadedOneShotActor;
-use kabu::defi::price::PriceActor;
+use kabu::defi::preloader::MarketStatePreloadedOneShotComponent;
+use kabu::defi::price::PriceComponent;
 use kabu::evm::db::KabuDBType;
 use kabu::evm::utils::NWETH;
 use kabu::execution::estimator::EvmEstimatorComponent;
@@ -27,7 +27,7 @@ use kabu::execution::multicaller::{MulticallerDeployer, MulticallerSwapEncoder};
 use kabu::node::debug_provider::AnvilDebugProviderFactory;
 use kabu::node::json_rpc::BlockProcessingComponent;
 use kabu::strategy::backrun::{BackrunConfig, StateChangeArbComponent};
-use kabu::strategy::merger::{ArbSwapPathMergerActor, DiffPathMergerActor, SamePathMergerComponent};
+use kabu::strategy::merger::{ArbSwapPathMergerComponent, DiffPathMergerComponent, SamePathMergerComponent};
 use kabu::types::blockchain::{debug_trace_block, ChainParameters, KabuDataTypesEthereum, Mempool};
 use kabu::types::entities::{AccountNonceAndBalanceState, BlockHistory, LatestBlock, TxSigners};
 use kabu::types::events::{
@@ -37,7 +37,7 @@ use kabu::types::events::{
 use kabu::types::market::{Market, MarketState, PoolClass, PoolId, Token};
 use kabu::types::swap::Swap;
 use kabu_core_components::Component;
-use kabu_node_config::NodeBlockActorConfig;
+use kabu_node_config::NodeBlockComponentConfig;
 use reth_tasks::TaskManager;
 use std::env;
 use std::fmt::{Display, Formatter};
@@ -212,8 +212,9 @@ async fn main() -> Result<()> {
 
     info!("Starting initialize signers actor");
 
-    let initialize_signers_actor =
-        InitializeSignersOneShotBlockingActor::new(Some(priv_key)).with_signers(tx_signers.clone()).with_monitor(accounts_state.clone());
+    let initialize_signers_actor = InitializeSignersOneShotBlockingComponent::new(Some(priv_key))
+        .with_signers(tx_signers.clone())
+        .with_monitor(accounts_state.clone());
     match initialize_signers_actor.spawn(task_executor.clone()) {
         Err(e) => {
             error!("{}", e);
@@ -246,7 +247,7 @@ async fn main() -> Result<()> {
     }
 
     info!("Starting market state preload component");
-    let market_state_preload_component = MarketStatePreloadedOneShotActor::new(client.clone())
+    let market_state_preload_component = MarketStatePreloadedOneShotComponent::new(client.clone())
         .with_copied_account(multicaller_encoder.get_contract_address())
         .with_signers(tx_signers.clone())
         .with_market_state(market_state.clone());
@@ -260,7 +261,7 @@ async fn main() -> Result<()> {
     }
 
     info!("Starting node component");
-    let node_block_component = BlockProcessingComponent::new(client.clone(), NodeBlockActorConfig::all_enabled()).with_channels(
+    let node_block_component = BlockProcessingComponent::new(client.clone(), NodeBlockComponentConfig::all_enabled()).with_channels(
         Some(new_block_headers_channel.clone()),
         Some(new_block_with_tx_channel.clone()),
         Some(new_block_logs_channel.clone()),
@@ -287,7 +288,7 @@ async fn main() -> Result<()> {
     }
 
     info!("Starting price component");
-    let price_component = PriceActor::new(client.clone()).only_once().with_market(market_instance.clone());
+    let price_component = PriceComponent::new(client.clone()).only_once().with_market(market_instance.clone());
     match price_component.spawn(task_executor.clone()) {
         Err(e) => {
             error!("{}", e);
@@ -458,7 +459,7 @@ async fn main() -> Result<()> {
     if test_config.modules.arb_path_merger {
         info!("Starting swap path merger component");
 
-        let swap_path_merger_component = ArbSwapPathMergerActor::<KabuDBType>::new(multicaller_address)
+        let swap_path_merger_component = ArbSwapPathMergerComponent::<KabuDBType>::new(multicaller_address)
             .with_latest_block(latest_block.clone())
             .with_market_events_channel(market_events_channel.clone())
             .with_compose_channel(swap_compose_channel.clone());
@@ -503,7 +504,7 @@ async fn main() -> Result<()> {
     }
 
     // Diff path merger tries to merge all found swaplines into one transaction
-    let diff_path_merger_component = DiffPathMergerActor::<KabuDBType>::new()
+    let diff_path_merger_component = DiffPathMergerComponent::<KabuDBType>::new()
         .with_market_events_channel(market_events_channel.clone())
         .with_compose_channel(swap_compose_channel.clone());
     match diff_path_merger_component.spawn(task_executor.clone()) {

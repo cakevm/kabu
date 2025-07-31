@@ -168,7 +168,7 @@ async fn arb_swap_path_merger_worker<
     }
 }
 
-pub struct ArbSwapPathMergerActor<DB: Send + Sync + Clone + 'static> {
+pub struct ArbSwapPathMergerComponent<DB: Send + Sync + Clone + 'static> {
     multicaller_address: Address,
 
     latest_block: Option<Arc<RwLock<LatestBlock>>>,
@@ -180,12 +180,12 @@ pub struct ArbSwapPathMergerActor<DB: Send + Sync + Clone + 'static> {
     compose_channel_tx: Option<broadcast::Sender<MessageSwapCompose<DB>>>,
 }
 
-impl<DB> ArbSwapPathMergerActor<DB>
+impl<DB> ArbSwapPathMergerComponent<DB>
 where
     DB: DatabaseRef + Send + Sync + Clone + 'static,
 {
-    pub fn new(multicaller_address: Address) -> ArbSwapPathMergerActor<DB> {
-        ArbSwapPathMergerActor {
+    pub fn new(multicaller_address: Address) -> ArbSwapPathMergerComponent<DB> {
+        ArbSwapPathMergerComponent {
             multicaller_address,
             latest_block: None,
             market_events: None,
@@ -217,7 +217,7 @@ where
     }
 }
 
-impl<DB> Component for ArbSwapPathMergerActor<DB>
+impl<DB> Component for ArbSwapPathMergerComponent<DB>
 where
     DB: DatabaseRef<Error = KabuDBError> + Database<Error = KabuDBError> + DatabaseCommit + Send + Sync + Clone + 'static,
 {
@@ -251,7 +251,7 @@ where
     }
 
     fn name(&self) -> &'static str {
-        "ArbSwapPathMergerActor"
+        "ArbSwapPathMergerComponent"
     }
 }
 

@@ -9,8 +9,8 @@ use kabu_core_blockchain::Blockchain;
 use kabu_types_blockchain::{KabuDataTypes, KabuDataTypesEthereum};
 use kabu_types_entities::{AccountNonceAndBalanceState, KeyStore, LoomTxSigner, TxSigners};
 
-/// The one-shot actor adds a new signer to the signers and monitor list after and stops.
-pub struct InitializeSignersOneShotBlockingActor<LDT: KabuDataTypes> {
+/// The one-shot component adds a new signer to the signers and monitor list after and stops.
+pub struct InitializeSignersOneShotBlockingComponent<LDT: KabuDataTypes> {
     key: Option<Vec<u8>>,
 
     signers: Option<Arc<RwLock<TxSigners<LDT>>>>,
@@ -29,14 +29,14 @@ async fn initialize_signers_one_shot_worker(
     Ok(())
 }
 
-impl<LDT: KabuDataTypes> InitializeSignersOneShotBlockingActor<LDT> {
-    pub fn new(key: Option<Vec<u8>>) -> InitializeSignersOneShotBlockingActor<LDT> {
+impl<LDT: KabuDataTypes> InitializeSignersOneShotBlockingComponent<LDT> {
+    pub fn new(key: Option<Vec<u8>>) -> InitializeSignersOneShotBlockingComponent<LDT> {
         let key = key.unwrap_or_else(|| B256::random().to_vec());
 
-        InitializeSignersOneShotBlockingActor { key: Some(key), signers: None, monitor: None }
+        InitializeSignersOneShotBlockingComponent { key: Some(key), signers: None, monitor: None }
     }
 
-    pub fn new_from_encrypted_env() -> InitializeSignersOneShotBlockingActor<LDT> {
+    pub fn new_from_encrypted_env() -> InitializeSignersOneShotBlockingComponent<LDT> {
         let key = match std::env::var("DATA") {
             Ok(priv_key_enc) => {
                 let keystore = KeyStore::new();
@@ -46,14 +46,14 @@ impl<LDT: KabuDataTypes> InitializeSignersOneShotBlockingActor<LDT> {
             _ => None,
         };
 
-        InitializeSignersOneShotBlockingActor { key, signers: None, monitor: None }
+        InitializeSignersOneShotBlockingComponent { key, signers: None, monitor: None }
     }
 
-    pub fn new_from_encrypted_key(priv_key_enc: Vec<u8>) -> InitializeSignersOneShotBlockingActor<LDT> {
+    pub fn new_from_encrypted_key(priv_key_enc: Vec<u8>) -> InitializeSignersOneShotBlockingComponent<LDT> {
         let keystore = KeyStore::new();
         let key = keystore.encrypt_once(priv_key_enc.as_slice()).unwrap();
 
-        InitializeSignersOneShotBlockingActor { key: Some(key), signers: None, monitor: None }
+        InitializeSignersOneShotBlockingComponent { key: Some(key), signers: None, monitor: None }
     }
 
     pub fn on_bc(self, bc: &Blockchain<LDT>) -> Self {
@@ -69,7 +69,7 @@ impl<LDT: KabuDataTypes> InitializeSignersOneShotBlockingActor<LDT> {
     }
 }
 
-impl Component for InitializeSignersOneShotBlockingActor<KabuDataTypesEthereum> {
+impl Component for InitializeSignersOneShotBlockingComponent<KabuDataTypesEthereum> {
     fn spawn(self, executor: reth_tasks::TaskExecutor) -> eyre::Result<()> {
         let name = self.name();
         let key = self.key.ok_or_else(|| eyre!("No signer keys found"))?;
@@ -89,6 +89,6 @@ impl Component for InitializeSignersOneShotBlockingActor<KabuDataTypesEthereum> 
     }
 
     fn name(&self) -> &'static str {
-        "InitializeSignersOneShotBlockingActor"
+        "InitializeSignersOneShotBlockingComponent"
     }
 }

@@ -1,12 +1,12 @@
 #[derive(Debug, Clone)]
-pub struct NodeBlockActorConfig {
+pub struct NodeBlockComponentConfig {
     pub block_header: bool,
     pub block_with_tx: bool,
     pub block_logs: bool,
     pub block_state_update: bool,
 }
 
-impl NodeBlockActorConfig {
+impl NodeBlockComponentConfig {
     pub fn all_disabled() -> Self {
         Self { block_header: false, block_with_tx: false, block_logs: false, block_state_update: false }
     }

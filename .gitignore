@@ -3,7 +3,7 @@
 .vscode
 .cache
 *.iml
-private.rs
+crates/types/entities/src/private.rs
 config.toml
 *.bkp
 .claude

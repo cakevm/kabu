@@ -101,7 +101,7 @@ async fn price_worker<N: Network, P: Provider<N> + Clone + 'static>(
     Ok(())
 }
 
-pub struct PriceActor<P, N> {
+pub struct PriceComponent<P, N> {
     client: P,
     only_once: bool,
 
@@ -109,7 +109,7 @@ pub struct PriceActor<P, N> {
     _n: PhantomData<N>,
 }
 
-impl<P, N> PriceActor<P, N>
+impl<P, N> PriceComponent<P, N>
 where
     N: Network,
     P: Provider<N> + Send + Sync + Clone + 'static,
@@ -131,7 +131,7 @@ where
     }
 }
 
-impl<P, N> Component for PriceActor<P, N>
+impl<P, N> Component for PriceComponent<P, N>
 where
     N: Network,
     P: Provider<N> + Send + Sync + Clone + 'static,
@@ -153,6 +153,6 @@ where
     }
 
     fn name(&self) -> &'static str {
-        "PriceActor"
+        "PriceComponent"
     }
 }

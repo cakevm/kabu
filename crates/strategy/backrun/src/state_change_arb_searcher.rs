@@ -272,7 +272,7 @@ pub async fn state_change_arb_searcher_worker<
     }
 }
 
-pub struct StateChangeArbSearcherActor<DB: Clone + Send + Sync + 'static, LDT: KabuDataTypes + 'static> {
+pub struct StateChangeArbSearcherComponent<DB: Clone + Send + Sync + 'static, LDT: KabuDataTypes + 'static> {
     backrun_config: BackrunConfig,
 
     market: Option<Arc<RwLock<Market>>>,
@@ -289,10 +289,10 @@ pub struct StateChangeArbSearcherActor<DB: Clone + Send + Sync + 'static, LDT: K
 impl<
         DB: DatabaseRef<Error = KabuDBError> + Database<Error = KabuDBError> + DatabaseCommit + Send + Sync + Clone + 'static,
         LDT: KabuDataTypes + 'static,
-    > StateChangeArbSearcherActor<DB, LDT>
+    > StateChangeArbSearcherComponent<DB, LDT>
 {
-    pub fn new(backrun_config: BackrunConfig) -> StateChangeArbSearcherActor<DB, LDT> {
-        StateChangeArbSearcherActor {
+    pub fn new(backrun_config: BackrunConfig) -> StateChangeArbSearcherComponent<DB, LDT> {
+        StateChangeArbSearcherComponent {
             backrun_config,
             market: None,
             state_update_rx: None,
@@ -334,7 +334,7 @@ impl<
     }
 }
 
-impl<DB, LDT> Component for StateChangeArbSearcherActor<DB, LDT>
+impl<DB, LDT> Component for StateChangeArbSearcherComponent<DB, LDT>
 where
     DB: Database<Error = KabuDBError> + DatabaseRef<Error = KabuDBError> + DatabaseCommit + Send + Sync + Clone + Default + 'static,
     LDT: KabuDataTypes + 'static,
@@ -372,6 +372,6 @@ where
     }
 
     fn name(&self) -> &'static str {
-        "StateChangeArbSearcherActor"
+        "StateChangeArbSearcherComponent"
     }
 }

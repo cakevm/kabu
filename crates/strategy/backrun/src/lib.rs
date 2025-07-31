@@ -1,8 +1,8 @@
 pub use arb_actor::StateChangeArbComponent;
 pub use backrun_config::{BackrunConfig, BackrunConfigSection};
 pub use block_state_change_processor::BlockStateChangeProcessorComponent;
-pub use pending_tx_state_change_processor::PendingTxStateChangeProcessorActor;
-pub use state_change_arb_searcher::StateChangeArbSearcherActor;
+pub use pending_tx_state_change_processor::PendingTxStateChangeProcessorComponent;
+pub use state_change_arb_searcher::StateChangeArbSearcherComponent;
 pub use swap_calculator::SwapCalculator;
 
 mod block_state_change_processor;

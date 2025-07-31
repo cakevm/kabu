@@ -6,7 +6,7 @@ use clap::{CommandFactory, FromArgMatches, Parser};
 use kabu::core::blockchain::{Blockchain, BlockchainState, Strategy};
 use kabu::core::topology::TopologyConfig;
 use kabu::evm::db::{AlloyDB, KabuDB};
-use kabu::node::config::NodeBlockActorConfig;
+use kabu::node::config::NodeBlockComponentConfig;
 use kabu::node::exex::mempool_worker;
 use kabu::types::blockchain::KabuDataTypesEthereum;
 use kabu_types_market::MarketState;
@@ -43,7 +43,7 @@ fn main() -> eyre::Result<()> {
                 .with_types_and_provider::<EthereumNode, BlockchainProvider<_>>()
                 .with_components(EthereumNode::components())
                 .with_add_ons(EthereumAddOns::default())
-                .install_exex("kabu-exex", |node_ctx| kabu_runtime::init(node_ctx, bc_clone, NodeBlockActorConfig::all_enabled()))
+                .install_exex("kabu-exex", |node_ctx| kabu_runtime::init(node_ctx, bc_clone, NodeBlockComponentConfig::all_enabled()))
                 .launch()
                 .await?;
 

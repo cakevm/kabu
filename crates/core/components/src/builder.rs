@@ -10,7 +10,7 @@ use std::sync::Arc;
 use tokio::sync::{broadcast, RwLock};
 
 // Import MEV-specific types for channel communication
-use kabu_evm_db::KabuDBType;
+use kabu_evm_db::KabuDB;
 use kabu_types_blockchain::KabuDataTypesEthereum;
 use kabu_types_entities::{AccountNonceAndBalanceState, TxSigners};
 use kabu_types_events::{MarketEvents, MempoolEvents, MessageHealthEvent, MessageSwapCompose, MessageTxCompose};
@@ -18,9 +18,9 @@ use kabu_types_events::{MarketEvents, MempoolEvents, MessageHealthEvent, Message
 /// MEV Component Communication Channels
 /// This struct holds all the broadcast channels used for inter-component communication
 #[derive(Clone)]
-pub struct MevComponentChannels {
+pub struct MevComponentChannels<DB = KabuDB> {
     /// Channel for swap composition messages (Strategy -> Router -> Signer)
-    pub swap_compose: broadcast::Sender<MessageSwapCompose<KabuDBType>>,
+    pub swap_compose: broadcast::Sender<MessageSwapCompose<DB, KabuDataTypesEthereum>>,
     /// Channel for transaction composition messages (Signer -> Broadcaster)
     pub tx_compose: broadcast::Sender<MessageTxCompose>,
     /// Channel for market events (Market -> Strategy/HealthMonitor)
@@ -35,7 +35,7 @@ pub struct MevComponentChannels {
     pub account_state: Arc<RwLock<AccountNonceAndBalanceState>>,
 }
 
-impl Default for MevComponentChannels {
+impl<DB: Clone> Default for MevComponentChannels<DB> {
     fn default() -> Self {
         let (swap_compose, _) = broadcast::channel(1000);
         let (tx_compose, _) = broadcast::channel(1000);
@@ -57,22 +57,22 @@ impl Default for MevComponentChannels {
 
 /// Context provided to component builders
 #[derive(Clone)]
-pub struct BuilderContext<State> {
+pub struct BuilderContext<State, DB = KabuDB> {
     pub state: State,
-    pub channels: MevComponentChannels,
+    pub channels: MevComponentChannels<DB>,
 }
 
-impl<State> BuilderContext<State> {
+impl<State, DB: Clone> BuilderContext<State, DB> {
     pub fn new(state: State) -> Self {
         Self { state, channels: MevComponentChannels::default() }
     }
 
-    pub fn with_channels(state: State, channels: MevComponentChannels) -> Self {
+    pub fn with_channels(state: State, channels: MevComponentChannels<DB>) -> Self {
         Self { state, channels }
     }
 }
 
-/// Generic components builder following Reth's pattern
+/// Generic components builder
 pub struct ComponentsBuilder<State, Pool = (), Network = (), Executor = (), Strategy = ()> {
     pool: Pool,
     network: Network,
@@ -535,7 +535,7 @@ where
             _state,
         } = self;
 
-        // Build components in dependency order following Reth pattern:
+        // Build components in dependency order:
         // 1. First build standalone components (market, pools)
         // 2. Then build components that depend on shared state (signers, account state)
         // 3. Finally build service components that wire everything together

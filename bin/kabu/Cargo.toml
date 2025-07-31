@@ -25,6 +25,7 @@ kabu-core-block-history = { workspace = true, optional = true }
 kabu-core-blockchain = { workspace = true, optional = true }
 kabu-core-components = { workspace = true, optional = true }
 kabu-core-mempool = { workspace = true, optional = true }
+kabu-core-node = { workspace = true }
 kabu-core-router = { workspace = true }
 kabu-core-topology = { workspace = true, optional = true }
 # defi
@@ -68,7 +69,6 @@ kabu-types-swap = { workspace = true, optional = true }
 # Binary dependencies
 clap.workspace = true
 eyre.workspace = true
-hex.workspace = true
 tokio.workspace = true
 tracing.workspace = true
 tracing-subscriber.workspace = true
