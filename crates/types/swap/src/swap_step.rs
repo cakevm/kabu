@@ -120,6 +120,56 @@ impl SwapStep {
         ret
     }
 
+    /// Fast check if two swap paths can be merged without doing the expensive merge operation
+    pub fn can_merge_swap_paths(swap_path_0: &SwapLine, swap_path_1: &SwapLine) -> bool {
+        // Check if tokens match
+        if swap_path_0.get_first_token().unwrap() != swap_path_1.get_first_token().unwrap()
+            || swap_path_0.get_last_token().unwrap() != swap_path_1.get_last_token().unwrap()
+        {
+            return false;
+        }
+
+        let mut split_index_start = 0;
+        let mut split_index_end = 0;
+
+        // Count common pools at start
+        for i in 0..swap_path_0.pools().len() {
+            if i >= swap_path_1.pools().len() {
+                break;
+            }
+            let pool_0 = &swap_path_0.pools()[i];
+            let pool_1 = &swap_path_1.pools()[i];
+            let token_0 = &swap_path_0.tokens()[i + 1];
+            let token_1 = &swap_path_1.tokens()[i + 1];
+
+            if pool_0 == pool_1 && token_0 == token_1 {
+                split_index_start += 1;
+            } else {
+                break;
+            }
+        }
+
+        // Count common pools at end
+        for i in 0..swap_path_0.pools().len() {
+            if i >= swap_path_1.pools().len() {
+                break;
+            }
+            let pool_0 = &swap_path_0.pools()[swap_path_0.pools().len() - 1 - i];
+            let pool_1 = &swap_path_1.pools()[swap_path_1.pools().len() - 1 - i];
+            let token_0 = &swap_path_0.tokens()[swap_path_0.tokens().len() - 2 - i];
+            let token_1 = &swap_path_1.tokens()[swap_path_1.tokens().len() - 2 - i];
+
+            if pool_0 == pool_1 && token_0 == token_1 {
+                split_index_end += 1;
+            } else {
+                break;
+            }
+        }
+
+        // Cannot merge if there are common pools on both sides
+        !(split_index_start > 0 && split_index_end > 0)
+    }
+
     pub fn merge_swap_paths(swap_path_0: SwapLine, swap_path_1: SwapLine, multicaller: Address) -> Result<(SwapStep, SwapStep)> {
         let mut split_index_start = 0;
         let mut split_index_end = 0;
