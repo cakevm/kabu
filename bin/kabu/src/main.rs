@@ -10,8 +10,10 @@ use kabu::node::config::NodeBlockComponentConfig;
 use kabu::node::exex::mempool_worker;
 use kabu::types::blockchain::KabuDataTypesEthereum;
 use kabu_types_market::MarketState;
+use reth::builder::NodeHandle;
 use reth::chainspec::{Chain, EthereumChainSpecParser};
 use reth::cli::Cli;
+use reth::tasks::TaskManager;
 use reth_node_ethereum::node::EthereumAddOns;
 use reth_node_ethereum::EthereumNode;
 use reth_provider::providers::BlockchainProvider;
@@ -39,7 +41,7 @@ fn main() -> eyre::Result<()> {
             let bc = Blockchain::new(builder.config().chain.chain.id());
             let bc_clone = bc.clone();
 
-            let handle = builder
+            let NodeHandle { node, node_exit_future } = builder
                 .with_types_and_provider::<EthereumNode, BlockchainProvider<_>>()
                 .with_components(EthereumNode::components())
                 .with_add_ons(EthereumAddOns::default())
@@ -47,9 +49,9 @@ fn main() -> eyre::Result<()> {
                 .launch()
                 .await?;
 
-            let mempool = handle.node.pool.clone();
+            let mempool = node.pool.clone();
             let ipc_provider =
-                ProviderBuilder::new().disable_recommended_fillers().connect_ipc(IpcConnect::new(handle.node.config.rpc.ipcpath)).await?;
+                ProviderBuilder::new().disable_recommended_fillers().connect_ipc(IpcConnect::new(node.config.rpc.ipcpath)).await?;
             let alloy_db = AlloyDB::new(ipc_provider.clone(), BlockId::latest()).unwrap();
 
             let state_db = KabuDB::new().with_ext_db(alloy_db);
@@ -58,6 +60,7 @@ fn main() -> eyre::Result<()> {
 
             let strategy = Strategy::<KabuDB>::new();
 
+            let task_executor = node.task_executor.clone();
             let bc_clone = bc.clone();
             tokio::task::spawn(async move {
                 if let Err(e) = kabu_runtime::start_kabu(
@@ -68,7 +71,7 @@ fn main() -> eyre::Result<()> {
                     topology_config,
                     kabu_args.kabu_config.clone(),
                     true,
-                    None, // Task executor will be created internally
+                    task_executor,
                 )
                 .await
                 {
@@ -77,7 +80,7 @@ fn main() -> eyre::Result<()> {
             });
             tokio::task::spawn(mempool_worker(mempool, bc));
 
-            handle.node_exit_future.await
+            node_exit_future.await
         }),
         Command::Remote(kabu_args) => {
             let rt = tokio::runtime::Builder::new_multi_thread().enable_all().build()?;
@@ -97,6 +100,8 @@ fn main() -> eyre::Result<()> {
 
                 let strategy = Strategy::<KabuDB>::new();
 
+                let task_manager = TaskManager::new(tokio::runtime::Handle::current());
+                let task_executor = task_manager.executor();
                 if let Err(e) = kabu_runtime::start_kabu(
                     provider,
                     bc_clone,
@@ -105,7 +110,7 @@ fn main() -> eyre::Result<()> {
                     topology_config,
                     kabu_args.kabu_config.clone(),
                     false,
-                    None,
+                    task_executor,
                 )
                 .await
                 {

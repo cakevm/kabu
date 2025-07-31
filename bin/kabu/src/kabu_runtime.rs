@@ -18,7 +18,7 @@ use kabu::types::entities::strategy_config::load_from_file;
 use kabu_core_components::Component;
 use kabu_types_market::PoolClass;
 use reth::api::NodeTypes;
-use reth::tasks::{TaskExecutor, TaskManager};
+use reth::tasks::TaskExecutor;
 use reth_exex::ExExContext;
 use reth_node_api::FullNodeComponents;
 use reth_primitives::EthPrimitives;
@@ -48,7 +48,7 @@ pub async fn start_kabu<P>(
     topology_config: TopologyConfig,
     kabu_config_filepath: String,
     is_exex: bool,
-    task_executor: Option<TaskExecutor>,
+    task_executor: TaskExecutor,
 ) -> eyre::Result<()>
 where
     P: Provider<Ethereum> + DebugProviderExt<Ethereum> + Send + Sync + Clone + 'static,
@@ -78,15 +78,6 @@ where
 
     let swap_encoder = MulticallerSwapEncoder::default_with_address(multicaller_address);
 
-    // Use provided task executor or create a new one
-    let executor = match task_executor {
-        Some(executor) => executor,
-        None => {
-            let task_manager = TaskManager::new(tokio::runtime::Handle::current());
-            task_manager.executor()
-        }
-    };
-
     // Create KabuBuildContext with defaults or use builder for customization
     let kabu_context = KabuBuildContext::builder(
         provider.clone(),
@@ -108,8 +99,6 @@ where
     // Create builder context
     let builder_context = BuilderContext::with_channels(kabu_context, mev_channels.clone());
 
-    // Note: Initialize signers is now handled by the market builder
-
     // Wait for node sync if needed
     if !is_exex {
         // In exex mode, we're already synced
@@ -119,7 +108,7 @@ where
     // Build and spawn all MEV components using the builder pattern
     info!("Building MEV components using Kabu node builders");
     let components = KabuNode::components::<P, KabuDB>();
-    match components.build_and_spawn(builder_context.clone(), executor.clone()).await {
+    match components.build_and_spawn(builder_context.clone(), task_executor.clone()).await {
         Ok(_) => info!("All core MEV components built and spawned successfully"),
         Err(e) => {
             error!("Failed to build MEV components: {}", e);
@@ -132,7 +121,7 @@ where
     let merger_builder = KabuMergerBuilder::<P, KabuDB>::new();
     match merger_builder.build_merger(&builder_context).await {
         Ok(merger) => {
-            merger.spawn(executor.clone())?;
+            merger.spawn(task_executor.clone())?;
             info!("Merger components built and spawned successfully");
         }
         Err(e) => {
@@ -146,7 +135,7 @@ where
     let web_server_builder = KabuWebServerBuilder::<P, KabuDB>::new();
     match web_server_builder.build_web_server(&builder_context).await {
         Ok(web_server) => {
-            web_server.spawn(executor.clone())?;
+            web_server.spawn(task_executor.clone())?;
             info!("Web server component built and spawned successfully");
         }
         Err(e) => {
@@ -160,7 +149,7 @@ where
     let monitoring_builder = KabuMonitoringBuilder::<P, KabuDB>::new();
     match monitoring_builder.build_monitoring(&builder_context).await {
         Ok(monitoring) => {
-            monitoring.spawn(executor.clone())?;
+            monitoring.spawn(task_executor.clone())?;
             info!("Monitoring components built and spawned successfully");
         }
         Err(e) => {
@@ -169,15 +158,6 @@ where
         }
     }
 
-    // Note: Market builder already handles initialization, market state preload, price,
-    // account monitor, and pool loaders
-    // Note: Network builder already handles block processing
-    // Note: Merger, web server, and monitoring components are spawned separately above
-
     info!("All MEV components started successfully");
-
-    // Keep runtime alive
-    tokio::signal::ctrl_c().await?;
-    info!("Shutting down Kabu MEV bot");
     Ok(())
 }
