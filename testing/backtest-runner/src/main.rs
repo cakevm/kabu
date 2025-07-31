@@ -7,6 +7,7 @@ use alloy_provider::network::TransactionResponse;
 use alloy_provider::Provider;
 use alloy_rpc_types::{BlockId, BlockNumberOrTag};
 use alloy_rpc_types_eth::TransactionTrait;
+use chrono::Local;
 use clap::Parser;
 use eyre::{OptionExt, Result};
 use kabu::broadcast::accounts::{AccountMonitorComponent, InitializeSignersOneShotBlockingComponent, SignersComponent};
@@ -42,7 +43,7 @@ use std::env;
 use std::fmt::{Display, Formatter};
 use std::process::exit;
 use std::sync::Arc;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 use tokio::sync::RwLock;
 use tracing::{debug, error, info};
 use tracing_subscriber::layer::SubscriberExt;
@@ -53,45 +54,55 @@ use wiremock::MockServer;
 mod flashbots_mock;
 mod test_config;
 
+use std::io::{self, Write};
+
 #[derive(Clone, Default, Debug)]
 struct Stat {
     found_counter: usize,
     sign_counter: usize,
     best_profit_eth: U256,
     best_swap: Option<Swap>,
+    start_time: Option<Instant>,
 }
 
 impl Display for Stat {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        // Runtime
+        if let Some(start) = self.start_time {
+            let elapsed = start.elapsed();
+            writeln!(f, "  Runtime: {:.3}s", elapsed.as_secs_f64())?;
+        }
+
+        // Summary
+        writeln!(f, "  Opportunities Found: {}", self.found_counter)?;
+        writeln!(
+            f,
+            "  Opportunities Verified: {} ({:.1}%)",
+            self.sign_counter,
+            if self.found_counter > 0 { (self.sign_counter as f64 / self.found_counter as f64) * 100.0 } else { 0.0 }
+        )?;
+
+        // Best arbitrage
         match &self.best_swap {
-            Some(swap) => match swap.get_first_token() {
-                Some(token) => {
-                    write!(
-                        f,
-                        "Found: {} Ok: {} Profit : {} / ProfitEth : {} Path : {} ",
-                        self.found_counter,
-                        self.sign_counter,
-                        token.to_float(swap.arb_profit()),
-                        NWETH::to_float(swap.arb_profit_eth()),
-                        swap
-                    )
+            Some(swap) => {
+                writeln!(f, "\n  Best Arbitrage:")?;
+                match swap.get_first_token() {
+                    Some(token) => {
+                        writeln!(f, "    Token Profit: {} {}", token.to_float(swap.arb_profit()), token.get_symbol())?;
+                    }
+                    None => {
+                        writeln!(f, "    Raw Profit: {}", swap.arb_profit())?;
+                    }
                 }
-                None => {
-                    write!(
-                        f,
-                        "Found: {} Ok: {} Profit : {} / ProfitEth : {} Path : {} ",
-                        self.found_counter,
-                        self.sign_counter,
-                        swap.arb_profit(),
-                        swap.arb_profit_eth(),
-                        swap
-                    )
-                }
-            },
-            _ => {
-                write!(f, "NO BEST SWAP")
+                writeln!(f, "    ETH Profit: {} ETH", NWETH::to_float(swap.arb_profit_eth()))?;
+                writeln!(f, "    Path: {swap}")?;
+            }
+            None => {
+                writeln!(f, "\n  No profitable arbitrage found")?;
             }
         }
+
+        Ok(())
     }
 }
 
@@ -226,6 +237,7 @@ async fn main() -> Result<()> {
         _ => info!("Signers have been initialized"),
     }
     // Give it a moment to complete
+    println!("[{}] Waiting for signers initialization...", Local::now().format("%H:%M:%S.%3f"));
     tokio::time::sleep(Duration::from_millis(100)).await;
 
     for (token_name, token_config) in test_config.tokens {
@@ -249,6 +261,7 @@ async fn main() -> Result<()> {
         market_instance.write().await.add_token(token);
     }
 
+    println!("[{}] Initializing components...", Local::now().format("%H:%M:%S.%3f"));
     info!("Starting market state preload component");
     let market_state_preload_component = MarketStatePreloadedOneShotComponent::new(client.clone())
         .with_copied_account(multicaller_encoder.get_contract_address())
@@ -304,12 +317,16 @@ async fn main() -> Result<()> {
         _ => info!("Price component has been initialized"),
     }
     // Give it a moment to complete since it runs only once
+    println!("[{}] Waiting for price data to load (500ms)...", Local::now().format("%H:%M:%S.%3f"));
     tokio::time::sleep(Duration::from_millis(500)).await;
 
     let pool_loaders =
         Arc::new(PoolLoadersBuilder::<_, _, KabuDataTypesEthereum>::default_pool_loaders(client.clone(), PoolsLoadingConfig::default()));
 
-    for (pool_name, pool_config) in test_config.pools {
+    let total_pools = test_config.pools.len();
+    println!("[{}] Loading {} pools...", Local::now().format("%H:%M:%S.%3f"), total_pools);
+
+    for (idx, (pool_name, pool_config)) in test_config.pools.into_iter().enumerate() {
         match pool_config.class {
             PoolClass::UniswapV2 | PoolClass::UniswapV3 => {
                 debug!(address=%pool_config.address, class=%pool_config.class, "Loading pool");
@@ -346,6 +363,14 @@ async fn main() -> Result<()> {
             }
         }
         let swap_path_len = market_instance.read().await.get_pool_paths(&PoolId::Address(pool_config.address)).unwrap_or_default().len();
+        println!(
+            "[{}] [{}/{}] Loaded pool '{}' - {} paths",
+            Local::now().format("%H:%M:%S.%3f"),
+            idx + 1,
+            total_pools,
+            pool_name,
+            swap_path_len
+        );
         info!(
             "Loaded pool '{}' with address={}, pool_class={}, swap_paths={}",
             pool_name, pool_config.address, pool_config.class, swap_path_len
@@ -523,7 +548,16 @@ async fn main() -> Result<()> {
 
     // #### Blockchain events
     // we need to wait for all components to start. For the CI it can be a bit longer
-    tokio::time::sleep(Duration::from_secs(args.wait_init)).await;
+    let components_wait = args.wait_init;
+    println!("[{}] Waiting {}s for all components to initialize...", Local::now().format("%H:%M:%S.%3f"), components_wait);
+
+    // Show countdown
+    for i in (1..=components_wait).rev() {
+        print!("\r[{}] Starting in {}s... ", Local::now().format("%H:%M:%S.%3f"), i);
+        io::stdout().flush().unwrap();
+        tokio::time::sleep(Duration::from_secs(1)).await;
+    }
+    println!("\r[{}] Components ready!              ", Local::now().format("%H:%M:%S.%3f"));
 
     let next_block_base_fee = ChainParameters::ethereum().calc_next_block_base_fee(
         block_header.gas_used,
@@ -552,6 +586,11 @@ async fn main() -> Result<()> {
     let client_clone = client.clone();
     tokio::spawn(async move {
         info!("Re-broadcaster task started");
+
+        let total_txs = test_config.txs.len();
+        if total_txs > 0 {
+            info!("Re-broadcasting {} transactions", total_txs);
+        }
 
         for (_, tx_config) in test_config.txs.iter() {
             debug!("Fetching original tx {}", tx_config.hash);
@@ -587,12 +626,17 @@ async fn main() -> Result<()> {
         }
     });
 
-    println!("Test '{}' is started!", args.config);
+    let test_start_time = Instant::now();
+    println!("\n[{}] TEST STARTED: {}", Local::now().format("%H:%M:%S.%3f"), args.config);
+    println!("[{}] Block: {} | Timeout: {}s", Local::now().format("%H:%M:%S.%3f"), test_config.settings.block, args.timeout);
+    println!("[{}] Waiting for arbitrage opportunities...", Local::now().format("%H:%M:%S.%3f"));
 
     let mut tx_compose_sub = mev_channels.swap_compose.subscribe();
 
-    let mut stat = Stat::default();
+    let mut stat = Stat { start_time: Some(test_start_time), ..Default::default() };
     let timeout_duration = Duration::from_secs(args.timeout);
+    let mut last_update = Instant::now();
+    let update_interval = Duration::from_secs(5);
 
     loop {
         tokio::select! {
@@ -602,6 +646,12 @@ async fn main() -> Result<()> {
                         SwapComposeMessage::Ready(ready_message) => {
                             debug!(swap=%ready_message.swap, "Ready message");
                             stat.sign_counter += 1;
+                            println!(
+                                "[{}] Verified swap #{} - Profit: {} ETH",
+                                Local::now().format("%H:%M:%S.%3f"),
+                                stat.sign_counter,
+                                NWETH::to_float(ready_message.swap.arb_profit_eth())
+                            );
 
                             if stat.best_profit_eth < ready_message.swap.arb_profit_eth() {
                                 stat.best_profit_eth = ready_message.swap.arb_profit_eth();
@@ -617,6 +667,9 @@ async fn main() -> Result<()> {
                         SwapComposeMessage::Prepare(encode_message) => {
                             debug!(swap=%encode_message.swap, "Prepare message");
                             stat.found_counter += 1;
+                            if stat.found_counter == 1 {
+                                println!("[{}] Found first arbitrage opportunity!", Local::now().format("%H:%M:%S.%3f"));
+                            }
                         }
                         _ => {}
                     },
@@ -625,63 +678,103 @@ async fn main() -> Result<()> {
                     }
                 }
             }
-            msg = tokio::time::sleep(timeout_duration) => {
-                debug!(?msg, "Timed out");
-                break;
+            _ = tokio::time::sleep(update_interval) => {
+                if last_update.elapsed() >= update_interval {
+                    let elapsed = test_start_time.elapsed().as_secs();
+                    let remaining = timeout_duration.as_secs().saturating_sub(elapsed);
+                    println!(
+                        "[{}] Status: {} found, {} verified | Elapsed: {}s, Remaining: {}s",
+                        Local::now().format("%H:%M:%S.%3f"),
+                        stat.found_counter,
+                        stat.sign_counter,
+                        elapsed,
+                        remaining
+                    );
+                    last_update = Instant::now();
+
+                    if elapsed >= timeout_duration.as_secs() {
+                        println!("[{}] Test timeout reached ({}s)", Local::now().format("%H:%M:%S.%3f"), timeout_duration.as_secs());
+                        break;
+                    }
+                }
             }
         }
     }
     if test_config.modules.flashbots {
         // wait for flashbots mock server to receive all requests
-        tokio::time::sleep(Duration::from_secs(30)).await;
+        println!("[{}] Waiting 30s for Flashbots mock server to collect requests...", Local::now().format("%H:%M:%S.%3f"));
+        for i in (1..=30).rev() {
+            print!("\r[{}] Flashbots collection: {}s remaining... ", Local::now().format("%H:%M:%S.%3f"), i);
+            io::stdout().flush().unwrap();
+            tokio::time::sleep(Duration::from_secs(1)).await;
+        }
+        println!("\r[{}] Flashbots collection complete!                    ", Local::now().format("%H:%M:%S.%3f"));
         if let Some(last_requests) = mock_server.unwrap().received_requests().await {
             if last_requests.is_empty() {
-                println!("Mock server did not received any request!")
+                println!("[{}] Flashbots: No requests received", Local::now().format("%H:%M:%S.%3f"))
             } else {
-                println!("Received {} flashbots requests", last_requests.len());
+                println!("[{}] Flashbots: {} requests received", Local::now().format("%H:%M:%S.%3f"), last_requests.len());
                 for request in last_requests {
                     let bundle_request: BundleRequest = serde_json::from_slice(&request.body)?;
                     println!(
-                        "bundle_count={}, target_blocks={:?}, txs_in_bundles={:?}",
+                        "[{}]   Bundles: {} | Blocks: {:?} | Txs: {:?}",
+                        Local::now().format("%H:%M:%S.%3f"),
                         bundle_request.params.len(),
                         bundle_request.params.iter().map(|b| b.target_block).collect::<Vec<_>>(),
                         bundle_request.params.iter().map(|b| b.transactions.len()).collect::<Vec<_>>()
                     );
                     // print all transactions
                     for bundle in bundle_request.params {
-                        println!("Bundle with {} transactions", bundle.transactions.len());
+                        println!("[{}]     Bundle: {} tx(s)", Local::now().format("%H:%M:%S.%3f"), bundle.transactions.len());
                     }
                 }
             }
         } else {
-            println!("Mock server recording is disabled!")
+            println!("[{}] Flashbots: Recording disabled", Local::now().format("%H:%M:%S.%3f"))
         }
     }
 
-    println!("\n\n-------------------\nStat : {stat}\n-------------------\n");
+    println!("\n[{}] TEST RESULTS\n{}", Local::now().format("%H:%M:%S.%3f"), "=".repeat(50));
+    println!("{stat}");
+    println!("{}", "=".repeat(50));
 
     if let Some(swaps_encoded) = test_config.assertions.swaps_encoded {
         if swaps_encoded > stat.found_counter {
-            println!("Test failed. Not enough encoded swaps : {} need {}", stat.found_counter, swaps_encoded);
+            println!(
+                "\n[{}] FAILED: Encoded swaps\n  Expected: >= {}\n  Actual: {}",
+                Local::now().format("%H:%M:%S.%3f"),
+                swaps_encoded,
+                stat.found_counter
+            );
             exit(1)
         } else {
-            println!("Test passed. Encoded swaps : {} required {}", stat.found_counter, swaps_encoded);
+            println!("[{}] PASSED: Encoded swaps ({})", Local::now().format("%H:%M:%S.%3f"), stat.found_counter);
         }
     }
     if let Some(swaps_ok) = test_config.assertions.swaps_ok {
         if swaps_ok > stat.sign_counter {
-            println!("Test failed. Not enough verified swaps : {} need {}", stat.sign_counter, swaps_ok);
+            println!(
+                "\n[{}] FAILED: Verified swaps\n  Expected: >= {}\n  Actual: {}",
+                Local::now().format("%H:%M:%S.%3f"),
+                swaps_ok,
+                stat.sign_counter
+            );
             exit(1)
         } else {
-            println!("Test passed. swaps : {} required {}", stat.sign_counter, swaps_ok);
+            println!("[{}] PASSED: Verified swaps ({})", Local::now().format("%H:%M:%S.%3f"), stat.sign_counter);
         }
     }
     if let Some(best_profit) = test_config.assertions.best_profit_eth {
         if NWETH::from_float(best_profit) > stat.best_profit_eth {
-            println!("Profit is too small {} need {}", NWETH::to_float(stat.best_profit_eth), best_profit);
+            println!(
+                "\n[{}] FAILED: Best profit\n  Expected: >= {} ETH\n  Actual: {} ETH",
+                Local::now().format("%H:%M:%S.%3f"),
+                best_profit,
+                NWETH::to_float(stat.best_profit_eth)
+            );
             exit(1)
         } else {
-            println!("Test passed. best profit : {} > {}", NWETH::to_float(stat.best_profit_eth), best_profit);
+            println!("[{}] PASSED: Best profit ({} ETH)", Local::now().format("%H:%M:%S.%3f"), NWETH::to_float(stat.best_profit_eth));
         }
     }
 

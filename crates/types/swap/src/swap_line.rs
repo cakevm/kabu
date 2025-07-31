@@ -565,7 +565,7 @@ mod tests {
         let (_, _, swap_line) = default_swap_line();
 
         // under test
-        let formatted = format!("{}", swap_line);
+        let formatted = format!("{swap_line}");
         assert_eq!(
             formatted,
             "SwapLine [profit=0.02, tokens=[WETH, USDT, USDT, WETH], \

@@ -17,7 +17,7 @@ use std::env;
 pub fn bench_swap_calculator(c: &mut Criterion) {
     let mut group = c.benchmark_group("swap_calculator");
 
-    let pool_addresses = vec![
+    let pool_addresses = [
         (address!("322bba387c825180ebfb62bd8e6969ebe5b5e52d"), PoolClass::UniswapV2),
         (address!("f382839b955ab57cc1e041f2c987a909c9a48af1"), PoolClass::UniswapV2),
         (address!("49af5fb5de94c93ee83ad488fe8cab30b0ef35f2"), PoolClass::UniswapV3),
@@ -59,7 +59,7 @@ pub fn bench_swap_calculator(c: &mut Criterion) {
             let (pool_address, _) = pool_addresses.last().unwrap();
             let last_pool = market.get_pool(&PoolId::Address(*pool_address)).unwrap();
             directions.insert(last_pool.clone(), last_pool.get_swap_directions());
-            let swap_path = market.build_swap_path_vec(&directions).unwrap().get(0).unwrap().clone();
+            let swap_path = market.build_swap_path_vec(&directions).unwrap().first().unwrap().clone();
 
             Ok::<(SwapPath, KabuDBType), eyre::Error>((swap_path, state_db.clone()))
         })
@@ -69,7 +69,7 @@ pub fn bench_swap_calculator(c: &mut Criterion) {
 
     let swap_line = SwapLine { path: swap_path, ..Default::default() };
 
-    println!("SwapLine: {}", swap_line);
+    println!("SwapLine: {swap_line}");
     group.bench_function("calculate", |b| {
         b.iter(|| {
             SwapCalculator::calculate(black_box(&mut swap_line.clone()), black_box(&mut state_db.clone()), EvmEnv::default())

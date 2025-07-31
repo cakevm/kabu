@@ -11,6 +11,7 @@ exclude.workspace = true
 [dependencies]
 kabu = { workspace = true, features = ["full-json-rpc", "strategy-full"] }
 
+chrono.workspace = true
 clap.workspace = true
 dotenvy.workspace = true
 eyre.workspace = true

@@ -162,7 +162,7 @@ swap-test-8:FILE="./testing/backtest-runner/test_21035613.toml"
 swap-test-8: swap-test
 
 .PHONY: swap-test-all
-swap-test-all: RL=info
+swap-test-all: RL=off
 swap-test-all:
 	@$(MAKE) swap-test-1 RL=$(RL)
 	@$(MAKE) swap-test-2 RL=$(RL)
