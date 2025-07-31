@@ -633,7 +633,7 @@ async fn main() -> Result<()> {
     }
     if test_config.modules.flashbots {
         // wait for flashbots mock server to receive all requests
-        tokio::time::sleep(Duration::from_secs(2)).await;
+        tokio::time::sleep(Duration::from_secs(5)).await;
         if let Some(last_requests) = mock_server.unwrap().received_requests().await {
             if last_requests.is_empty() {
                 println!("Mock server did not received any request!")
