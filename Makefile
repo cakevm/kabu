@@ -114,7 +114,7 @@ replayer:
 swap-test:
 	@echo "Running anvil swap test case: $(FILE)\n"
 	@RL=${RL:-info}; \
-    RUST_LOG=$(RL) cargo run --package kabu-backtest-runner --bin kabu-backtest-runner -- --config $(FILE) --timeout 25 --wait-init 5; \
+    RUST_LOG=$(RL) cargo run --package kabu-backtest-runner --bin kabu-backtest-runner -- --config $(FILE) --timeout 25 --wait-init 7; \
 	EXIT_CODE=$$?; \
 	if [ $$EXIT_CODE -ne 0 ]; then \
 		echo "\n\033[0;31mError: Anvil swap tester exited with code $$EXIT_CODE\033[0m\n"; \
