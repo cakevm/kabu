@@ -624,8 +624,8 @@ async fn main() -> Result<()> {
     }
     if test_config.modules.flashbots {
         // wait for flashbots mock server to receive all requests
-        println!("[{}] Waiting 30s for Flashbots mock server to collect requests...", Local::now().format("%H:%M:%S.%3f"));
-        for i in (1..=30).rev() {
+        println!("[{}] Waiting 10s for Flashbots mock server to collect requests...", Local::now().format("%H:%M:%S.%3f"));
+        for i in (1..=10).rev() {
             print!("\r[{}] Flashbots collection: {}s remaining... ", Local::now().format("%H:%M:%S.%3f"), i);
             io::stdout().flush().unwrap();
             tokio::time::sleep(Duration::from_secs(1)).await;

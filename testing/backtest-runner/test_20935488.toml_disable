@@ -11,6 +11,7 @@ coinbase = "0x1dd35b4da6534230ff53048f7477f17f7f4e7a70"
 multicaller = "0x3dd35b4da6534230ff53048f7477f17f7f4e7a70"
 skip_default = false
 
+
 [pools]
 ito_weth_uni2 = { address = "0x322bba387c825180ebfb62bd8e6969ebe5b5e52d", class = "uniswap2" }
 kobosu_ito_uni2 = { address = "0xf382839b955ab57cc1e041f2c987a909c9a48af1", class = "uniswap2" }

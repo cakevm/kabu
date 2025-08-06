@@ -8,7 +8,6 @@ flashbots = true
 block = 19101578
 coinbase = "0x1dd35b4da6534230ff53048f7477f17f7f4e7a70"
 multicaller = "0x3dd35b4da6534230ff53048f7477f17f7f4e7a70"
-skip_default = false
 
 [pools]
 weth_n_uni3 = { address = "0x90e7a93e0a6514cb0c84fc7acc1cb5c0793352d2", class = "uniswap3" }

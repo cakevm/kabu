@@ -13,7 +13,7 @@ The node system consists of three main parts:
 
 The `KabuNode` trait is the core abstraction for creating different node types:
 
-```rust
+```rust,ignore
 pub trait KabuNode<P, DB>: Send + Sync + 'static 
 where
     P: Provider + Send + Sync + 'static,
@@ -30,7 +30,7 @@ where
 
 The standard implementation that includes all MEV components:
 
-```rust
+```rust,ignore
 pub struct KabuEthereumNode<P, DB> {
     _phantom: PhantomData<(P, DB)>,
 }
@@ -50,7 +50,7 @@ impl<P, DB> KabuNode<P, DB> for KabuEthereumNode<P, DB> {
 
 The builder provides a fluent API for node construction:
 
-```rust
+```rust,ignore
 pub struct KabuBuilder<P, DB> {
     context: KabuBuildContext<P, DB>,
     node: Option<Box<dyn KabuNode<P, DB>>>,
@@ -81,7 +81,7 @@ impl<P, DB> KabuBuilder<P, DB> {
 
 The built node can be launched with a task executor:
 
-```rust
+```rust,ignore
 impl<P, DB> BuiltKabu<P, DB> {
     pub async fn launch(self, executor: TaskExecutor) -> Result<KabuHandle> {
         // Build components from the node
@@ -101,7 +101,7 @@ impl<P, DB> BuiltKabu<P, DB> {
 
 The build context contains all shared resources and configuration:
 
-```rust
+```rust,ignore
 pub struct KabuBuildContext<P, DB> {
     // Provider and blockchain
     pub provider: P,
@@ -138,7 +138,7 @@ pub struct KabuBuildContext<P, DB> {
 
 The context uses a builder for flexible initialization:
 
-```rust
+```rust,ignore
 let context = KabuBuildContext::builder(
     provider,
     blockchain,
@@ -194,7 +194,7 @@ Create specialized nodes for different use cases:
 
 ### Research Node
 
-```rust
+```rust,ignore
 pub struct ResearchNode;
 
 impl<P, DB> KabuNode<P, DB> for ResearchNode {
@@ -221,7 +221,7 @@ impl<P, DB> KabuNode<P, DB> for ResearchNode {
 
 ### Minimal Production Node
 
-```rust
+```rust,ignore
 pub struct MinimalProductionNode;
 
 impl<P, DB> KabuNode<P, DB> for MinimalProductionNode {

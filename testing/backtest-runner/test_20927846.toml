@@ -3,7 +3,6 @@
 signer = true
 flashbots = true
 
-
 [settings]
 block = 20927847
 coinbase = "0x1dd35b4da6534230ff53048f7477f17f7f4e7a70"

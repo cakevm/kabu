@@ -18,7 +18,7 @@ The new node system provides a unified way to build and launch Kabu instances:
 
 The `KabuNode` trait defines the interface for different node implementations:
 
-```rust
+```rust,ignore
 pub trait KabuNode<P, DB>: Send + Sync + 'static {
     async fn build_components(
         &self,
@@ -31,7 +31,7 @@ pub trait KabuNode<P, DB>: Send + Sync + 'static {
 
 The `KabuBuilder` provides a fluent API for constructing and launching nodes:
 
-```rust
+```rust,ignore
 let handle = KabuBuilder::new(kabu_context)
     .node(KabuEthereumNode::<P, DB>::default())
     .build()
@@ -43,7 +43,7 @@ let handle = KabuBuilder::new(kabu_context)
 
 The build context centralizes all configuration and shared resources:
 
-```rust
+```rust,ignore
 let kabu_context = KabuBuildContext::builder(
     provider,
     blockchain,
@@ -110,7 +110,7 @@ Execution and profit tracking:
 
 All component communication is centralized through `MevComponentChannels`:
 
-```rust
+```rust,ignore
 pub struct MevComponentChannels<DB> {
     // Market events
     pub market_events: broadcast::Sender<MarketEvents>,
@@ -133,7 +133,7 @@ pub struct MevComponentChannels<DB> {
 
 The typical arbitrage detection and execution flow:
 
-```
+```text
 Block/Mempool Event
     ↓
 StateChangeArbSearcher
@@ -157,7 +157,7 @@ FlashbotsBroadcast
 
 The standard way to create a Kabu instance:
 
-```rust
+```rust,ignore
 // Create provider
 let provider = ProviderBuilder::new()
     .on_http(node_url)
@@ -195,7 +195,7 @@ handle.wait_for_shutdown().await?;
 
 You can create custom nodes by implementing the `KabuNode` trait:
 
-```rust
+```rust,ignore
 pub struct CustomNode;
 
 impl<P, DB> KabuNode<P, DB> for CustomNode 

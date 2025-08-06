@@ -4,7 +4,7 @@
 
 The simplest way to start a Kabu MEV bot:
 
-```rust
+```rust,ignore
 use kabu::core::blockchain::{Blockchain, BlockchainState};
 use kabu::core::components::{KabuBuilder, MevComponentChannels};
 use kabu::core::node::{KabuBuildContext, KabuEthereumNode};
@@ -68,7 +68,7 @@ async fn main() -> Result<()> {
 
 Kabu can run as a Reth Execution Extension (ExEx):
 
-```rust
+```rust,ignore
 use reth::cli::Cli;
 use reth::builder::NodeHandle;
 
@@ -99,7 +99,7 @@ fn main() -> eyre::Result<()> {
 
 Create a component that monitors specific pools:
 
-```rust
+```rust,ignore
 use kabu_core_components::{Component, MevComponentChannels};
 use kabu_types_events::MarketEvents;
 use reth_tasks::TaskExecutor;
@@ -161,7 +161,7 @@ impl<DB: Clone + Send + Sync + 'static> Component for PoolMonitorComponent<DB> {
 
 Create a minimal node with only essential components:
 
-```rust
+```rust,ignore
 use kabu_core_components::{KabuNode, KabuBuildContext, BoxedComponent};
 
 pub struct MinimalNode;
@@ -220,7 +220,7 @@ let handle = KabuBuilder::new(kabu_context)
 
 When working with pools, ensure their state is loaded:
 
-```rust
+```rust,ignore
 use kabu_types_market::{Pool, RequiredStateReader};
 use kabu_defi_pools::UniswapV3Pool;
 
@@ -247,7 +247,7 @@ market.write().await.add_pool(pool.into())?;
 
 ### Accessing Shared State
 
-```rust
+```rust,ignore
 // Read market data
 let market_guard = context.market.read().await;
 let pool = market_guard.get_pool(&pool_address)?;
@@ -261,7 +261,7 @@ signers.add_privkey(private_key);
 
 ## Testing Components
 
-```rust
+```rust,no_run
 #[cfg(test)]
 mod tests {
     use super::*;

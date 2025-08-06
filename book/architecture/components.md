@@ -6,7 +6,7 @@ Components are the building blocks of Kabu's architecture. Each component is an 
 
 All components implement the `Component` trait:
 
-```rust
+```rust,ignore
 pub trait Component: Send + Sync + 'static {
     fn spawn(self, executor: TaskExecutor) -> Result<()>;
     fn spawn_boxed(self: Box<Self>, executor: TaskExecutor) -> Result<()>;
@@ -33,7 +33,7 @@ stateDiagram-v2
 
 Components use the builder pattern for configuration. Instead of manual channel wiring, components now use centralized `MevComponentChannels`:
 
-```rust
+```rust,ignore
 pub struct MyComponent<DB> {
     config: MyConfig,
     channels: Option<MevComponentChannels<DB>>,
@@ -60,7 +60,7 @@ impl<DB> MyComponent<DB> {
 
 Monitors state changes and identifies arbitrage opportunities:
 
-```rust
+```rust,ignore
 StateChangeArbSearcherComponent::new(backrun_config)
     .with_channels(&channels)
     .with_market_state(market_state)
@@ -70,7 +70,7 @@ StateChangeArbSearcherComponent::new(backrun_config)
 
 Manages transaction signing with nonce tracking:
 
-```rust
+```rust,ignore
 SignersComponent::<DB, KabuDataTypesEthereum>::new()
     .with_channels(&channels)
 ```
@@ -79,7 +79,7 @@ SignersComponent::<DB, KabuDataTypesEthereum>::new()
 
 Submits transaction bundles to Flashbots:
 
-```rust
+```rust,ignore
 FlashbotsBroadcastComponent::new(
     client.clone(),
     BroadcasterConfig::flashbots(signer),
@@ -91,7 +91,7 @@ FlashbotsBroadcastComponent::new(
 
 Tracks pool reliability and removes unhealthy pools:
 
-```rust
+```rust,ignore
 PoolHealthMonitorComponent::new()
     .with_channels(&channels)
     .with_market(market)
@@ -101,7 +101,7 @@ PoolHealthMonitorComponent::new()
 
 Here's a template for creating a new component:
 
-```rust
+```rust,ignore
 use std::sync::Arc;
 use tokio::sync::RwLock;
 use eyre::{Result, eyre};
@@ -180,7 +180,7 @@ Components communicate through typed channels in `MevComponentChannels`:
 
 ### Example: Processing Swaps
 
-```rust
+```rust,ignore
 // In your component
 let mut swap_compose = channels.swap_compose.subscribe();
 
@@ -207,7 +207,7 @@ while let Ok(msg) = swap_compose.recv().await {
    - Use bounded channels to prevent memory issues
 
 2. **Error Handling**
-   ```rust
+   ```rust,ignore
    match rx.recv().await {
        Ok(msg) => process(msg),
        Err(RecvError::Closed) => {
