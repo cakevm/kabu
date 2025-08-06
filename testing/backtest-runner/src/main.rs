@@ -10,42 +10,31 @@ use alloy_rpc_types_eth::TransactionTrait;
 use chrono::Local;
 use clap::Parser;
 use eyre::{OptionExt, Result};
-use kabu::broadcast::accounts::{AccountMonitorComponent, InitializeSignersOneShotBlockingComponent, SignersComponent};
-use kabu::broadcast::broadcaster::{FlashbotsBroadcastComponent, RelayConfig};
-use kabu::core::block_history::BlockHistoryComponent;
 use kabu::core::blockchain::Blockchain;
-use kabu::core::components::MevComponentChannels;
-use kabu::core::router::SwapRouterComponent;
+use kabu::core::blockchain::BlockchainState;
+use kabu::core::topology::{EncoderConfig, TopologyConfig};
 use kabu::defi::address_book::TokenAddressEth;
-use kabu::defi::health_monitor::StuffingTxMonitorActor;
-use kabu::defi::market::{fetch_and_add_pool_by_pool_id, fetch_state_and_add_pool};
-use kabu::defi::pools::protocols::CurveProtocol;
-use kabu::defi::pools::{CurvePool, PoolLoadersBuilder, PoolsLoadingConfig};
-use kabu::defi::preloader::MarketStatePreloadedOneShotComponent;
-use kabu::defi::price::PriceComponent;
-use kabu::evm::db::KabuDBType;
+use kabu::defi::pools::PoolsLoadingConfig;
+use kabu::defi::pools::{UniswapV2Pool, UniswapV3Pool};
+use kabu::evm::db::{AlloyDB, KabuDB};
 use kabu::evm::utils::NWETH;
-use kabu::execution::estimator::EvmEstimatorComponent;
 use kabu::execution::multicaller::{MulticallerDeployer, MulticallerSwapEncoder};
 use kabu::node::debug_provider::AnvilDebugProviderFactory;
-use kabu::node::json_rpc::BlockProcessingComponent;
-use kabu::strategy::backrun::{BackrunConfig, StateChangeArbComponent};
-use kabu::strategy::merger::{ArbSwapPathMergerComponent, DiffPathMergerComponent, SamePathMergerComponent};
+use kabu::strategy::backrun::BackrunConfig;
 use kabu::types::blockchain::{debug_trace_block, ChainParameters, KabuDataTypesEthereum};
-use kabu::types::entities::BlockHistory;
+use kabu::types::entities::LoomTxSigner;
 use kabu::types::events::{MarketEvents, MempoolEvents, SwapComposeMessage};
-use kabu::types::market::{MarketState, PoolClass, PoolId, Token};
+use kabu::types::market::{MarketState, PoolClass, Token};
+use kabu::types::market::{Pool, PoolWrapper, RequiredStateReader};
 use kabu::types::swap::Swap;
-use kabu_core_components::Component;
-use kabu_node_config::NodeBlockComponentConfig;
+use kabu_core_components::{KabuBuilder, MevComponentChannels};
+use kabu_core_node::{KabuBuildContext, KabuEthereumNode};
 use reth_tasks::TaskManager;
 use std::env;
 use std::fmt::{Display, Formatter};
 use std::process::exit;
-use std::sync::Arc;
 use std::time::{Duration, Instant};
-use tokio::sync::RwLock;
-use tracing::{debug, error, info};
+use tracing::{debug, error, info, warn};
 use tracing_subscriber::layer::SubscriberExt;
 use tracing_subscriber::util::SubscriberInitExt;
 use tracing_subscriber::{fmt, EnvFilter, Layer};
@@ -150,7 +139,6 @@ async fn main() -> Result<()> {
         mount_flashbots_mock(mock_server.as_ref().unwrap()).await;
     }
 
-    //let multicaller_address = MulticallerDeployer::new().deploy(client.clone(), priv_key.clone()).await?.address().ok_or_eyre("MULTICALLER_NOT_DEPLOYED")?;
     let multicaller_address = MulticallerDeployer::new()
         .set_code(client.clone(), address!("FCfCfcfC0AC30164AFdaB927F441F2401161F358"))
         .await?
@@ -168,31 +156,24 @@ async fn main() -> Result<()> {
 
     let block_header_with_txes = client.get_block(block_number.into()).await?.unwrap();
 
-    let state_db = KabuDBType::default();
+    // Create AlloyDB connected to the forked Anvil instance
+    let alloy_db =
+        AlloyDB::new(client.clone(), BlockId::Number(BlockNumberOrTag::Number(block_number))).ok_or_eyre("Failed to create AlloyDB")?;
+    let state_db = KabuDB::new().with_ext_db(alloy_db);
     let market_state_instance = MarketState::new(state_db);
 
     // Add default tokens for price actor
 
-    info!("Creating channels and task executor");
-    // Create TaskExecutor using TaskManager for testing
-    let task_manager = TaskManager::new(tokio::runtime::Handle::current());
-    let task_executor = task_manager.executor();
-
+    info!("Creating blockchain and initial state");
     // Create Blockchain instance which manages all channels
-    let blockchain = Blockchain::new(1); // Chain ID 1 for mainnet
+    // Disable influxdb for test runner
+    let blockchain = Blockchain::new_with_config(1, false); // Chain ID 1 for mainnet, influxdb disabled
 
-    // Get channels from blockchain
-    let new_block_headers_channel = blockchain.new_block_headers_channel();
-    let new_block_with_tx_channel = blockchain.new_block_with_tx_channel();
-    let new_block_state_update_channel = blockchain.new_block_state_update_channel();
-    let new_block_logs_channel = blockchain.new_block_logs_channel();
-    let market_events_channel = blockchain.market_events_channel();
-    let mempool_events_channel = blockchain.mempool_events_channel();
-    let pool_health_monitor_channel = blockchain.health_monitor_channel();
+    // Create blockchain state
+    let blockchain_state = BlockchainState::<KabuDB, KabuDataTypesEthereum>::new_with_market_state(market_state_instance);
 
-    // Get shared state from blockchain and create additional state
+    // Get references we need for setup
     let market_instance = blockchain.market();
-    let mempool_instance = blockchain.mempool();
     let latest_block = blockchain.latest_block();
 
     // Update the market with our test tokens
@@ -204,41 +185,18 @@ async fn main() -> Result<()> {
         market_guard.add_token(Token::new_with_data(TokenAddressEth::DAI, Some("DAI".to_string()), None, Some(18), true, false));
     }
 
-    // Create market state and other test-specific state
-    let market_state = Arc::new(RwLock::new(market_state_instance));
-    let block_history_state = Arc::new(RwLock::new(BlockHistory::new(10)));
-
-    // Create MEV channels for swap compose and tx compose
-    let mev_channels = MevComponentChannels::<KabuDBType>::default();
-
     // Update latest block with current block info
-    latest_block.write().await.update(block_number, block_header.hash, None, None, None, None);
-
     let (_, post) = debug_trace_block(client.clone(), BlockId::Number(BlockNumberOrTag::Number(block_number)), true).await?;
     latest_block.write().await.update(
         block_number,
         block_header.hash,
         Some(block_header.clone()),
-        Some(block_header_with_txes),
+        Some(block_header_with_txes.clone()),
         None,
-        Some(post),
+        Some(post.clone()),
     );
 
     info!("Starting initialize signers actor");
-
-    let initialize_signers_actor = InitializeSignersOneShotBlockingComponent::new(Some(priv_key))
-        .with_signers(mev_channels.signers.clone())
-        .with_monitor(mev_channels.account_state.clone());
-    match initialize_signers_actor.spawn(task_executor.clone()) {
-        Err(e) => {
-            error!("{}", e);
-            panic!("Cannot initialize signers");
-        }
-        _ => info!("Signers have been initialized"),
-    }
-    // Give it a moment to complete
-    println!("[{}] Waiting for signers initialization...", Local::now().format("%H:%M:%S.%3f"));
-    tokio::time::sleep(Duration::from_millis(100)).await;
 
     for (token_name, token_config) in test_config.tokens {
         let symbol = token_config.symbol.unwrap_or(token_config.address.to_checksum(None));
@@ -261,290 +219,202 @@ async fn main() -> Result<()> {
         market_instance.write().await.add_token(token);
     }
 
-    println!("[{}] Initializing components...", Local::now().format("%H:%M:%S.%3f"));
-    info!("Starting market state preload component");
-    let market_state_preload_component = MarketStatePreloadedOneShotComponent::new(client.clone())
-        .with_copied_account(multicaller_encoder.get_contract_address())
-        .with_signers(mev_channels.signers.clone())
-        .with_market_state(market_state.clone());
-    match market_state_preload_component.spawn(task_executor.clone()) {
-        Err(e) => {
-            error!("{}", e)
-        }
-        _ => {
-            info!("Market state preload component started successfully")
+    // Create topology config for test environment
+    let topology_config = TopologyConfig {
+        influxdb: None,
+        clients: std::collections::HashMap::new(),
+        blockchains: std::collections::HashMap::new(),
+        actors: kabu::core::topology::ActorConfig {
+            broadcaster: None,
+            node: None,
+            node_exex: None,
+            mempool: None,
+            price: None,
+            pools: None,
+            noncebalance: None,
+            estimator: None,
+        },
+        signers: std::collections::HashMap::new(),
+        encoders: std::collections::HashMap::from([(
+            "multicaller".to_string(),
+            EncoderConfig::SwapStep(kabu::core::topology::SwapStepEncoderConfig { address: multicaller_address.to_string() }),
+        )]),
+        preloaders: None,
+        webserver: None,
+        database: None, // Database is optional for test runner
+    };
+
+    // Create BackrunConfig from test settings
+    let backrun_config = BackrunConfig::new_dumb();
+
+    // Configure which pools to load based on test config
+    let mut pools_config = PoolsLoadingConfig::disable_all(PoolsLoadingConfig::default());
+    for pool_config in test_config.pools.values() {
+        match pool_config.class {
+            PoolClass::UniswapV2 => pools_config = pools_config.enable(PoolClass::UniswapV2),
+            PoolClass::UniswapV3 => pools_config = pools_config.enable(PoolClass::UniswapV3),
+            PoolClass::Curve => pools_config = pools_config.enable(PoolClass::Curve),
+            _ => {}
         }
     }
 
-    info!("Starting node component");
-    let node_block_component = BlockProcessingComponent::new(client.clone(), NodeBlockComponentConfig::all_enabled()).with_channels(
-        Some(new_block_headers_channel.clone()),
-        Some(new_block_with_tx_channel.clone()),
-        Some(new_block_logs_channel.clone()),
-        Some(new_block_state_update_channel.clone()),
-    );
-    match node_block_component.spawn(task_executor.clone()) {
-        Err(e) => {
-            error!("{}", e)
-        }
-        _ => {
-            info!("Node component started successfully")
-        }
-    }
+    println!("[{}] Building Kabu MEV components...", Local::now().format("%H:%M:%S.%3f"));
+    info!("Building Kabu MEV components with KabuEthereumNode");
 
-    info!("Starting account monitor component");
-    let account_monitor_component = AccountMonitorComponent::new(
+    // For test runner, we don't need a database pool
+    info!("Test runner using no database pool");
+
+    // Create channels first so we can use them throughout the test
+    let mev_channels = MevComponentChannels::<KabuDB>::default();
+
+    // Create KabuBuildContext with our channels
+    let kabu_context = KabuBuildContext::builder(
         client.clone(),
-        mev_channels.account_state.clone(),
-        mev_channels.signers.clone(),
-        Duration::from_secs(1),
-    );
-    match account_monitor_component.spawn(task_executor.clone()) {
-        Err(e) => {
-            error!("{}", e);
-            panic!("Cannot initialize account monitor");
-        }
-        _ => info!("Account monitor has been initialized"),
+        blockchain.clone(),
+        blockchain_state.clone(),
+        topology_config.clone(),
+        backrun_config.clone(),
+        multicaller_address,
+        None,  // No database pool needed for test runner
+        false, // is_exex = false for testing
+    )
+    .with_pools_config(pools_config.clone())
+    .with_swap_encoder(multicaller_encoder.clone())
+    .with_channels(mev_channels.clone()) // Use our channels
+    .with_enable_web_server(false) // Disable web server for test runner
+    .build();
+
+    // Create TaskExecutor
+    let task_manager = TaskManager::new(tokio::runtime::Handle::current());
+    let task_executor = task_manager.executor();
+
+    // Initialize test signer BEFORE launching components
+    println!("[{}] Initializing test signer...", Local::now().format("%H:%M:%S.%3f"));
+    {
+        let signers = mev_channels.signers.clone();
+        let account_state = mev_channels.account_state.clone();
+
+        // Add the private key directly
+        let signer = signers.write().await.add_privkey(alloy_primitives::Bytes::from(priv_key));
+        account_state.write().await.add_account(signer.address());
+        println!("[{}] Test signer initialized: {:?}", Local::now().format("%H:%M:%S.%3f"), signer.address());
     }
 
-    info!("Starting price component");
-    let price_component = PriceComponent::new(client.clone()).only_once().with_market(market_instance.clone());
-    match price_component.spawn(task_executor.clone()) {
-        Err(e) => {
-            error!("{}", e);
-            panic!("Cannot initialize price component");
-        }
-        _ => info!("Price component has been initialized"),
-    }
-    // Give it a moment to complete since it runs only once
-    println!("[{}] Waiting for price data to load (500ms)...", Local::now().format("%H:%M:%S.%3f"));
+    // Build and launch components with KabuEthereumNode - now SignersComponent will have signers configured
+    let _handle =
+        KabuBuilder::new(kabu_context).node(KabuEthereumNode::<_, KabuDB>::default()).build().launch(task_executor.clone()).await?;
+
+    // Give components time to initialize
+    println!("[{}] Waiting for component initialization...", Local::now().format("%H:%M:%S.%3f"));
     tokio::time::sleep(Duration::from_millis(500)).await;
 
-    let pool_loaders =
-        Arc::new(PoolLoadersBuilder::<_, _, KabuDataTypesEthereum>::default_pool_loaders(client.clone(), PoolsLoadingConfig::default()));
-
+    // Manually load test pools since automatic loader may not work in test environment
     let total_pools = test_config.pools.len();
-    println!("[{}] Loading {} pools...", Local::now().format("%H:%M:%S.%3f"), total_pools);
+    if total_pools > 0 {
+        println!("[{}] Loading {} test pools manually...", Local::now().format("%H:%M:%S.%3f"), total_pools);
 
-    for (idx, (pool_name, pool_config)) in test_config.pools.into_iter().enumerate() {
-        match pool_config.class {
-            PoolClass::UniswapV2 | PoolClass::UniswapV3 => {
-                debug!(address=%pool_config.address, class=%pool_config.class, "Loading pool");
-                fetch_and_add_pool_by_pool_id(
-                    client.clone(),
-                    market_instance.clone(),
-                    market_state.clone(),
-                    pool_loaders.clone(),
-                    PoolId::Address(pool_config.address),
-                    pool_config.class,
-                )
-                .await?;
+        let mut pools_loaded = 0;
 
-                debug!(address=%pool_config.address, class=%pool_config.class, "Loaded pool");
-            }
-            PoolClass::Curve => {
-                debug!("Loading curve pool");
-                if let Ok(curve_contract) = CurveProtocol::get_contract_from_code(client.clone(), pool_config.address).await {
-                    let curve_pool = CurvePool::fetch_pool_data_with_default_encoder(client.clone(), curve_contract).await?;
-                    fetch_state_and_add_pool::<_, _, _, KabuDataTypesEthereum>(
-                        client.clone(),
-                        market_instance.clone(),
-                        market_state.clone(),
-                        curve_pool.into(),
-                    )
-                    .await?;
-                } else {
-                    error!("CURVE_POOL_NOT_LOADED");
+        // Get access to the market state to update the state DB
+        let market_state_db = blockchain_state.market_state_commit();
+
+        for (pool_name, pool_config) in &test_config.pools {
+            match pool_config.class {
+                PoolClass::UniswapV2 => {
+                    // For UniswapV2, we need to fetch pool data from chain
+                    match UniswapV2Pool::fetch_pool_data(client.clone(), pool_config.address).await {
+                        Ok(pool) => {
+                            // Load pool state into state DB
+                            match pool.get_state_required() {
+                                Ok(state_required) => {
+                                    match RequiredStateReader::<KabuDataTypesEthereum>::fetch_calls_and_slots(
+                                        client.clone(),
+                                        state_required,
+                                        Some(block_number),
+                                    )
+                                    .await
+                                    {
+                                        Ok(state_update) => {
+                                            market_state_db.write().await.state_db.apply_geth_update(state_update);
+                                            debug!("Applied state update for UniswapV2 pool {}", pool_name);
+                                        }
+                                        Err(e) => {
+                                            error!("Failed to fetch state for UniswapV2 pool {}: {}", pool_name, e);
+                                        }
+                                    }
+                                }
+                                Err(e) => {
+                                    error!("Failed to get required state for UniswapV2 pool {}: {}", pool_name, e);
+                                }
+                            }
+
+                            if let Err(e) = market_instance.write().await.add_pool(PoolWrapper::from(pool)) {
+                                error!("Failed to add UniswapV2 pool to market: {}", e);
+                            } else {
+                                pools_loaded += 1;
+                                println!("  ✓ Loaded {} (UniswapV2) at {}", pool_name, pool_config.address);
+                            }
+                        }
+                        Err(e) => {
+                            error!("Failed to load UniswapV2 pool {}: {}", pool_name, e);
+                        }
+                    }
                 }
-                debug!("Loaded curve pool");
-            }
-            _ => {
-                error!("Unknown pool class")
+                PoolClass::UniswapV3 => {
+                    // For UniswapV3, we need to fetch pool data from chain
+                    match UniswapV3Pool::fetch_pool_data(client.clone(), pool_config.address).await {
+                        Ok(pool) => {
+                            // Load pool state into state DB
+                            match pool.get_state_required() {
+                                Ok(state_required) => {
+                                    match RequiredStateReader::<KabuDataTypesEthereum>::fetch_calls_and_slots(
+                                        client.clone(),
+                                        state_required,
+                                        Some(block_number),
+                                    )
+                                    .await
+                                    {
+                                        Ok(state_update) => {
+                                            market_state_db.write().await.state_db.apply_geth_update(state_update);
+                                            debug!("Applied state update for UniswapV3 pool {}", pool_name);
+                                        }
+                                        Err(e) => {
+                                            error!("Failed to fetch state for UniswapV3 pool {}: {}", pool_name, e);
+                                        }
+                                    }
+                                }
+                                Err(e) => {
+                                    error!("Failed to get required state for UniswapV3 pool {}: {}", pool_name, e);
+                                }
+                            }
+
+                            if let Err(e) = market_instance.write().await.add_pool(PoolWrapper::from(pool)) {
+                                error!("Failed to add UniswapV3 pool to market: {}", e);
+                            } else {
+                                pools_loaded += 1;
+                                println!("  ✓ Loaded {} (UniswapV3) at {}", pool_name, pool_config.address);
+                            }
+                        }
+                        Err(e) => {
+                            error!("Failed to load UniswapV3 pool {}: {}", pool_name, e);
+                        }
+                    }
+                }
+                _ => {
+                    warn!("Unsupported pool class {:?} for {}", pool_config.class, pool_name);
+                }
             }
         }
-        let swap_path_len = market_instance.read().await.get_pool_paths(&PoolId::Address(pool_config.address)).unwrap_or_default().len();
-        println!(
-            "[{}] [{}/{}] Loaded pool '{}' - {} paths",
-            Local::now().format("%H:%M:%S.%3f"),
-            idx + 1,
-            total_pools,
-            pool_name,
-            swap_path_len
-        );
-        info!(
-            "Loaded pool '{}' with address={}, pool_class={}, swap_paths={}",
-            pool_name, pool_config.address, pool_config.class, swap_path_len
-        );
+
+        println!("[{}] Loaded {}/{} test pools", Local::now().format("%H:%M:%S.%3f"), pools_loaded, total_pools);
     }
 
-    info!("Starting block history component");
-    let block_history_component = BlockHistoryComponent::new(client.clone()).with_channels(
-        ChainParameters::ethereum(),
-        latest_block.clone(),
-        market_state.clone(),
-        block_history_state.clone(),
-        new_block_headers_channel.clone(),
-        new_block_with_tx_channel.clone(),
-        new_block_logs_channel.clone(),
-        new_block_state_update_channel.clone(),
-        market_events_channel.clone(),
-    );
-    match block_history_component.spawn(task_executor.clone()) {
-        Err(e) => {
-            error!("{}", e)
-        }
-        _ => {
-            info!("Block history component started successfully")
-        }
-    }
-
-    // Start estimator component
-    let estimator_component = EvmEstimatorComponent::new_with_provider(multicaller_encoder.clone(), Some(client.clone()))
-        .with_swap_compose_channel(mev_channels.swap_compose.clone());
-    match estimator_component.spawn(task_executor.clone()) {
-        Err(e) => error!("{e}"),
-        _ => {
-            info!("Estimator component started successfully")
-        }
-    }
-
-    let health_monitor_component = StuffingTxMonitorActor::new(client.clone())
-        .with_latest_block(latest_block.clone())
-        .with_tx_compose_channel(mev_channels.tx_compose.clone())
-        .with_market_events(market_events_channel.clone());
-    match health_monitor_component.spawn(task_executor.clone()) {
-        Ok(_) => {
-            info!("Stuffing tx monitor component started")
-        }
-        Err(e) => {
-            panic!("StuffingTxMonitorActor error {e}")
-        }
-    }
-
-    // Start actor that encodes paths found
-    if test_config.modules.encoder {
-        info!("Starting swap router component");
-
-        let swap_router_component =
-            SwapRouterComponent::new(mev_channels.signers.clone(), mev_channels.account_state.clone(), mev_channels.swap_compose.clone());
-
-        match swap_router_component.spawn(task_executor.clone()) {
-            Err(e) => {
-                error!("{}", e)
-            }
-            _ => {
-                info!("Swap router component started successfully")
-            }
-        }
-    }
-
-    // Start signer actor that signs paths before broadcasting
-    if test_config.modules.signer {
-        info!("Starting signers component");
-        let signers_component = SignersComponent::<_, _, KabuDBType, KabuDataTypesEthereum>::new(
-            client.clone(),
-            mev_channels.signers.clone(),
-            mev_channels.account_state.clone(),
-            120, // gas_price_buffer
-        )
-        .with_channels(mev_channels.swap_compose.clone(), mev_channels.swap_compose.clone());
-        match signers_component.spawn(task_executor.clone()) {
-            Err(e) => {
-                error!("{}", e);
-                panic!("Cannot start signers");
-            }
-            _ => info!("Signers component started"),
-        }
-    }
-
-    // Start state change arb actor
-    if test_config.modules.arb_block || test_config.modules.arb_mempool {
-        info!("Starting state change arb component");
-        let state_change_arb_component = StateChangeArbComponent::<_, _, KabuDBType, KabuDataTypesEthereum>::new(
-            client.clone(),
-            test_config.modules.arb_block,
-            test_config.modules.arb_mempool,
-            BackrunConfig::new_dumb(),
-        )
-        .with_market(market_instance.clone())
-        .with_mempool(mempool_instance.clone())
-        .with_latest_block(latest_block.clone())
-        .with_market_state(market_state.clone())
-        .with_block_history(block_history_state.clone())
-        .with_mempool_events_channel(mempool_events_channel.clone())
-        .with_market_events_channel(market_events_channel.clone())
-        .with_swap_compose_channel(mev_channels.swap_compose.clone())
-        .with_pool_health_monitor_channel(pool_health_monitor_channel.clone());
-        match state_change_arb_component.spawn(task_executor.clone()) {
-            Err(e) => {
-                error!("{}", e)
-            }
-            _ => {
-                info!("State change arb component started successfully")
-            }
-        }
-    }
-
-    // Swap path merger tries to build swap steps from swap lines
-    if test_config.modules.arb_path_merger {
-        info!("Starting swap path merger component");
-
-        let swap_path_merger_component = ArbSwapPathMergerComponent::<KabuDBType>::new(multicaller_address)
-            .with_latest_block(latest_block.clone())
-            .with_market_events_channel(market_events_channel.clone())
-            .with_compose_channel(mev_channels.swap_compose.clone());
-        match swap_path_merger_component.spawn(task_executor.clone()) {
-            Err(e) => {
-                error!("{}", e)
-            }
-            _ => {
-                info!("Swap path merger component started successfully")
-            }
-        }
-    }
-
-    // Same path merger tries to merge different stuffing tx to optimize swap line
-    if test_config.modules.same_path_merger {
-        let same_path_merger_component = SamePathMergerComponent::<_, _, KabuDBType>::new(client.clone())
-            .with_market_state(market_state.clone())
-            .with_latest_block(latest_block.clone())
-            .with_market_events_channel(market_events_channel.clone())
-            .with_compose_channel(mev_channels.swap_compose.clone());
-        match same_path_merger_component.spawn(task_executor.clone()) {
-            Err(e) => {
-                error!("{}", e)
-            }
-            _ => {
-                info!("Same path merger component started successfully")
-            }
-        }
-    }
-    if test_config.modules.flashbots {
-        let relays = vec![RelayConfig { id: 1, url: mock_server.as_ref().unwrap().uri(), name: "relay".to_string(), no_sign: Some(false) }];
-        let flashbots_broadcast_component =
-            FlashbotsBroadcastComponent::new(None, true)?.with_relays(relays)?.with_channel(mev_channels.tx_compose.clone());
-        match flashbots_broadcast_component.spawn(task_executor.clone()) {
-            Err(e) => {
-                error!("{}", e)
-            }
-            _ => {
-                info!("Flashbots broadcast component started successfully")
-            }
-        }
-    }
-
-    // Diff path merger tries to merge all found swaplines into one transaction
-    let diff_path_merger_component = DiffPathMergerComponent::<KabuDBType>::new()
-        .with_market_events_channel(market_events_channel.clone())
-        .with_compose_channel(mev_channels.swap_compose.clone());
-    match diff_path_merger_component.spawn(task_executor.clone()) {
-        Err(e) => {
-            error!("{}", e)
-        }
-        _ => {
-            info!("Diff path merger component started successfully")
-        }
-    }
+    // Get references for event sending
+    // Use channels from MevComponentChannels (these are what components are listening to)
+    let market_events_channel = mev_channels.market_events.clone();
+    let mempool_events_channel = mev_channels.mempool_events.clone();
+    // But mempool instance comes from blockchain
+    let mempool_instance = blockchain.mempool();
 
     // #### Blockchain events
     // we need to wait for all components to start. For the CI it can be a bit longer
@@ -565,7 +435,43 @@ async fn main() -> Result<()> {
         block_header.base_fee_per_gas.unwrap_or_default(),
     );
 
-    // Sending block header update message
+    // Send block header through blockchain channel for block history component
+    use kabu::types::events::{BlockHeaderEventData, MessageBlockHeader};
+    let block_header_msg = MessageBlockHeader::new(BlockHeaderEventData {
+        header: block_header.clone(),
+        next_block_number: block_header.number + 1,
+        next_block_timestamp: block_header.timestamp + 12,
+        _phantom: std::marker::PhantomData,
+    });
+    if let Err(e) = blockchain.new_block_headers_channel().send(block_header_msg) {
+        error!("Failed to send block header through blockchain channel: {}", e);
+    } else {
+        info!("Sent block header for block {}", block_header.number);
+    }
+
+    // Also send the block with transactions
+    use kabu::types::events::{BlockUpdate, MessageBlock};
+    let block_msg = MessageBlock::new(BlockUpdate { block: block_header_with_txes.clone() });
+    if let Err(e) = blockchain.new_block_with_tx_channel().send(block_msg) {
+        error!("Failed to send block with tx through blockchain channel: {}", e);
+    } else {
+        info!("Sent block with {} transactions", block_header_with_txes.transactions.as_transactions().unwrap_or(&[]).len());
+    }
+
+    // Also send the block state update with state diffs
+    use kabu::types::events::{BlockStateUpdate, MessageBlockStateUpdate};
+    let block_state_msg = MessageBlockStateUpdate::new(BlockStateUpdate {
+        block_header: block_header.clone(),
+        state_update: post.clone(),
+        _phantom: std::marker::PhantomData,
+    });
+    if let Err(e) = blockchain.new_block_state_update_channel().send(block_state_msg) {
+        error!("Failed to send block state update through blockchain channel: {}", e);
+    } else {
+        info!("Sent block state update with {} state changes", post.len());
+    }
+
+    // Sending block header update message for market events
     if let Err(e) = market_events_channel.send(MarketEvents::BlockHeaderUpdate {
         block_number: block_header.number,
         block_hash: block_header.hash,
@@ -573,17 +479,18 @@ async fn main() -> Result<()> {
         base_fee: block_header.base_fee_per_gas.unwrap_or_default(),
         next_base_fee: next_block_base_fee,
     }) {
-        error!("{}", e);
-    }
-
-    // Sending block state update message
-    if let Err(e) = market_events_channel.send(MarketEvents::BlockStateUpdate { block_hash: block_header.hash }) {
-        error!("{}", e);
+        error!("Failed to send BlockHeaderUpdate: {}", e);
+    } else {
+        info!("Sent BlockHeaderUpdate for block {}", block_header.number);
     }
 
     // #### RE-BROADCASTER
     //starting broadcasting transactions from eth to anvil
     let client_clone = client.clone();
+    let mempool_events_channel_clone = mempool_events_channel.clone();
+    let mempool_instance_clone = mempool_instance.clone();
+    let market_events_channel_clone = market_events_channel.clone();
+    let block_hash = block_header.hash;
     tokio::spawn(async move {
         info!("Re-broadcaster task started");
 
@@ -591,6 +498,9 @@ async fn main() -> Result<()> {
         if total_txs > 0 {
             info!("Re-broadcasting {} transactions", total_txs);
         }
+
+        // Add delay to ensure components are ready
+        tokio::time::sleep(Duration::from_millis(100)).await;
 
         for (_, tx_config) in test_config.txs.iter() {
             debug!("Fetching original tx {}", tx_config.hash);
@@ -603,12 +513,16 @@ async fn main() -> Result<()> {
 
             match tx_config.send.to_lowercase().as_str() {
                 "mempool" => {
-                    let mut mempool_guard = mempool_instance.write().await;
+                    let mut mempool_guard = mempool_instance_clone.write().await;
                     let tx_hash: TxHash = tx.tx_hash();
 
                     mempool_guard.add_tx(tx.clone());
-                    if let Err(e) = mempool_events_channel.send(MempoolEvents::MempoolActualTxUpdate { tx_hash }) {
-                        error!("{e}");
+                    drop(mempool_guard); // Release lock before sending event
+
+                    if let Err(e) = mempool_events_channel_clone.send(MempoolEvents::MempoolActualTxUpdate { tx_hash }) {
+                        error!("Failed to send mempool event: {}", e);
+                    } else {
+                        info!("Sent mempool event for tx {}", tx_hash);
                     }
                 }
                 "block" => match client_clone.send_raw_transaction(tx.inner.encoded_2718().as_slice()).await {
@@ -623,6 +537,14 @@ async fn main() -> Result<()> {
                     debug!("Incorrect action {} for : hash {} from {} to {}  ", tx_config.send, tx.tx_hash(), from, to);
                 }
             }
+        }
+
+        // Send block state update after all transactions are added to mempool
+        tokio::time::sleep(Duration::from_millis(100)).await;
+        if let Err(e) = market_events_channel_clone.send(MarketEvents::BlockStateUpdate { block_hash }) {
+            error!("Failed to send block state update: {}", e);
+        } else {
+            info!("Sent block state update for block {}", block_hash);
         }
     });
 

@@ -1,31 +1,48 @@
 use crate::arguments::{AppArgs, Command, KabuArgs};
 use alloy::eips::BlockId;
+use alloy::primitives::hex;
 use alloy::providers::{IpcConnect, ProviderBuilder, WsConnect};
 use alloy::rpc::client::ClientBuilder;
 use clap::{CommandFactory, FromArgMatches, Parser};
-use kabu::core::blockchain::{Blockchain, BlockchainState, Strategy};
-use kabu::core::topology::TopologyConfig;
+use diesel_migrations::{embed_migrations, EmbeddedMigrations};
+use eyre::OptionExt;
+use kabu::broadcast::accounts::InitializeSignersOneShotBlockingComponent;
+use kabu::core::blockchain::{Blockchain, BlockchainState};
+use kabu::core::components::{Component, KabuBuilder};
+use kabu::core::topology::{EncoderConfig, TopologyConfig};
+use kabu::defi::pools::PoolsLoadingConfig;
 use kabu::evm::db::{AlloyDB, KabuDB};
+use kabu::execution::multicaller::MulticallerSwapEncoder;
 use kabu::node::config::NodeBlockComponentConfig;
-use kabu::node::exex::mempool_worker;
+use kabu::node::debug_provider::DebugProviderExt;
+use kabu::node::exex::{kabu_exex, mempool_worker};
+use kabu::storage::db::init_db_pool_with_migrations;
+use kabu::strategy::backrun::{BackrunConfig, BackrunConfigSection};
 use kabu::types::blockchain::KabuDataTypesEthereum;
-use kabu_types_market::MarketState;
+use kabu::types::entities::strategy_config::load_from_file;
+use kabu_core_node::{KabuBuildContext, KabuEthereumNode};
+use kabu_types_market::{MarketState, PoolClass};
+use reth::api::NodeTypes;
 use reth::builder::NodeHandle;
 use reth::chainspec::{Chain, EthereumChainSpecParser};
 use reth::cli::Cli;
 use reth::tasks::TaskManager;
+use reth_exex::ExExContext;
+use reth_node_api::FullNodeComponents;
 use reth_node_ethereum::node::EthereumAddOns;
 use reth_node_ethereum::EthereumNode;
+use reth_primitives::EthPrimitives;
 use reth_provider::providers::BlockchainProvider;
-use std::time::Duration;
-use tokio::{signal, task};
+use std::future::Future;
 use tracing::{error, info};
 use tracing_subscriber::layer::SubscriberExt;
 use tracing_subscriber::util::SubscriberInitExt;
 use tracing_subscriber::{fmt, EnvFilter, Layer};
 
 mod arguments;
-mod kabu_runtime;
+
+// Embed migrations from the storage/db crate
+pub const MIGRATIONS: EmbeddedMigrations = embed_migrations!("../../migrations");
 
 fn main() -> eyre::Result<()> {
     let env_filter = EnvFilter::try_from_default_env().unwrap_or_else(|_| "info".into());
@@ -45,7 +62,7 @@ fn main() -> eyre::Result<()> {
                 .with_types_and_provider::<EthereumNode, BlockchainProvider<_>>()
                 .with_components(EthereumNode::components())
                 .with_add_ons(EthereumAddOns::default())
-                .install_exex("kabu-exex", |node_ctx| kabu_runtime::init(node_ctx, bc_clone, NodeBlockComponentConfig::all_enabled()))
+                .install_exex("kabu-exex", |node_ctx| init_kabu_exex(node_ctx, bc_clone, NodeBlockComponentConfig::all_enabled()))
                 .launch()
                 .await?;
 
@@ -53,34 +70,43 @@ fn main() -> eyre::Result<()> {
             let ipc_provider =
                 ProviderBuilder::new().disable_recommended_fillers().connect_ipc(IpcConnect::new(node.config.rpc.ipcpath)).await?;
             let alloy_db = AlloyDB::new(ipc_provider.clone(), BlockId::latest()).unwrap();
-
             let state_db = KabuDB::new().with_ext_db(alloy_db);
-
             let bc_state = BlockchainState::<KabuDB, KabuDataTypesEthereum>::new_with_market_state(MarketState::new(state_db));
 
-            let strategy = Strategy::<KabuDB>::new();
-
+            // Start Kabu MEV components
             let task_executor = node.task_executor.clone();
             let bc_clone = bc.clone();
-            tokio::task::spawn(async move {
-                if let Err(e) = kabu_runtime::start_kabu(
-                    ipc_provider,
-                    bc_clone,
-                    bc_state,
-                    strategy,
-                    topology_config,
-                    kabu_args.kabu_config.clone(),
-                    true,
-                    task_executor,
-                )
-                .await
-                {
-                    error!("Error starting kabu: {:?}", e);
-                }
+            let kabu_handle = tokio::task::spawn(async move {
+                start_kabu_mev(ipc_provider, bc_clone, bc_state, topology_config, kabu_args.kabu_config.clone(), true, task_executor).await
             });
+
+            // Start mempool worker
             tokio::task::spawn(mempool_worker(mempool, bc));
 
-            node_exit_future.await
+            // Wait for either node exit or kabu handle
+            tokio::select! {
+                _ = node_exit_future => {
+                    info!("Node exited");
+                }
+                result = kabu_handle => {
+                    match result {
+                        Ok(Ok(handle)) => {
+                            info!("Kabu MEV components started, waiting for shutdown");
+                            handle.wait_for_shutdown().await?;
+                        }
+                        Ok(Err(e)) => {
+                            error!("Error starting kabu: {:?}", e);
+                            return Err(e);
+                        }
+                        Err(e) => {
+                            error!("Task panic: {:?}", e);
+                            return Err(e.into());
+                        }
+                    }
+                }
+            }
+
+            Ok(())
         }),
         Command::Remote(kabu_args) => {
             let rt = tokio::runtime::Builder::new_multi_thread().enable_all().build()?;
@@ -98,41 +124,105 @@ fn main() -> eyre::Result<()> {
 
                 let bc_state = BlockchainState::<KabuDB, KabuDataTypesEthereum>::new();
 
-                let strategy = Strategy::<KabuDB>::new();
-
                 let task_manager = TaskManager::new(tokio::runtime::Handle::current());
                 let task_executor = task_manager.executor();
-                if let Err(e) = kabu_runtime::start_kabu(
-                    provider,
-                    bc_clone,
-                    bc_state,
-                    strategy,
-                    topology_config,
-                    kabu_args.kabu_config.clone(),
-                    false,
-                    task_executor,
-                )
-                .await
-                {
-                    error!("Error starting kabu: {:#?}", e);
-                    panic!("{}", e)
-                }
 
-                // keep kabu running
-                tokio::select! {
-                    _ = signal::ctrl_c() => {
-                    info!("CTRL+C received... exiting");
-                }
-                _ = async {
-                        loop {
-                        tokio::time::sleep(Duration::from_secs(60)).await;
-                        task::yield_now().await;
-                        }
-                    } => {}
-                }
+                let handle =
+                    start_kabu_mev(provider, bc_clone, bc_state, topology_config, kabu_args.kabu_config.clone(), false, task_executor)
+                        .await?;
+
+                // Wait for shutdown
+                handle.wait_for_shutdown().await?;
                 Ok::<(), eyre::Error>(())
             })?;
             Ok(())
         }
     }
+}
+
+async fn init_kabu_exex<Node>(
+    ctx: ExExContext<Node>,
+    bc: Blockchain,
+    config: NodeBlockComponentConfig,
+) -> eyre::Result<impl Future<Output = eyre::Result<()>>>
+where
+    Node: FullNodeComponents<Types: NodeTypes<Primitives = EthPrimitives>>,
+{
+    Ok(kabu_exex(ctx, bc, config))
+}
+
+async fn start_kabu_mev<P>(
+    provider: P,
+    bc: Blockchain,
+    bc_state: BlockchainState<KabuDB, KabuDataTypesEthereum>,
+    topology_config: TopologyConfig,
+    kabu_config_filepath: String,
+    is_exex: bool,
+    task_executor: reth::tasks::TaskExecutor,
+) -> eyre::Result<kabu::core::components::KabuHandle>
+where
+    P: alloy::providers::Provider<alloy::network::Ethereum> + DebugProviderExt<alloy::network::Ethereum> + Send + Sync + Clone + 'static,
+{
+    let chain_id = provider.get_chain_id().await?;
+    info!(chain_id = ?chain_id, "Starting Kabu MEV bot");
+
+    // Parse configuration
+    let (_encoder_name, encoder) = topology_config.encoders.iter().next().ok_or_eyre("NO_ENCODER")?;
+    let multicaller_address: alloy::primitives::Address = match encoder {
+        EncoderConfig::SwapStep(e) => e.address.parse()?,
+    };
+    info!(address=?multicaller_address, "Multicaller");
+
+    let db_url = topology_config.database.clone().unwrap().url;
+
+    // Initialize database pool and handle migrations
+    let db_pool = init_db_pool_with_migrations(db_url, MIGRATIONS).await?;
+
+    let pools_config =
+        PoolsLoadingConfig::disable_all(PoolsLoadingConfig::default()).enable(PoolClass::UniswapV2).enable(PoolClass::UniswapV3);
+
+    let backrun_config: BackrunConfigSection = load_from_file::<BackrunConfigSection>(kabu_config_filepath.into()).await?;
+    let backrun_config: BackrunConfig = backrun_config.backrun_strategy;
+
+    let swap_encoder = MulticallerSwapEncoder::default_with_address(multicaller_address);
+
+    // Create KabuBuildContext
+    let kabu_context = KabuBuildContext::builder(
+        provider.clone(),
+        bc,
+        bc_state.clone(),
+        topology_config.clone(),
+        backrun_config.clone(),
+        multicaller_address,
+        Some(db_pool.clone()),
+        is_exex,
+    )
+    .with_pools_config(pools_config.clone())
+    .with_swap_encoder(swap_encoder.clone())
+    .build();
+
+    // Get references to channels before building
+    let signers = kabu_context.channels.signers.clone();
+    let account_state = kabu_context.channels.account_state.clone();
+
+    // Build and launch MEV components using the compact builder pattern
+    info!("Building MEV components using KabuBuilder with KabuEthereumNode");
+
+    let handle =
+        KabuBuilder::new(kabu_context).node(KabuEthereumNode::<P, KabuDB>::default()).build().launch(task_executor.clone()).await?;
+
+    // Initialize signers if DATA env var is provided
+    if let Ok(key) = std::env::var("DATA") {
+        info!("Initializing signers from DATA environment variable");
+        let private_key_encrypted = hex::decode(key)?;
+        let signer_initializer = InitializeSignersOneShotBlockingComponent::<KabuDataTypesEthereum>::new(Some(private_key_encrypted))
+            .with_signers(signers)
+            .with_monitor(account_state);
+
+        signer_initializer.spawn(task_executor)?;
+    } else {
+        info!("No DATA environment variable found, skipping signer initialization");
+    }
+
+    Ok(handle)
 }

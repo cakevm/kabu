@@ -126,6 +126,7 @@ where
 }
 
 #[allow(dead_code)]
+#[derive(Clone)]
 pub struct MarketStatePreloadedOneShotComponent<P, N, DB> {
     name: &'static str,
     client: P,
@@ -239,11 +240,6 @@ where
         });
         Ok(())
     }
-
-    fn spawn_boxed(self: Box<Self>, executor: TaskExecutor) -> Result<()> {
-        (*self).spawn(executor)
-    }
-
     fn name(&self) -> &'static str {
         "MarketStatePreloadedOneShotComponent"
     }

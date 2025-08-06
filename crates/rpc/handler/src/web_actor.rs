@@ -88,10 +88,6 @@ where
         Ok(())
     }
 
-    fn spawn_boxed(self: Box<Self>, executor: reth_tasks::TaskExecutor) -> eyre::Result<()> {
-        (*self).spawn(executor)
-    }
-
     fn name(&self) -> &'static str {
         "WebServerComponent"
     }

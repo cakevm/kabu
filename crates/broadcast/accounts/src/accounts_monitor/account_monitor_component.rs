@@ -17,6 +17,7 @@ use kabu_types_events::{MessageBlock, MessageBlockHeader, MessageBlockLogs};
 use reth_tasks::TaskExecutor;
 
 /// Component that monitors account nonces and balances for managed accounts
+#[derive(Clone)]
 pub struct AccountMonitorComponent<P, N, LDT: KabuDataTypes + 'static = KabuDataTypesEthereum> {
     /// JSON-RPC provider for fetching account data
     client: P,
@@ -25,11 +26,11 @@ pub struct AccountMonitorComponent<P, N, LDT: KabuDataTypes + 'static = KabuData
     /// Signers to monitor accounts for
     signers: Arc<RwLock<TxSigners<LDT>>>,
     /// Channel to receive block headers
-    block_header_rx: Option<broadcast::Receiver<MessageBlockHeader<LDT>>>,
+    block_header_tx: Option<broadcast::Sender<MessageBlockHeader<LDT>>>,
     /// Channel to receive blocks with transactions
-    block_rx: Option<broadcast::Receiver<MessageBlock<LDT>>>,
+    block_tx: Option<broadcast::Sender<MessageBlock<LDT>>>,
     /// Channel to receive block logs
-    block_logs_rx: Option<broadcast::Receiver<MessageBlockLogs<LDT>>>,
+    block_logs_tx: Option<broadcast::Sender<MessageBlockLogs<LDT>>>,
     /// Update interval for fetching account data
     update_interval: Duration,
     /// Phantom data for network type
@@ -52,9 +53,9 @@ where
             client,
             account_state,
             signers,
-            block_header_rx: None,
-            block_rx: None,
-            block_logs_rx: None,
+            block_header_tx: None,
+            block_tx: None,
+            block_logs_tx: None,
             update_interval,
             _network: std::marker::PhantomData,
         }
@@ -66,9 +67,9 @@ where
         block_channel: broadcast::Sender<MessageBlock<LDT>>,
         block_logs_channel: broadcast::Sender<MessageBlockLogs<LDT>>,
     ) -> Self {
-        self.block_header_rx = Some(block_header_channel.subscribe());
-        self.block_rx = Some(block_channel.subscribe());
-        self.block_logs_rx = Some(block_logs_channel.subscribe());
+        self.block_header_tx = Some(block_header_channel);
+        self.block_tx = Some(block_channel);
+        self.block_logs_tx = Some(block_logs_channel);
         self
     }
 
@@ -93,8 +94,8 @@ where
         });
 
         // Extract receivers
-        let mut block_rx = self.block_rx;
-        let mut block_logs_rx = self.block_logs_rx;
+        let mut block_rx = self.block_tx.map(|tx| tx.subscribe());
+        let mut block_logs_rx = self.block_logs_tx.map(|tx| tx.subscribe());
         let account_state = self.account_state;
 
         // Main event loop
@@ -308,10 +309,6 @@ where
             }
         });
         Ok(())
-    }
-
-    fn spawn_boxed(self: Box<Self>, executor: TaskExecutor) -> Result<()> {
-        (*self).spawn(executor)
     }
 
     fn name(&self) -> &'static str {

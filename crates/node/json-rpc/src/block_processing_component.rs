@@ -12,6 +12,7 @@ use kabu_types_events::{MessageBlock, MessageBlockHeader, MessageBlockLogs, Mess
 use reth_tasks::TaskExecutor;
 
 /// Simplified component that processes blockchain data from Ethereum nodes
+#[derive(Clone)]
 pub struct BlockProcessingComponent<P, N, LDT: KabuDataTypes + 'static> {
     /// JSON-RPC provider for fetching blockchain data
     client: P,
@@ -222,11 +223,6 @@ where
         });
         Ok(())
     }
-
-    fn spawn_boxed(self: Box<Self>, executor: TaskExecutor) -> Result<()> {
-        (*self).spawn(executor)
-    }
-
     fn name(&self) -> &'static str {
         "BlockProcessingComponent"
     }

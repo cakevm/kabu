@@ -31,7 +31,7 @@ alloy-rpc-types.workspace = true
 alloy-rpc-types-eth.workspace = true
 
 kabu-core-components.workspace = true
-kabu-node-config.workspace = true
+kabu-core-node.workspace = true
 kabu-types-blockchain.workspace = true
 reth-tasks.workspace = true
 

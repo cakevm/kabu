@@ -77,11 +77,6 @@ impl<LDT: KabuDataTypes + 'static> Component for MempoolComponent<LDT> {
 
         Ok(())
     }
-
-    fn spawn_boxed(self: Box<Self>, executor: TaskExecutor) -> Result<()> {
-        (*self).spawn(executor)
-    }
-
     fn name(&self) -> &'static str {
         "MempoolComponent"
     }

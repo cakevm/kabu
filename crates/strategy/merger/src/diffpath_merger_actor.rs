@@ -159,6 +159,7 @@ where
     }
 }
 
+#[derive(Clone)]
 pub struct DiffPathMergerComponent<DB: Clone + Send + Sync + 'static> {
     market_events: Option<broadcast::Sender<MarketEvents>>,
 
@@ -224,10 +225,6 @@ where
         });
 
         Ok(())
-    }
-
-    fn spawn_boxed(self: Box<Self>, executor: TaskExecutor) -> Result<()> {
-        (*self).spawn(executor)
     }
 
     fn name(&self) -> &'static str {

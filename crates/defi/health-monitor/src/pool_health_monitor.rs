@@ -187,6 +187,10 @@ pub async fn pool_health_monitor_worker(
                                     _=>{}
                                 }
                             }
+                            Err(RecvError::Closed)=>{
+                                debug!("pool_health_update channel closed, shutting down");
+                                break;
+                            }
                             Err(e)=>{
                                 error!("pool_health_update error {}", e)
                             }
@@ -230,11 +234,6 @@ impl Component for PoolHealthMonitorComponent {
 
         Ok(())
     }
-
-    fn spawn_boxed(self: Box<Self>, executor: TaskExecutor) -> Result<()> {
-        (*self).spawn(executor)
-    }
-
     fn name(&self) -> &'static str {
         "PoolHealthMonitorComponent"
     }

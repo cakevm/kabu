@@ -458,11 +458,6 @@ where
 
         Ok(())
     }
-
-    fn spawn_boxed(self: Box<Self>, executor: TaskExecutor) -> Result<()> {
-        (*self).spawn(executor)
-    }
-
     fn name(&self) -> &'static str {
         "PendingTxStateChangeProcessorComponent"
     }

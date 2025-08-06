@@ -10,5 +10,8 @@ version.workspace = true
 
 [dependencies]
 bb8.workspace = true
+diesel.workspace = true
 diesel-async.workspace = true
+diesel_migrations = { version = "2.2", features = ["postgres"] }
 thiserror.workspace = true
+tracing.workspace = true

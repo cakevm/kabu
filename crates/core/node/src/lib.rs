@@ -1,7 +1,7 @@
 //! Kabu MEV Bot Node Implementation
 
 use alloy_network::Ethereum;
-use alloy_primitives::{hex, Address};
+use alloy_primitives::Address;
 use alloy_provider::Provider;
 use eyre::Result;
 use std::marker::PhantomData;
@@ -10,9 +10,10 @@ use tokio::sync::RwLock;
 
 // Core component framework imports
 use kabu_core_components::{
-    BroadcasterBuilder, BuilderContext, Component, EstimatorBuilder, ExecutorBuilder, HealthMonitorBuilderTrait, MarketBuilder,
-    MergerBuilder, MevComponentChannels, MevComponentsBuilder, MonitoringBuilder, NetworkBuilder, PlaceholderComponent, PoolBuilder,
-    SignerBuilderTrait, StrategyBuilder, WebServerBuilder,
+    BroadcasterBuilder, BuilderContext, Component, EstimatorBuilder, ExecutorBuilder, HealthMonitorBuilderTrait, KabuComponentsSet,
+    KabuNode as KabuNodeTrait, KabuNodeComponentsBuilder, KabuNodeTypes, MarketBuilder, MergerBuilder, MevComponentChannels,
+    MevComponentsBuilder, MonitoringBuilder, NetworkBuilder, PlaceholderComponent, PoolBuilder, SignerBuilderTrait, StrategyBuilder,
+    WebServerBuilder,
 };
 
 // Component implementations
@@ -31,7 +32,6 @@ use kabu_metrics::InfluxDbWriterComponent;
 use kabu_node_config::NodeBlockComponentConfig;
 use kabu_node_debug_provider::DebugProviderExt;
 use kabu_node_json_rpc::BlockProcessingComponent;
-use kabu_rpc_handler::WebServerComponent;
 use kabu_storage_db::DbPool;
 use kabu_strategy_backrun::{BackrunConfig, StateChangeArbComponent};
 use kabu_strategy_merger::{ArbSwapPathMergerComponent, DiffPathMergerComponent, SamePathMergerComponent};
@@ -79,12 +79,14 @@ where
     pub multicaller_address: Address,
     /// Multicaller encoder
     pub swap_encoder: MulticallerSwapEncoder,
-    /// Database pool
-    pub db_pool: DbPool,
+    /// Database pool (optional - only needed for web server)
+    pub db_pool: Option<DbPool>,
     /// Pool loading configuration
     pub pools_config: PoolsLoadingConfig,
     /// Whether running as ExEx
     pub is_exex: bool,
+    /// Whether to spawn web server
+    pub enable_web_server: bool,
     /// Shared market state
     pub market: Arc<RwLock<Market>>,
     /// Shared market state with DB
@@ -126,7 +128,7 @@ where
         topology_config: TopologyConfig,
         backrun_config: BackrunConfig,
         multicaller_address: Address,
-        db_pool: DbPool,
+        db_pool: Option<DbPool>,
         is_exex: bool,
     ) -> Self {
         let swap_encoder = MulticallerSwapEncoder::default_with_address(multicaller_address);
@@ -156,6 +158,7 @@ where
             db_pool,
             pools_config,
             is_exex,
+            enable_web_server: true, // Default to enabled
             market,
             market_state,
             mempool,
@@ -173,7 +176,7 @@ where
         topology_config: TopologyConfig,
         backrun_config: BackrunConfig,
         multicaller_address: Address,
-        db_pool: DbPool,
+        db_pool: Option<DbPool>,
         is_exex: bool,
     ) -> KabuBuildContextBuilder<P, DB> {
         KabuBuildContextBuilder::new(
@@ -212,9 +215,10 @@ where
     backrun_config: BackrunConfig,
     multicaller_address: Address,
     swap_encoder: MulticallerSwapEncoder,
-    db_pool: DbPool,
+    db_pool: Option<DbPool>,
     pools_config: PoolsLoadingConfig,
     is_exex: bool,
+    enable_web_server: bool,
     market: Arc<RwLock<Market>>,
     market_state: Arc<RwLock<MarketState<DB>>>,
     mempool: Arc<RwLock<Mempool<KabuDataTypesEthereum>>>,
@@ -244,7 +248,7 @@ where
         topology_config: TopologyConfig,
         backrun_config: BackrunConfig,
         multicaller_address: Address,
-        db_pool: DbPool,
+        db_pool: Option<DbPool>,
         is_exex: bool,
     ) -> Self {
         let swap_encoder = MulticallerSwapEncoder::default_with_address(multicaller_address);
@@ -275,12 +279,18 @@ where
             db_pool,
             pools_config,
             is_exex,
+            enable_web_server: true, // Default to enabled
             market,
             market_state,
             mempool,
             block_history,
             latest_block,
         }
+    }
+
+    pub fn with_enable_web_server(mut self, enable: bool) -> Self {
+        self.enable_web_server = enable;
+        self
     }
 
     pub fn with_channels(mut self, channels: MevComponentChannels<DB>) -> Self {
@@ -336,6 +346,7 @@ where
             db_pool: self.db_pool,
             pools_config: self.pools_config,
             is_exex: self.is_exex,
+            enable_web_server: self.enable_web_server,
             market: self.market,
             market_state: self.market_state,
             mempool: self.mempool,
@@ -348,6 +359,35 @@ where
 /// Kabu Node providing MEV bot functionality
 #[derive(Clone, Default)]
 pub struct KabuNode;
+
+/// Kabu Ethereum node types configuration
+#[derive(Clone)]
+pub struct KabuEthereumNode<P, DB> {
+    _phantom: PhantomData<(P, DB)>,
+}
+
+impl<P, DB> Default for KabuEthereumNode<P, DB> {
+    fn default() -> Self {
+        Self { _phantom: PhantomData }
+    }
+}
+
+impl<P, DB> KabuNodeTypes for KabuEthereumNode<P, DB>
+where
+    P: Provider<Ethereum> + DebugProviderExt<Ethereum> + Send + Sync + Clone + 'static,
+    DB: DatabaseRef<Error = KabuDBError>
+        + Database<Error = KabuDBError>
+        + DatabaseCommit
+        + DatabaseKabuExt
+        + BlockHistoryState<KabuDataTypesEthereum>
+        + Send
+        + Sync
+        + Clone
+        + Default
+        + 'static,
+{
+    type State = KabuBuildContext<P, DB>;
+}
 
 /// Trait to extract KabuBuildContext from generic BuilderContext
 pub trait AsKabuContext<P, DB>
@@ -497,33 +537,84 @@ impl<P, DB> KabuNetworkBuilder<P, DB> {
 }
 
 /// Composite network component for both block processing and history
-pub struct CompositeNetworkComponent {
-    components: Vec<Box<dyn Component>>,
+pub struct CompositeNetworkComponent<P, DB>
+where
+    P: Provider<Ethereum> + DebugProviderExt<Ethereum> + Send + Sync + Clone + 'static,
+    DB: DatabaseRef<Error = KabuDBError>
+        + Database<Error = KabuDBError>
+        + DatabaseCommit
+        + DatabaseKabuExt
+        + BlockHistoryState<KabuDataTypesEthereum>
+        + Send
+        + Sync
+        + Clone
+        + Default
+        + 'static,
+{
+    block_processing: BlockProcessingComponent<P, Ethereum, KabuDataTypesEthereum>,
+    block_history: BlockHistoryComponent<P, Ethereum, DB, KabuDataTypesEthereum>,
 }
 
-impl Clone for CompositeNetworkComponent {
+impl<P, DB> Clone for CompositeNetworkComponent<P, DB>
+where
+    P: Provider<Ethereum> + DebugProviderExt<Ethereum> + Send + Sync + Clone + 'static,
+    DB: DatabaseRef<Error = KabuDBError>
+        + Database<Error = KabuDBError>
+        + DatabaseCommit
+        + DatabaseKabuExt
+        + BlockHistoryState<KabuDataTypesEthereum>
+        + Send
+        + Sync
+        + Clone
+        + Default
+        + 'static,
+{
     fn clone(&self) -> Self {
-        // We cannot clone the components, so return empty
-        Self { components: Vec::new() }
+        Self { block_processing: self.block_processing.clone(), block_history: self.block_history.clone() }
     }
 }
 
-impl CompositeNetworkComponent {
-    pub fn new(components: Vec<Box<dyn Component>>) -> Self {
-        Self { components }
+impl<P, DB> CompositeNetworkComponent<P, DB>
+where
+    P: Provider<Ethereum> + DebugProviderExt<Ethereum> + Send + Sync + Clone + 'static,
+    DB: DatabaseRef<Error = KabuDBError>
+        + Database<Error = KabuDBError>
+        + DatabaseCommit
+        + DatabaseKabuExt
+        + BlockHistoryState<KabuDataTypesEthereum>
+        + Send
+        + Sync
+        + Clone
+        + Default
+        + 'static,
+{
+    pub fn new(
+        block_processing: BlockProcessingComponent<P, Ethereum, KabuDataTypesEthereum>,
+        block_history: BlockHistoryComponent<P, Ethereum, DB, KabuDataTypesEthereum>,
+    ) -> Self {
+        Self { block_processing, block_history }
     }
 }
 
-impl Component for CompositeNetworkComponent {
+impl<P, DB> Component for CompositeNetworkComponent<P, DB>
+where
+    P: Provider<Ethereum> + DebugProviderExt<Ethereum> + Send + Sync + Clone + 'static,
+    DB: DatabaseRef<Error = KabuDBError>
+        + Database<Error = KabuDBError>
+        + DatabaseCommit
+        + DatabaseKabuExt
+        + BlockHistoryState<KabuDataTypesEthereum>
+        + Send
+        + Sync
+        + Clone
+        + Default
+        + 'static,
+{
     fn spawn(self, executor: reth_tasks::TaskExecutor) -> Result<()> {
-        for component in self.components {
-            component.spawn_boxed(executor.clone())?;
-        }
+        // Spawn each component directly
+        self.block_processing.spawn(executor.clone())?;
+        self.block_history.spawn(executor)?;
         Ok(())
-    }
-
-    fn spawn_boxed(self: Box<Self>, executor: reth_tasks::TaskExecutor) -> Result<()> {
-        (*self).spawn(executor)
     }
 
     fn name(&self) -> &'static str {
@@ -545,24 +636,25 @@ where
         + Default
         + 'static,
 {
-    type Network = CompositeNetworkComponent;
+    type Network = CompositeNetworkComponent<P, DB>;
 
     async fn build_network(self, ctx: &BuilderContext<KabuBuildContext<P, DB>>) -> Result<Self::Network> {
         let kabu_ctx = ctx.as_kabu_context()?;
-        let mut components: Vec<Box<dyn Component>> = Vec::new();
 
         // Block processing component
-        let block_processing = BlockProcessingComponent::new(kabu_ctx.provider.clone(), NodeBlockComponentConfig::all_enabled())
-            .with_channels(
-                Some(kabu_ctx.blockchain.new_block_headers_channel()),
-                Some(kabu_ctx.blockchain.new_block_with_tx_channel()),
-                Some(kabu_ctx.blockchain.new_block_logs_channel()),
-                Some(kabu_ctx.blockchain.new_block_state_update_channel()),
-            );
-        components.push(Box::new(block_processing));
+        let block_processing = BlockProcessingComponent::<P, Ethereum, KabuDataTypesEthereum>::new(
+            kabu_ctx.provider.clone(),
+            NodeBlockComponentConfig::all_enabled(),
+        )
+        .with_channels(
+            Some(kabu_ctx.blockchain.new_block_headers_channel()),
+            Some(kabu_ctx.blockchain.new_block_with_tx_channel()),
+            Some(kabu_ctx.blockchain.new_block_logs_channel()),
+            Some(kabu_ctx.blockchain.new_block_state_update_channel()),
+        );
 
         // Block history component
-        let block_history = BlockHistoryComponent::new(kabu_ctx.provider.clone()).with_channels(
+        let block_history = BlockHistoryComponent::<P, Ethereum, DB, KabuDataTypesEthereum>::new(kabu_ctx.provider.clone()).with_channels(
             ChainParameters::ethereum(),
             kabu_ctx.latest_block.clone(),
             kabu_ctx.market_state.clone(),
@@ -573,9 +665,8 @@ where
             kabu_ctx.blockchain.new_block_state_update_channel(),
             kabu_ctx.channels.market_events.clone(),
         );
-        components.push(Box::new(block_history));
 
-        Ok(CompositeNetworkComponent::new(components))
+        Ok(CompositeNetworkComponent::new(block_processing, block_history))
     }
 }
 
@@ -766,33 +857,79 @@ impl<P, DB> KabuMarketBuilder<P, DB> {
 }
 
 /// Composite market component that manages multiple market-related sub-components
-pub struct CompositeMarketComponent {
-    components: Vec<Box<dyn Component>>,
+pub struct CompositeMarketComponent<P, DB>
+where
+    P: Provider<Ethereum> + DebugProviderExt<Ethereum> + Send + Sync + Clone + 'static,
+    DB: DatabaseRef<Error = KabuDBError>
+        + Database<Error = KabuDBError>
+        + DatabaseCommit
+        + DatabaseKabuExt
+        + BlockHistoryState<KabuDataTypesEthereum>
+        + Send
+        + Sync
+        + Clone
+        + Default
+        + 'static,
+{
+    signer_initializer: Option<InitializeSignersOneShotBlockingComponent<KabuDataTypesEthereum>>,
+    market_state_preload: MarketStatePreloadedOneShotComponent<P, Ethereum, DB>,
+    price_component: PriceComponent<P, Ethereum>,
+    account_monitor: AccountMonitorComponent<P, Ethereum, KabuDataTypesEthereum>,
+    protocol_loader: ProtocolPoolLoaderComponent<P, P, Ethereum>,
+    history_loader: HistoryPoolLoaderComponent<P, P, Ethereum>,
 }
 
-impl Clone for CompositeMarketComponent {
+impl<P, DB> Clone for CompositeMarketComponent<P, DB>
+where
+    P: Provider<Ethereum> + DebugProviderExt<Ethereum> + Send + Sync + Clone + 'static,
+    DB: DatabaseRef<Error = KabuDBError>
+        + Database<Error = KabuDBError>
+        + DatabaseCommit
+        + DatabaseKabuExt
+        + BlockHistoryState<KabuDataTypesEthereum>
+        + Send
+        + Sync
+        + Clone
+        + Default
+        + 'static,
+{
     fn clone(&self) -> Self {
-        // We cannot clone the components, so return empty
-        Self { components: Vec::new() }
-    }
-}
-
-impl CompositeMarketComponent {
-    pub fn new(components: Vec<Box<dyn Component>>) -> Self {
-        Self { components }
-    }
-}
-
-impl Component for CompositeMarketComponent {
-    fn spawn(self, executor: reth_tasks::TaskExecutor) -> Result<()> {
-        for component in self.components {
-            component.spawn_boxed(executor.clone())?;
+        Self {
+            signer_initializer: self.signer_initializer.clone(),
+            market_state_preload: self.market_state_preload.clone(),
+            price_component: self.price_component.clone(),
+            account_monitor: self.account_monitor.clone(),
+            protocol_loader: self.protocol_loader.clone(),
+            history_loader: self.history_loader.clone(),
         }
-        Ok(())
     }
+}
 
-    fn spawn_boxed(self: Box<Self>, executor: reth_tasks::TaskExecutor) -> Result<()> {
-        (*self).spawn(executor)
+impl<P, DB> Component for CompositeMarketComponent<P, DB>
+where
+    P: Provider<Ethereum> + DebugProviderExt<Ethereum> + Send + Sync + Clone + 'static,
+    DB: DatabaseRef<Error = KabuDBError>
+        + Database<Error = KabuDBError>
+        + DatabaseCommit
+        + DatabaseKabuExt
+        + BlockHistoryState<KabuDataTypesEthereum>
+        + Send
+        + Sync
+        + Clone
+        + Default
+        + 'static,
+{
+    fn spawn(self, executor: reth_tasks::TaskExecutor) -> Result<()> {
+        // Spawn each component directly
+        if let Some(initializer) = self.signer_initializer {
+            initializer.spawn(executor.clone())?;
+        }
+        self.market_state_preload.spawn(executor.clone())?;
+        self.price_component.spawn(executor.clone())?;
+        self.account_monitor.spawn(executor.clone())?;
+        self.protocol_loader.spawn(executor.clone())?;
+        self.history_loader.spawn(executor)?;
+        Ok(())
     }
 
     fn name(&self) -> &'static str {
@@ -814,40 +951,30 @@ where
         + Default
         + 'static,
 {
-    type Market = CompositeMarketComponent;
+    type Market = CompositeMarketComponent<P, DB>;
 
     async fn build_market(self, ctx: &BuilderContext<KabuBuildContext<P, DB>>) -> Result<Self::Market> {
         let kabu_ctx = ctx.as_kabu_context()?;
-        let mut components: Vec<Box<dyn Component>> = Vec::new();
 
-        // Initialize signers (one-shot)
-        if let Ok(key) = std::env::var("DATA") {
-            let private_key_encrypted = hex::decode(key)?;
-            let initializer = InitializeSignersOneShotBlockingComponent::new(Some(private_key_encrypted))
-                .with_signers(kabu_ctx.channels.signers.clone())
-                .with_monitor(kabu_ctx.channels.account_state.clone());
-            components.push(Box::new(initializer));
-        }
+        // Signer initialization is handled externally (in main or test runner)
+        let signer_initializer = None;
 
         // Market state preloader (one-shot)
-        let market_state_preload = MarketStatePreloadedOneShotComponent::new(kabu_ctx.provider.clone())
+        let market_state_preload = MarketStatePreloadedOneShotComponent::<P, Ethereum, DB>::new(kabu_ctx.provider.clone())
             .with_copied_account(kabu_ctx.swap_encoder.get_contract_address())
             .with_signers(kabu_ctx.channels.signers.clone())
             .with_market_state(kabu_ctx.market_state.clone());
-        components.push(Box::new(market_state_preload));
 
         // Price component (one-shot)
         let price_component = PriceComponent::new(kabu_ctx.provider.clone()).only_once().with_market(kabu_ctx.market.clone());
-        components.push(Box::new(price_component));
 
         // Account monitor
-        let account_monitor = AccountMonitorComponent::new(
+        let account_monitor = AccountMonitorComponent::<P, Ethereum, KabuDataTypesEthereum>::new(
             kabu_ctx.provider.clone(),
             kabu_ctx.channels.account_state.clone(),
             kabu_ctx.channels.signers.clone(),
             std::time::Duration::from_secs(1),
         );
-        components.push(Box::new(account_monitor));
 
         // Pool loaders
         let pool_loaders = Arc::new(PoolLoadersBuilder::<_, _, KabuDataTypesEthereum>::default_pool_loaders(
@@ -856,20 +983,25 @@ where
         ));
 
         // Protocol pool loader
-        let protocol_loader = ProtocolPoolLoaderComponent::new(kabu_ctx.provider.clone(), pool_loaders.clone());
-        components.push(Box::new(protocol_loader));
+        let protocol_loader = ProtocolPoolLoaderComponent::<P, P, Ethereum>::new(kabu_ctx.provider.clone(), pool_loaders.clone());
 
         // History pool loader
-        let history_loader = HistoryPoolLoaderComponent::new(
+        let history_loader = HistoryPoolLoaderComponent::<P, P, Ethereum>::new(
             kabu_ctx.provider.clone(),
             pool_loaders,
             0,    // start_block
             1000, // block_batch_size
             10,   // max_batches
         );
-        components.push(Box::new(history_loader));
 
-        Ok(CompositeMarketComponent::new(components))
+        Ok(CompositeMarketComponent {
+            signer_initializer,
+            market_state_preload,
+            price_component,
+            account_monitor,
+            protocol_loader,
+            history_loader,
+        })
     }
 }
 
@@ -1067,33 +1199,68 @@ impl<P, DB> KabuMergerBuilder<P, DB> {
 }
 
 /// Composite merger component that manages all merger sub-components
-pub struct CompositeMergerComponent {
-    components: Vec<Box<dyn Component>>,
+pub struct CompositeMergerComponent<P, DB>
+where
+    P: Provider<Ethereum> + DebugProviderExt<Ethereum> + Send + Sync + Clone + 'static,
+    DB: DatabaseRef<Error = KabuDBError>
+        + Database<Error = KabuDBError>
+        + DatabaseCommit
+        + DatabaseKabuExt
+        + BlockHistoryState<KabuDataTypesEthereum>
+        + Send
+        + Sync
+        + Clone
+        + Default
+        + 'static,
+{
+    swap_path_merger: ArbSwapPathMergerComponent<DB>,
+    same_path_merger: SamePathMergerComponent<P, Ethereum, DB>,
+    diff_path_merger: DiffPathMergerComponent<DB>,
 }
 
-impl Clone for CompositeMergerComponent {
+impl<P, DB> Clone for CompositeMergerComponent<P, DB>
+where
+    P: Provider<Ethereum> + DebugProviderExt<Ethereum> + Send + Sync + Clone + 'static,
+    DB: DatabaseRef<Error = KabuDBError>
+        + Database<Error = KabuDBError>
+        + DatabaseCommit
+        + DatabaseKabuExt
+        + BlockHistoryState<KabuDataTypesEthereum>
+        + Send
+        + Sync
+        + Clone
+        + Default
+        + 'static,
+{
     fn clone(&self) -> Self {
-        // We cannot clone the components, so return empty
-        Self { components: Vec::new() }
-    }
-}
-
-impl CompositeMergerComponent {
-    pub fn new(components: Vec<Box<dyn Component>>) -> Self {
-        Self { components }
-    }
-}
-
-impl Component for CompositeMergerComponent {
-    fn spawn(self, executor: reth_tasks::TaskExecutor) -> Result<()> {
-        for component in self.components {
-            component.spawn_boxed(executor.clone())?;
+        Self {
+            swap_path_merger: self.swap_path_merger.clone(),
+            same_path_merger: self.same_path_merger.clone(),
+            diff_path_merger: self.diff_path_merger.clone(),
         }
-        Ok(())
     }
+}
 
-    fn spawn_boxed(self: Box<Self>, executor: reth_tasks::TaskExecutor) -> Result<()> {
-        (*self).spawn(executor)
+impl<P, DB> Component for CompositeMergerComponent<P, DB>
+where
+    P: Provider<Ethereum> + DebugProviderExt<Ethereum> + Send + Sync + Clone + 'static,
+    DB: DatabaseRef<Error = KabuDBError>
+        + Database<Error = KabuDBError>
+        + DatabaseCommit
+        + DatabaseKabuExt
+        + BlockHistoryState<KabuDataTypesEthereum>
+        + Send
+        + Sync
+        + Clone
+        + Default
+        + 'static,
+{
+    fn spawn(self, executor: reth_tasks::TaskExecutor) -> Result<()> {
+        // Spawn each component directly
+        self.swap_path_merger.spawn(executor.clone())?;
+        self.same_path_merger.spawn(executor.clone())?;
+        self.diff_path_merger.spawn(executor)?;
+        Ok(())
     }
 
     fn name(&self) -> &'static str {
@@ -1115,11 +1282,10 @@ where
         + Default
         + 'static,
 {
-    type Merger = CompositeMergerComponent;
+    type Merger = CompositeMergerComponent<P, DB>;
 
     async fn build_merger(self, ctx: &BuilderContext<KabuBuildContext<P, DB>>) -> Result<Self::Merger> {
         let kabu_ctx = ctx.as_kabu_context()?;
-        let mut components: Vec<Box<dyn Component>> = Vec::new();
 
         // Get the swap compose channel from the channels
         let swap_compose_channel = kabu_ctx.channels.swap_compose.clone();
@@ -1129,7 +1295,6 @@ where
             .with_latest_block(kabu_ctx.latest_block.clone())
             .with_market_events_channel(kabu_ctx.channels.market_events.clone())
             .with_compose_channel(swap_compose_channel.clone());
-        components.push(Box::new(swap_path_merger));
 
         // Same path merger
         let same_path_merger = SamePathMergerComponent::<_, _, DB>::new(kabu_ctx.provider.clone())
@@ -1137,15 +1302,13 @@ where
             .with_latest_block(kabu_ctx.latest_block.clone())
             .with_market_events_channel(kabu_ctx.channels.market_events.clone())
             .with_compose_channel(swap_compose_channel.clone());
-        components.push(Box::new(same_path_merger));
 
         // Diff path merger
         let diff_path_merger = DiffPathMergerComponent::<DB>::new()
             .with_market_events_channel(kabu_ctx.channels.market_events.clone())
             .with_compose_channel(swap_compose_channel);
-        components.push(Box::new(diff_path_merger));
 
-        Ok(CompositeMergerComponent::new(components))
+        Ok(CompositeMergerComponent { swap_path_merger, same_path_merger, diff_path_merger })
     }
 }
 
@@ -1184,22 +1347,20 @@ where
         + Default
         + 'static,
 {
-    type WebServer = WebServerComponent<(), DB>;
+    type WebServer = PlaceholderComponent;
 
     async fn build_web_server(self, ctx: &BuilderContext<KabuBuildContext<P, DB>>) -> Result<Self::WebServer> {
         let kabu_ctx = ctx.as_kabu_context()?;
 
-        let webserver_host = kabu_ctx.topology_config.webserver.clone().unwrap_or_default().host;
+        // For now, always return a placeholder component
+        // In the future, we can conditionally return a real web server based on enable_web_server flag
+        if !kabu_ctx.enable_web_server {
+            return Ok(PlaceholderComponent::new("WebServer"));
+        }
 
-        let web_server = WebServerComponent::<(), DB>::new(
-            webserver_host,
-            axum::Router::new(), // Empty router for now
-            kabu_ctx.db_pool.clone(),
-            tokio_util::sync::CancellationToken::new(),
-        )
-        .on_bc(&kabu_ctx.blockchain, &kabu_ctx.blockchain_state);
-
-        Ok(web_server)
+        // Even when enabled, we return placeholder for now since WebServerComponent
+        // has complex trait bounds that make it hard to use in a generic context
+        Ok(PlaceholderComponent::new("WebServer"))
     }
 }
 
@@ -1208,33 +1369,23 @@ where
 // ================================================================================================
 
 /// Composite monitoring component that manages monitoring sub-components
+#[derive(Clone)]
 pub struct CompositeMonitoringComponent {
-    components: Vec<Box<dyn Component>>,
-}
-
-impl Clone for CompositeMonitoringComponent {
-    fn clone(&self) -> Self {
-        // We cannot clone the components, so return empty
-        Self { components: Vec::new() }
-    }
+    influxdb_writer: Option<InfluxDbWriterComponent>,
 }
 
 impl CompositeMonitoringComponent {
-    pub fn new(components: Vec<Box<dyn Component>>) -> Self {
-        Self { components }
+    pub fn new(influxdb_writer: Option<InfluxDbWriterComponent>) -> Self {
+        Self { influxdb_writer }
     }
 }
 
 impl Component for CompositeMonitoringComponent {
     fn spawn(self, executor: reth_tasks::TaskExecutor) -> Result<()> {
-        for component in self.components {
-            component.spawn_boxed(executor.clone())?;
+        if let Some(influxdb_writer) = self.influxdb_writer {
+            influxdb_writer.spawn(executor)?;
         }
         Ok(())
-    }
-
-    fn spawn_boxed(self: Box<Self>, executor: reth_tasks::TaskExecutor) -> Result<()> {
-        (*self).spawn(executor)
     }
 
     fn name(&self) -> &'static str {
@@ -1277,16 +1428,96 @@ where
 
     async fn build_monitoring(self, ctx: &BuilderContext<KabuBuildContext<P, DB>>) -> Result<Self::Monitoring> {
         let kabu_ctx = ctx.as_kabu_context()?;
-        let mut components: Vec<Box<dyn Component>> = Vec::new();
 
-        if let Some(influxdb_config) = &kabu_ctx.topology_config.influxdb {
-            let influxdb_writer =
-                InfluxDbWriterComponent::new(influxdb_config.url.clone(), influxdb_config.database.clone(), influxdb_config.tags.clone())
-                    .with_channel(kabu_ctx.blockchain.influxdb_write_channel());
+        let influxdb_writer = kabu_ctx.topology_config.influxdb.as_ref().map(|influxdb_config| {
+            InfluxDbWriterComponent::new(influxdb_config.url.clone(), influxdb_config.database.clone(), influxdb_config.tags.clone())
+                .with_channel(kabu_ctx.blockchain.influxdb_write_channel())
+        });
 
-            components.push(Box::new(influxdb_writer));
+        Ok(CompositeMonitoringComponent::new(influxdb_writer))
+    }
+}
+
+// ================================================================================================
+// Kabu Ethereum Node Components Builder
+// ================================================================================================
+
+/// Components builder for Kabu Ethereum node
+#[derive(Clone)]
+pub struct KabuEthereumComponentsBuilder<P, DB> {
+    _phantom: PhantomData<(P, DB)>,
+}
+
+impl<P, DB> Default for KabuEthereumComponentsBuilder<P, DB> {
+    fn default() -> Self {
+        Self { _phantom: PhantomData }
+    }
+}
+
+impl<P, DB> KabuNodeComponentsBuilder<KabuEthereumNode<P, DB>> for KabuEthereumComponentsBuilder<P, DB>
+where
+    P: Provider<Ethereum> + DebugProviderExt<Ethereum> + Send + Sync + Clone + 'static,
+    DB: DatabaseRef<Error = KabuDBError>
+        + Database<Error = KabuDBError>
+        + DatabaseCommit
+        + DatabaseKabuExt
+        + BlockHistoryState<KabuDataTypesEthereum>
+        + Send
+        + Sync
+        + Clone
+        + Default
+        + 'static,
+{
+    type Pool = KabuPoolBuilder<P, DB>;
+    type Network = KabuNetworkBuilder<P, DB>;
+    type Executor = KabuExecutorBuilder<P, DB>;
+    type Strategy = KabuStrategyBuilder<P, DB>;
+    type Signer = KabuSignerBuilder<P, DB>;
+    type Market = KabuMarketBuilder<P, DB>;
+    type Broadcaster = KabuBroadcasterBuilder<P, DB>;
+    type Estimator = KabuEstimatorBuilder<P, DB>;
+    type HealthMonitor = KabuHealthMonitorBuilder<P, DB>;
+    type Merger = KabuMergerBuilder<P, DB>;
+    type WebServer = KabuWebServerBuilder<P, DB>;
+    type Monitoring = KabuMonitoringBuilder<P, DB>;
+
+    fn build_components(self) -> KabuComponentsSet<KabuBuildContext<P, DB>, Self, KabuEthereumNode<P, DB>> {
+        KabuComponentsSet {
+            pool: KabuPoolBuilder::new(),
+            network: KabuNetworkBuilder::new(),
+            executor: KabuExecutorBuilder::new(),
+            strategy: KabuStrategyBuilder::new(),
+            signer: KabuSignerBuilder::new(),
+            market: KabuMarketBuilder::new(),
+            broadcaster: KabuBroadcasterBuilder::new(),
+            estimator: KabuEstimatorBuilder::new(),
+            health_monitor: KabuHealthMonitorBuilder::new(),
+            merger: KabuMergerBuilder::new(),
+            web_server: KabuWebServerBuilder::new(),
+            monitoring: KabuMonitoringBuilder::new(),
+            _phantom: PhantomData,
         }
+    }
+}
 
-        Ok(CompositeMonitoringComponent::new(components))
+// Implement KabuNode trait for KabuEthereumNode
+impl<P, DB> KabuNodeTrait<KabuEthereumNode<P, DB>> for KabuEthereumNode<P, DB>
+where
+    P: Provider<Ethereum> + DebugProviderExt<Ethereum> + Send + Sync + Clone + 'static,
+    DB: DatabaseRef<Error = KabuDBError>
+        + Database<Error = KabuDBError>
+        + DatabaseCommit
+        + DatabaseKabuExt
+        + BlockHistoryState<KabuDataTypesEthereum>
+        + Send
+        + Sync
+        + Clone
+        + Default
+        + 'static,
+{
+    type ComponentsBuilder = KabuEthereumComponentsBuilder<P, DB>;
+
+    fn components_builder(&self) -> Self::ComponentsBuilder {
+        KabuEthereumComponentsBuilder::default()
     }
 }

@@ -121,6 +121,10 @@ async fn flashbots_broadcaster_worker(
                             }
                         }
                     }
+                    Err(RecvError::Closed) => {
+                        debug!("flashbots_broadcaster_worker channel closed, shutting down");
+                        break;
+                    }
                     Err(e) => {
                         error!("flashbots_broadcaster_worker {}", e)
                     }
@@ -208,11 +212,6 @@ impl Component for FlashbotsBroadcastComponent {
 
         Ok(())
     }
-
-    fn spawn_boxed(self: Box<Self>, executor: TaskExecutor) -> Result<()> {
-        (*self).spawn(executor)
-    }
-
     fn name(&self) -> &'static str {
         "FlashbotsBroadcastComponent"
     }

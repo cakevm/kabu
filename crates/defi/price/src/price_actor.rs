@@ -101,6 +101,7 @@ async fn price_worker<N: Network, P: Provider<N> + Clone + 'static>(
     Ok(())
 }
 
+#[derive(Clone)]
 pub struct PriceComponent<P, N> {
     client: P,
     only_once: bool,
@@ -146,10 +147,6 @@ where
             }
         });
         Ok(())
-    }
-
-    fn spawn_boxed(self: Box<Self>, executor: reth_tasks::TaskExecutor) -> eyre::Result<()> {
-        (*self).spawn(executor)
     }
 
     fn name(&self) -> &'static str {

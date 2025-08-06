@@ -32,7 +32,6 @@ kabu-metrics = { workspace = true }
 kabu-node-config = { workspace = true }
 kabu-node-debug-provider = { workspace = true }
 kabu-node-json-rpc = { workspace = true }
-kabu-rpc-handler = { workspace = true }
 kabu-storage-db = { workspace = true }
 kabu-strategy-backrun = { workspace = true }
 kabu-strategy-merger = { workspace = true }
@@ -44,12 +43,10 @@ kabu-defi-health-monitor = { workspace = true, optional = true }
 alloy-network = { workspace = true }
 alloy-primitives = { workspace = true }
 alloy-provider = { workspace = true }
-axum = { workspace = true }
 eyre = { workspace = true }
 reth = { workspace = true }
 reth-tasks = { workspace = true }
 tokio = { workspace = true }
-tokio-util = { workspace = true }
 tracing = { workspace = true }
 
 [features]

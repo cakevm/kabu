@@ -68,6 +68,7 @@ kabu-types-swap = { workspace = true, optional = true }
 
 # Binary dependencies
 clap.workspace = true
+diesel_migrations.workspace = true
 eyre.workspace = true
 tokio.workspace = true
 tracing.workspace = true

@@ -360,6 +360,7 @@ async fn same_path_merger_worker<
     }
 }
 
+#[derive(Clone)]
 pub struct SamePathMergerComponent<P, N, DB: Send + Sync + Clone + 'static> {
     client: P,
     //encoder: SwapStepEncoder,
@@ -445,10 +446,6 @@ where
         );
 
         Ok(())
-    }
-
-    fn spawn_boxed(self: Box<Self>, executor: TaskExecutor) -> Result<()> {
-        (*self).spawn(executor)
     }
 
     fn name(&self) -> &'static str {

@@ -1,64 +1,317 @@
 # Examples
 
-## Fetch Uniswap Resveres
-Here is a basic example of how to fetch pool data from various Uniswap liquidity pools and their forks.
+## Quick Start with KabuBuilder
 
-```rs
-use std::env;
+The simplest way to start a Kabu MEV bot:
 
-use alloy::{
-    network::Ethereum,
-    primitives::{address, Address, BlockNumber, U256},
-    transports::BoxTransport,
-};
-use alloy_provider::RootProvider;
-use alloy_rpc_types::BlockId;
-use dotenv::dotenv;
-use kabu_defi_abi::uniswap2::IUniswapV2Pair;
-use kabu_node_debug_provider::{AnvilDebugProvider, AnvilDebugProviderFactory};
-use std::result::Result;
-
-async fn fetch_pools(
-    node_url: String,
-    block_number: u64,
-) -> Result<(), Box<dyn std::error::Error>> {
-    const POOL_ADDRESSES: [Address; 4] = [
-        address!("322BBA387c825180ebfB62bD8E6969EBe5b5e52d"), // ITO/WETH pool
-        address!("b4e16d0168e52d35cacd2c6185b44281ec28c9dc"), // USDC/WETH pool
-        address!("0d4a11d5eeaac28ec3f61d100daf4d40471f1852"), // WETH/USDT pool
-        address!("ddd23787a6b80a794d952f5fb036d0b31a8e6aff"), // PEPE/WETH pool
-    ];
-
-    let client: AnvilDebugProvider<
-        RootProvider<BoxTransport>,
-        RootProvider<BoxTransport>,
-        BoxTransport,
-        BoxTransport,
-        Ethereum,
-    > = AnvilDebugProviderFactory::from_node_on_block(node_url, BlockNumber::from(block_number))
-        .await
-        .unwrap();
-    for pool_address in POOL_ADDRESSES {
-        let pool_contract = IUniswapV2Pair::new(pool_address, client.clone());
-        let contract_reserves = pool_contract
-            .getReserves()
-            .call()
-            .block(BlockId::from(block_number))
-            .await?;
-        let reserves_0_original = U256::from(contract_reserves.reserve0);
-        let reserves_1_original = U256::from(contract_reserves.reserve1);
-
-        println!("Reserve0: {}", reserves_0_original);
-        println!("Reserve1: {}", reserves_1_original);
-    }
-    Ok(())
-}
+```rust
+use kabu::core::blockchain::{Blockchain, BlockchainState};
+use kabu::core::components::{KabuBuilder, MevComponentChannels};
+use kabu::core::node::{KabuBuildContext, KabuEthereumNode};
+use kabu::evm::db::KabuDB;
+use kabu::execution::multicaller::MulticallerSwapEncoder;
+use kabu::strategy::backrun::BackrunConfig;
+use kabu::types::blockchain::KabuDataTypesEthereum;
+use alloy::providers::ProviderBuilder;
+use reth_tasks::TaskManager;
 
 #[tokio::main]
-async fn main() {
-    dotenv().ok();
-    let block_number = 21077209u64; // set the latest block number
-    let node_url: String = env::var("WSS_RPC_URL").unwrap(); //add a provider which is supported like tenderly
-    let _ = fetch_pools(node_url, block_number).await;
+async fn main() -> Result<()> {
+    // Create provider
+    let provider = ProviderBuilder::new()
+        .on_http("http://localhost:8545")
+        .build()?;
+        
+    // Initialize blockchain components
+    let blockchain = Blockchain::new(1); // Chain ID 1 for mainnet
+    let blockchain_state = BlockchainState::<KabuDB, KabuDataTypesEthereum>::new();
+    
+    // Load configurations
+    let topology_config = TopologyConfig::load_from_file("config.toml")?;
+    let backrun_config = BackrunConfig::new_dumb(); // Simple config for testing
+    
+    // Deploy or get multicaller address
+    let multicaller_address = "0x...".parse()?;
+    
+    // Create task manager
+    let task_manager = TaskManager::new(tokio::runtime::Handle::current());
+    let task_executor = task_manager.executor();
+    
+    // Build and launch
+    let kabu_context = KabuBuildContext::builder(
+        provider,
+        blockchain,
+        blockchain_state,
+        topology_config,
+        backrun_config,
+        multicaller_address,
+        None, // No database for simple example
+        false, // Not running as reth ExEx
+    )
+    .build();
+    
+    let handle = KabuBuilder::new(kabu_context)
+        .node(KabuEthereumNode::default())
+        .build()
+        .launch(task_executor)
+        .await?;
+    
+    // Wait for shutdown signal
+    tokio::signal::ctrl_c().await?;
+    handle.shutdown().await?;
+    
+    Ok(())
 }
 ```
+
+## Running with Reth Node
+
+Kabu can run as a Reth Execution Extension (ExEx):
+
+```rust
+use reth::cli::Cli;
+use reth::builder::NodeHandle;
+
+fn main() -> eyre::Result<()> {
+    Cli::<EthereumChainSpecParser, KabuArgs>::parse().run(|builder, kabu_args| async move {
+        let blockchain = Blockchain::new(builder.config().chain.chain.id());
+        
+        let NodeHandle { node, node_exit_future } = builder
+            .with_types_and_provider::<EthereumNode, BlockchainProvider<_>>()
+            .with_components(EthereumNode::components())
+            .with_add_ons(EthereumAddOns::default())
+            .install_exex("kabu-exex", |ctx| init_kabu_exex(ctx, blockchain))
+            .launch()
+            .await?;
+            
+        // Start Kabu MEV components
+        let provider = node.provider.clone();
+        let handle = start_kabu_mev(provider, blockchain, true).await?;
+        
+        // Wait for node exit
+        node_exit_future.await?;
+        Ok(())
+    })
+}
+```
+
+## Custom Component Example
+
+Create a component that monitors specific pools:
+
+```rust
+use kabu_core_components::{Component, MevComponentChannels};
+use kabu_types_events::MarketEvents;
+use reth_tasks::TaskExecutor;
+
+pub struct PoolMonitorComponent<DB> {
+    pools_to_monitor: Vec<Address>,
+    channels: Option<MevComponentChannels<DB>>,
+}
+
+impl<DB: Clone + Send + Sync + 'static> PoolMonitorComponent<DB> {
+    pub fn new(pools: Vec<Address>) -> Self {
+        Self {
+            pools_to_monitor: pools,
+            channels: None,
+        }
+    }
+    
+    pub fn with_channels(mut self, channels: &MevComponentChannels<DB>) -> Self {
+        self.channels = Some(channels.clone());
+        self
+    }
+}
+
+impl<DB: Clone + Send + Sync + 'static> Component for PoolMonitorComponent<DB> {
+    fn spawn(self, executor: TaskExecutor) -> Result<()> {
+        let channels = self.channels.ok_or_else(|| eyre!("channels not set"))?;
+        let pools = self.pools_to_monitor;
+        
+        let mut market_events = channels.market_events.subscribe();
+        
+        executor.spawn_critical("PoolMonitor", async move {
+            while let Ok(event) = market_events.recv().await {
+                match event {
+                    MarketEvents::PoolUpdate { address, .. } => {
+                        if pools.contains(&address) {
+                            info!("Monitored pool updated: {:?}", address);
+                            // Trigger specific actions for monitored pools
+                        }
+                    }
+                    _ => {}
+                }
+            }
+        });
+        
+        Ok(())
+    }
+    
+    fn spawn_boxed(self: Box<Self>, executor: TaskExecutor) -> Result<()> {
+        (*self).spawn(executor)
+    }
+    
+    fn name(&self) -> &'static str {
+        "PoolMonitorComponent"
+    }
+}
+```
+
+## Custom Node Implementation
+
+Create a minimal node with only essential components:
+
+```rust
+use kabu_core_components::{KabuNode, KabuBuildContext, BoxedComponent};
+
+pub struct MinimalNode;
+
+#[async_trait]
+impl<P, DB> KabuNode<P, DB> for MinimalNode 
+where
+    P: Provider + Send + Sync + 'static,
+    DB: Database + Send + Sync + 'static,
+{
+    async fn build_components(
+        &self,
+        context: &KabuBuildContext<P, DB>,
+    ) -> Result<Vec<BoxedComponent>> {
+        let mut components = vec![];
+        
+        // Add only arbitrage searcher
+        components.push(Box::new(
+            StateChangeArbSearcherComponent::new(context.backrun_config.clone())
+                .with_channels(&context.channels)
+                .with_market_state(context.market_state.clone())
+        ));
+        
+        // Add signer component
+        components.push(Box::new(
+            SignersComponent::<DB, KabuDataTypesEthereum>::new()
+                .with_channels(&context.channels)
+        ));
+        
+        // Add broadcaster
+        if let Some(broadcaster_config) = context.topology_config.actors.broadcaster.as_ref() {
+            components.push(Box::new(
+                FlashbotsBroadcastComponent::new(
+                    context.provider.clone(),
+                    broadcaster_config.clone(),
+                )
+                .with_channels(&context.channels)
+            ));
+        }
+        
+        Ok(components)
+    }
+}
+
+// Usage
+let handle = KabuBuilder::new(kabu_context)
+    .node(MinimalNode)
+    .build()
+    .launch(task_executor)
+    .await?;
+```
+
+## Working with State
+
+### Loading Pool State
+
+When working with pools, ensure their state is loaded:
+
+```rust
+use kabu_types_market::{Pool, RequiredStateReader};
+use kabu_defi_pools::UniswapV3Pool;
+
+// Fetch pool data
+let pool = UniswapV3Pool::fetch_pool_data(provider.clone(), pool_address).await?;
+
+// Get required state
+let state_required = pool.get_state_required()?;
+
+// Fetch state from chain
+let state_update = RequiredStateReader::<KabuDataTypesEthereum>::fetch_calls_and_slots(
+    provider.clone(),
+    state_required,
+    Some(block_number),
+)
+.await?;
+
+// Apply to state DB
+market_state.write().await.state_db.apply_geth_update(state_update);
+
+// Add pool to market
+market.write().await.add_pool(pool.into())?;
+```
+
+### Accessing Shared State
+
+```rust
+// Read market data
+let market_guard = context.market.read().await;
+let pool = market_guard.get_pool(&pool_address)?;
+let tokens = market_guard.tokens();
+drop(market_guard); // Release lock
+
+// Update signer state
+let mut signers = context.channels.signers.write().await;
+signers.add_privkey(private_key);
+```
+
+## Testing Components
+
+```rust
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use tokio::sync::broadcast;
+    
+    #[tokio::test]
+    async fn test_component_startup() {
+        // Create test channels
+        let channels = MevComponentChannels::default();
+        
+        // Create component
+        let component = MyComponent::new(MyConfig::default())
+            .with_channels(&channels);
+        
+        // Create test executor
+        let task_manager = TaskManager::new(tokio::runtime::Handle::current());
+        let executor = task_manager.executor();
+        
+        // Spawn component
+        assert!(component.spawn(executor).is_ok());
+        
+        // Send test event
+        channels.market_events.send(MarketEvents::BlockHeaderUpdate {
+            block_number: 100,
+            block_hash: Default::default(),
+            timestamp: 0,
+            base_fee: U256::ZERO,
+            next_base_fee: U256::ZERO,
+        }).unwrap();
+        
+        // Allow processing
+        tokio::time::sleep(Duration::from_millis(100)).await;
+        
+        // Shutdown
+        task_manager.shutdown().await;
+    }
+}
+```
+
+## Complete Example: Custom Arbitrage Bot
+
+See the `testing/backtest-runner` for a complete example that:
+- Initializes providers and blockchain state
+- Loads pools and their state
+- Configures components
+- Processes historical blocks
+- Tracks arbitrage opportunities
+
+Key patterns from the backtest runner:
+- Uses `MevComponentChannels` for pre-initialized channels
+- Loads pool state before processing
+- Manually triggers events for testing
+- Tracks performance metrics

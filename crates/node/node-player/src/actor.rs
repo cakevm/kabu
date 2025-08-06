@@ -127,11 +127,6 @@ where
 
         Ok(())
     }
-
-    fn spawn_boxed(self: Box<Self>, executor: TaskExecutor) -> Result<()> {
-        (*self).spawn(executor)
-    }
-
     fn name(&self) -> &'static str {
         type_name::<Self>().rsplit("::").next().unwrap_or(type_name::<Self>())
     }

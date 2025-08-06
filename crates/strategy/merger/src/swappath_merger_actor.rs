@@ -188,6 +188,7 @@ async fn arb_swap_path_merger_worker<
     }
 }
 
+#[derive(Clone)]
 pub struct ArbSwapPathMergerComponent<DB: Send + Sync + Clone + 'static> {
     multicaller_address: Address,
 
@@ -264,10 +265,6 @@ where
         });
 
         Ok(())
-    }
-
-    fn spawn_boxed(self: Box<Self>, executor: TaskExecutor) -> Result<()> {
-        (*self).spawn(executor)
     }
 
     fn name(&self) -> &'static str {

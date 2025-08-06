@@ -14,22 +14,6 @@ release:
 maxperf:
 	RUSTFLAGS="-D warnings -C target-cpu=native" cargo build --profile maxperf
 
-## Exex gRPC node
-# Target to build the Exex gRPC node
-.PHONY: build-exex-node
-build-exex-node:
-	cargo build --bin exex-grpc-node
-
-# Build release for Exex gRPC node
-.PHONY: release-exex-node
-release-exex-node:
-	RUSTFLAGS="-D warnings -C target-cpu=native" cargo build --bin exex-grpc-node --release
-
-# Build optimized release of Exex gRPC node
-.PHONY: maxperf-exex-node
-maxperf-exex-node:
-	RUSTFLAGS="-D warnings -C target-cpu=native" cargo build --bin exex-grpc-node --profile maxperf
-
 # Build docs
 .PHONY: doc
 doc:

@@ -57,6 +57,7 @@ pub async fn start_influxdb_worker(
     }
 }
 
+#[derive(Clone)]
 pub struct InfluxDbWriterComponent {
     url: String,
     database: String,
@@ -85,10 +86,6 @@ impl Component for InfluxDbWriterComponent {
         executor.spawn_critical(name, start_influxdb_worker(self.url, self.database, self.tags, event_receiver));
 
         Ok(())
-    }
-
-    fn spawn_boxed(self: Box<Self>, executor: TaskExecutor) -> Result<()> {
-        (*self).spawn(executor)
     }
 
     fn name(&self) -> &'static str {

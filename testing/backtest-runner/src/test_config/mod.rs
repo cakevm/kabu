@@ -63,6 +63,7 @@ pub struct Settings {
 
 #[derive(Deserialize, Debug)]
 pub struct PoolConfig {
+    #[allow(dead_code)]
     pub address: Address,
     pub class: PoolClass,
 }

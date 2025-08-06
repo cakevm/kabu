@@ -355,6 +355,7 @@ where
     }
 }
 
+#[derive(Clone)]
 pub struct BlockHistoryComponent<P, N, DB, LDT: KabuDataTypes + 'static> {
     client: P,
     chain_parameters: ChainParameters,
@@ -456,11 +457,6 @@ where
 
         Ok(())
     }
-
-    fn spawn_boxed(self: Box<Self>, executor: TaskExecutor) -> Result<()> {
-        (*self).spawn(executor)
-    }
-
     fn name(&self) -> &'static str {
         "BlockHistoryComponent"
     }

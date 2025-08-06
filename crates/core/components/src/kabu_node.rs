@@ -30,10 +30,6 @@ impl Component for PlaceholderComponent {
         Ok(())
     }
 
-    fn spawn_boxed(self: Box<Self>, executor: TaskExecutor) -> Result<()> {
-        (*self).spawn(executor)
-    }
-
     fn name(&self) -> &'static str {
         self.name
     }

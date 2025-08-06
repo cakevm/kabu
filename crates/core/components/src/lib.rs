@@ -1,11 +1,13 @@
 mod builder;
+mod kabu_builder;
 mod kabu_node;
 mod node;
 mod traits;
 
 pub use builder::{BuilderContext, Components, ComponentsBuilder, MevComponentChannels, MevComponents, MevComponentsBuilder};
+pub use kabu_builder::{KabuBuilder, KabuBuiltNode, KabuHandle};
 pub use kabu_node::PlaceholderComponent;
-pub use node::{DefaultNodeComponents, Node, NodeComponents};
+pub use node::{DefaultKabuNodeComponentsBuilder, KabuComponentsSet, KabuNode, KabuNodeComponentsBuilder, KabuNodeTypes, WithKabuNode};
 pub use traits::{
     BroadcasterBuilder, ConsensusBuilder, EstimatorBuilder, ExecutorBuilder, HealthMonitorBuilder as HealthMonitorBuilderTrait,
     InitializerBuilder, MarketBuilder, MergerBuilder, MevNodeComponentsBuilder, MonitoringBuilder, NetworkBuilder, NodeComponentsBuilder,
@@ -21,9 +23,6 @@ pub trait Component: Send + 'static {
     fn spawn(self, executor: TaskExecutor) -> Result<()>
     where
         Self: Sized;
-
-    /// Spawn the component when it's boxed (for dynamic dispatch)
-    fn spawn_boxed(self: Box<Self>, executor: TaskExecutor) -> Result<()>;
 
     /// Name of the component for logging
     fn name(&self) -> &'static str;

@@ -15,5 +15,5 @@ The kabu framework is using the alloy type system and has a deep integration wit
 </div>
 
 
-[tg-badge]: https://img.shields.io/badge/telegram-dexloom_com-2CA5E0?style=plastic&logo=telegram
-[tg-url]: https://t.me/dexloom_com
+[tg-badge]: https://img.shields.io/badge/telegram-kabu-2C5E3D?style=plastic&logo=telegram
+[tg-url]: https://t.me/joinkabu

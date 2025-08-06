@@ -10,6 +10,7 @@ use kabu_types_blockchain::{KabuDataTypes, KabuDataTypesEthereum};
 use kabu_types_entities::{AccountNonceAndBalanceState, KeyStore, LoomTxSigner, TxSigners};
 
 /// The one-shot component adds a new signer to the signers and monitor list after and stops.
+#[derive(Clone)]
 pub struct InitializeSignersOneShotBlockingComponent<LDT: KabuDataTypes> {
     key: Option<Vec<u8>>,
 
@@ -82,10 +83,6 @@ impl Component for InitializeSignersOneShotBlockingComponent<KabuDataTypesEthere
             }
         });
         Ok(())
-    }
-
-    fn spawn_boxed(self: Box<Self>, executor: reth_tasks::TaskExecutor) -> eyre::Result<()> {
-        (*self).spawn(executor)
     }
 
     fn name(&self) -> &'static str {

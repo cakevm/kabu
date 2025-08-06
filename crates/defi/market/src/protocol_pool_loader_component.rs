@@ -12,6 +12,7 @@ use kabu_types_market::{PoolClass, PoolId, PoolLoaders};
 use reth_tasks::TaskExecutor;
 
 /// Component that loads pools by protocol type using protocol-specific loaders
+#[derive(Clone)]
 pub struct ProtocolPoolLoaderComponent<P, PL, N>
 where
     N: Network,
@@ -124,11 +125,6 @@ where
         });
         Ok(())
     }
-
-    fn spawn_boxed(self: Box<Self>, executor: TaskExecutor) -> Result<()> {
-        (*self).spawn(executor)
-    }
-
     fn name(&self) -> &'static str {
         "ProtocolPoolLoaderComponent"
     }

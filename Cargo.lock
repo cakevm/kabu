@@ -1598,6 +1598,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "bigdecimal"
+version = "0.4.8"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1a22f228ab7a1b23027ccc6c350b72868017af7ea8356fbdf19f8d991c690013"
+dependencies = [
+ "autocfg",
+ "libm",
+ "num-bigint",
+ "num-integer",
+ "num-traits",
+]
+
+[[package]]
 name = "bimap"
 version = "0.6.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2791,10 +2804,16 @@ version = "2.2.12"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "229850a212cd9b84d4f0290ad9d294afc0ae70fccaa8949dbe8b43ffafa1e20c"
 dependencies = [
+ "bigdecimal",
  "bitflags 2.9.1",
  "byteorder",
+ "chrono",
  "diesel_derives",
  "itoa",
+ "num-bigint",
+ "num-integer",
+ "num-traits",
+ "pq-sys",
 ]
 
 [[package]]
@@ -2823,6 +2842,17 @@ dependencies = [
  "proc-macro2",
  "quote",
  "syn 2.0.104",
+]
+
+[[package]]
+name = "diesel_migrations"
+version = "2.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8a73ce704bad4231f001bff3314d91dce4aba0770cee8b233991859abc15c1f6"
+dependencies = [
+ "diesel",
+ "migrations_internals",
+ "migrations_macros",
 ]
 
 [[package]]
@@ -4844,6 +4874,7 @@ version = "0.6.0"
 dependencies = [
  "alloy",
  "clap",
+ "diesel_migrations",
  "eyre",
  "kabu-broadcast-accounts",
  "kabu-broadcast-broadcaster",
@@ -4909,7 +4940,7 @@ dependencies = [
  "eyre",
  "kabu",
  "kabu-core-components",
- "kabu-node-config",
+ "kabu-core-node",
  "kabu-types-blockchain",
  "num_cpus",
  "rand 0.9.2",
@@ -5046,7 +5077,6 @@ dependencies = [
  "alloy-network",
  "alloy-primitives",
  "alloy-provider",
- "axum",
  "eyre",
  "kabu-broadcast-accounts",
  "kabu-broadcast-broadcaster",
@@ -5067,7 +5097,6 @@ dependencies = [
  "kabu-node-config",
  "kabu-node-debug-provider",
  "kabu-node-json-rpc",
- "kabu-rpc-handler",
  "kabu-storage-db",
  "kabu-strategy-backrun",
  "kabu-strategy-merger",
@@ -5077,7 +5106,6 @@ dependencies = [
  "reth",
  "reth-tasks",
  "tokio",
- "tokio-util",
  "tracing",
 ]
 
@@ -5577,8 +5605,11 @@ name = "kabu-storage-db"
 version = "0.6.0"
 dependencies = [
  "bb8",
+ "diesel",
  "diesel-async",
+ "diesel_migrations",
  "thiserror 2.0.12",
+ "tracing",
 ]
 
 [[package]]
@@ -6214,6 +6245,27 @@ dependencies = [
  "rand 0.9.2",
  "rand_xoshiro",
  "sketches-ddsketch",
+]
+
+[[package]]
+name = "migrations_internals"
+version = "2.2.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "3bda1634d70d5bd53553cf15dca9842a396e8c799982a3ad22998dc44d961f24"
+dependencies = [
+ "serde",
+ "toml 0.9.2",
+]
+
+[[package]]
+name = "migrations_macros"
+version = "2.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ffb161cc72176cb37aa47f1fc520d3ef02263d67d661f44f05d05a079e1237fd"
+dependencies = [
+ "migrations_internals",
+ "proc-macro2",
+ "quote",
 ]
 
 [[package]]
@@ -7094,6 +7146,16 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "85eae3c4ed2f50dcfe72643da4befc30deadb458a9b590d720cde2f2b1e97da9"
 dependencies = [
  "zerocopy",
+]
+
+[[package]]
+name = "pq-sys"
+version = "0.7.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "dfd6cf44cca8f9624bc19df234fc4112873432f5fda1caff174527846d026fa9"
+dependencies = [
+ "libc",
+ "vcpkg",
 ]
 
 [[package]]

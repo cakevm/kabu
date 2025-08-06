@@ -12,6 +12,7 @@ use kabu_types_market::{PoolClass, PoolId, PoolLoaders};
 use reth_tasks::TaskExecutor;
 
 /// Component that loads historical pool data by scanning past blocks for pool creation events
+#[derive(Clone)]
 pub struct HistoryPoolLoaderComponent<P, PL, N>
 where
     N: Network,
@@ -151,11 +152,6 @@ where
         });
         Ok(())
     }
-
-    fn spawn_boxed(self: Box<Self>, executor: TaskExecutor) -> Result<()> {
-        (*self).spawn(executor)
-    }
-
     fn name(&self) -> &'static str {
         "HistoryPoolLoaderComponent"
     }
