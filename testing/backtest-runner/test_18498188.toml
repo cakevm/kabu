@@ -35,6 +35,6 @@ wbtc = { address = "0x2260FAC5E5542a773Aa44fBCfeDf7C193bc2C599", symbol = "WBTC"
 #swaps_ok = 7
 #best_profit_eth = 172.78
 # TODO: Fix new pool arb timings
-swaps_encoded = 4
+swaps_encoded = 2
 swaps_ok = 2
 best_profit_eth = 8.88
