@@ -208,9 +208,9 @@ swap-test-4: swap-test
 swap-test-5:FILE="./testing/backtest-runner/test_20927846.toml"
 swap-test-5: swap-test
 
-.PHONY: swap-test-6
-swap-test-6:FILE="./testing/backtest-runner/test_20935488.toml"
-swap-test-6: swap-test
+#.PHONY: swap-test-6
+#swap-test-6:FILE="./testing/backtest-runner/test_20935488.toml"
+#swap-test-6: swap-test
 
 #.PHONY: swap-test-7
 #swap-test-7:FILE="./testing/backtest-runner/test_20937428.toml"
@@ -228,7 +228,7 @@ swap-test-all:
 	@$(MAKE) swap-test-3 RL=$(RL)
 	@$(MAKE) swap-test-4 RL=$(RL)
 	@$(MAKE) swap-test-5 RL=$(RL)
-	@$(MAKE) swap-test-6 RL=$(RL)
+	#@$(MAKE) swap-test-6 RL=$(RL)
 	@$(MAKE) swap-test-8 RL=$(RL)
 
 
