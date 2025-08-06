@@ -190,6 +190,28 @@ make swap-test-all
    make udeps
    ```
 
+### Documentation
+
+1. **Build the book:**
+   ```bash
+   make book
+   ```
+
+2. **Test book examples:**
+   ```bash
+   make test-book
+   ```
+
+3. **Serve book locally:**
+   ```bash
+   make serve-book  # Opens at http://localhost:3000
+   ```
+
+4. **Build API documentation:**
+   ```bash
+   make doc
+   ```
+
 ## Acknowledgements
 
 Many thanks to [dexloom](https://github.com/dexloom)! This project is a hard-fork from [loom](https://github.com/dexloom/loom), based on this [branch](https://github.com/dexloom/loom/tree/entityid). The `flashbots` crate is fork of [ethers-flashbots](https://github.com/onbjerg/ethers-flashbots). The `uniswap-v3-math` crate is a fork of [uniswap-v3-math](https://github.com/0xKitsune/uniswap-v3-math). Additionally, some code for the Uniswap V3 pools is derived from [amms-rs](https://github.com/darkforestry/amms-rs). Last but not least, a big shoutout to [Paradigm](https://github.com/paradigmxyz) — without their work, this project would not have been possible.
