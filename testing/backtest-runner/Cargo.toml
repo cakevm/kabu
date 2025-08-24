@@ -25,15 +25,21 @@ wiremock.workspace = true
 
 # alloy
 alloy-evm.workspace = true
+alloy-network.workspace = true
 alloy-primitives.workspace = true
 alloy-provider.workspace = true
 alloy-rpc-types.workspace = true
 alloy-rpc-types-eth.workspace = true
 
+# reth
+reth.workspace = true
+reth-node-ethereum.workspace = true
+reth-storage-rpc-provider.workspace = true
+reth-tasks.workspace = true
+
 kabu-core-components.workspace = true
 kabu-core-node.workspace = true
 kabu-types-blockchain.workspace = true
-reth-tasks.workspace = true
 
 [dev-dependencies]
 chrono.workspace = true

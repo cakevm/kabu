@@ -166,7 +166,7 @@ fn main() -> eyre::Result<()> {
 
 #[allow(clippy::too_many_arguments)]
 async fn start_kabu_mev<RethProvider, RpcProvider, Types, DB>(
-    _reth_provider: RethProvider,
+    reth_provider: RethProvider,
     provider: RpcProvider,
     bc: Blockchain,
     bc_state: BlockchainState<KabuDB, KabuDataTypesEthereum>,
@@ -206,6 +206,7 @@ where
 
     // Create KabuBuildContext
     let kabu_context = KabuBuildContext::builder(
+        reth_provider,
         provider.clone(),
         bc,
         bc_state.clone(),
@@ -227,7 +228,7 @@ where
     info!("Building MEV components using KabuBuilder with KabuEthereumNode");
 
     let handle = KabuBuilder::new(kabu_context)
-        .node(KabuEthereumNode::<RpcProvider, KabuDB>::default())
+        .node(KabuEthereumNode::<RethProvider, RpcProvider, KabuDB>::default())
         .build()
         .launch(task_executor.clone())
         .await?;

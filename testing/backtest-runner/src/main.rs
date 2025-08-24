@@ -1,6 +1,7 @@
 use crate::flashbots_mock::mount_flashbots_mock;
 use crate::flashbots_mock::BundleRequest;
 use crate::test_config::TestConfig;
+use alloy_network::Ethereum;
 use alloy_primitives::{address, TxHash, U256};
 use alloy_provider::network::eip2718::Encodable2718;
 use alloy_provider::network::TransactionResponse;
@@ -29,6 +30,9 @@ use kabu::types::market::{Pool, PoolWrapper, RequiredStateReader};
 use kabu::types::swap::Swap;
 use kabu_core_components::{KabuBuilder, MevComponentChannels};
 use kabu_core_node::{KabuBuildContext, KabuEthereumNode};
+use reth::chainspec::MAINNET;
+use reth_node_ethereum::EthereumNode;
+use reth_storage_rpc_provider::{RpcBlockchainProvider, RpcBlockchainProviderConfig};
 use reth_tasks::TaskManager;
 use std::env;
 use std::fmt::{Display, Formatter};
@@ -267,8 +271,14 @@ async fn main() -> Result<()> {
     // Create channels first so we can use them throughout the test
     let mev_channels = MevComponentChannels::<KabuDB>::default();
 
+    // Create RpcBlockchainProvider for test environment
+    let config = RpcBlockchainProviderConfig { compute_state_root: false, reth_rpc_support: false };
+    let reth_provider =
+        RpcBlockchainProvider::<_, EthereumNode, Ethereum>::new_with_config(client.clone(), config).with_chain_spec(MAINNET.clone());
+
     // Create KabuBuildContext with our channels
     let kabu_context = KabuBuildContext::builder(
+        reth_provider.clone(),
         client.clone(),
         blockchain.clone(),
         blockchain_state.clone(),
@@ -301,8 +311,11 @@ async fn main() -> Result<()> {
     }
 
     // Build and launch components with KabuEthereumNode - now SignersComponent will have signers configured
-    let _handle =
-        KabuBuilder::new(kabu_context).node(KabuEthereumNode::<_, KabuDB>::default()).build().launch(task_executor.clone()).await?;
+    let _handle = KabuBuilder::new(kabu_context)
+        .node(KabuEthereumNode::<RpcBlockchainProvider<_, EthereumNode, Ethereum>, _, KabuDB>::default())
+        .build()
+        .launch(task_executor.clone())
+        .await?;
 
     // Give components time to initialize
     println!("[{}] Waiting for component initialization...", Local::now().format("%H:%M:%S.%3f"));

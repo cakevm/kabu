@@ -49,8 +49,9 @@ use reth::revm::{Database, DatabaseCommit, DatabaseRef};
 
 /// Extended build context for Kabu components with all necessary resources
 #[derive(Clone)]
-pub struct KabuBuildContext<P, DB>
+pub struct KabuBuildContext<R, P, DB>
 where
+    R: Send + Sync + Clone + 'static,
     P: Provider<Ethereum> + DebugProviderExt<Ethereum> + Send + Sync + Clone + 'static,
     DB: DatabaseRef<Error = KabuDBError>
         + Database<Error = KabuDBError>
@@ -63,6 +64,8 @@ where
         + Default
         + 'static,
 {
+    /// Reth provider for node access
+    pub reth_provider: R,
     /// Provider for blockchain access
     pub provider: P,
     /// Blockchain state
@@ -97,16 +100,11 @@ where
     pub block_history: Arc<RwLock<BlockHistory<DB, KabuDataTypesEthereum>>>,
     /// Shared latest block
     pub latest_block: Arc<RwLock<LatestBlock<KabuDataTypesEthereum>>>,
-    // Note: Block channels and influxdb channel are accessed via blockchain methods:
-    // - blockchain.new_block_headers_channel()
-    // - blockchain.new_block_with_tx_channel()
-    // - blockchain.new_block_state_update_channel()
-    // - blockchain.new_block_logs_channel()
-    // - blockchain.influxdb_write_channel()
 }
 
-impl<P, DB> KabuBuildContext<P, DB>
+impl<R, P, DB> KabuBuildContext<R, P, DB>
 where
+    R: Send + Sync + Clone + 'static,
     P: Provider<Ethereum> + DebugProviderExt<Ethereum> + Send + Sync + Clone + 'static,
     DB: DatabaseRef<Error = KabuDBError>
         + Database<Error = KabuDBError>
@@ -122,6 +120,7 @@ where
     /// Create a new KabuBuildContext with defaults
     #[allow(clippy::too_many_arguments)]
     pub fn new(
+        reth_provider: R,
         provider: P,
         blockchain: Blockchain,
         blockchain_state: BlockchainState<DB, KabuDataTypesEthereum>,
@@ -147,6 +146,7 @@ where
             .enable(kabu_types_market::PoolClass::UniswapV3);
 
         Self {
+            reth_provider,
             provider,
             blockchain,
             blockchain_state,
@@ -170,6 +170,7 @@ where
     /// Create a builder for customizing the context
     #[allow(clippy::too_many_arguments)]
     pub fn builder(
+        reth_provider: R,
         provider: P,
         blockchain: Blockchain,
         blockchain_state: BlockchainState<DB, KabuDataTypesEthereum>,
@@ -178,8 +179,9 @@ where
         multicaller_address: Address,
         db_pool: Option<DbPool>,
         is_exex: bool,
-    ) -> KabuBuildContextBuilder<P, DB> {
+    ) -> KabuBuildContextBuilder<R, P, DB> {
         KabuBuildContextBuilder::new(
+            reth_provider,
             provider,
             blockchain,
             blockchain_state,
@@ -193,8 +195,9 @@ where
 }
 
 /// Builder for KabuBuildContext
-pub struct KabuBuildContextBuilder<P, DB>
+pub struct KabuBuildContextBuilder<R, P, DB>
 where
+    R: Send + Sync + Clone + 'static,
     P: Provider<Ethereum> + DebugProviderExt<Ethereum> + Send + Sync + Clone + 'static,
     DB: DatabaseRef<Error = KabuDBError>
         + Database<Error = KabuDBError>
@@ -207,6 +210,7 @@ where
         + Default
         + 'static,
 {
+    reth_provider: R,
     provider: P,
     blockchain: Blockchain,
     blockchain_state: BlockchainState<DB, KabuDataTypesEthereum>,
@@ -226,8 +230,9 @@ where
     latest_block: Arc<RwLock<LatestBlock<KabuDataTypesEthereum>>>,
 }
 
-impl<P, DB> KabuBuildContextBuilder<P, DB>
+impl<R, P, DB> KabuBuildContextBuilder<R, P, DB>
 where
+    R: Send + Sync + Clone + 'static,
     P: Provider<Ethereum> + DebugProviderExt<Ethereum> + Send + Sync + Clone + 'static,
     DB: DatabaseRef<Error = KabuDBError>
         + Database<Error = KabuDBError>
@@ -242,6 +247,7 @@ where
 {
     #[allow(clippy::too_many_arguments)]
     pub fn new(
+        reth_provider: R,
         provider: P,
         blockchain: Blockchain,
         blockchain_state: BlockchainState<DB, KabuDataTypesEthereum>,
@@ -268,6 +274,7 @@ where
             .enable(kabu_types_market::PoolClass::UniswapV3);
 
         Self {
+            reth_provider,
             provider,
             blockchain,
             blockchain_state,
@@ -333,8 +340,9 @@ where
         self
     }
 
-    pub fn build(self) -> KabuBuildContext<P, DB> {
+    pub fn build(self) -> KabuBuildContext<R, P, DB> {
         KabuBuildContext {
+            reth_provider: self.reth_provider,
             provider: self.provider,
             blockchain: self.blockchain,
             blockchain_state: self.blockchain_state,
@@ -362,18 +370,19 @@ pub struct KabuNode;
 
 /// Kabu Ethereum node types configuration
 #[derive(Clone)]
-pub struct KabuEthereumNode<P, DB> {
-    _phantom: PhantomData<(P, DB)>,
+pub struct KabuEthereumNode<R, P, DB> {
+    _phantom: PhantomData<(R, P, DB)>,
 }
 
-impl<P, DB> Default for KabuEthereumNode<P, DB> {
+impl<R, P, DB> Default for KabuEthereumNode<R, P, DB> {
     fn default() -> Self {
         Self { _phantom: PhantomData }
     }
 }
 
-impl<P, DB> KabuNodeTypes for KabuEthereumNode<P, DB>
+impl<R, P, DB> KabuNodeTypes for KabuEthereumNode<R, P, DB>
 where
+    R: Send + Sync + Clone + 'static,
     P: Provider<Ethereum> + DebugProviderExt<Ethereum> + Send + Sync + Clone + 'static,
     DB: DatabaseRef<Error = KabuDBError>
         + Database<Error = KabuDBError>
@@ -386,12 +395,13 @@ where
         + Default
         + 'static,
 {
-    type State = KabuBuildContext<P, DB>;
+    type State = KabuBuildContext<R, P, DB>;
 }
 
 /// Trait to extract KabuBuildContext from generic BuilderContext
-pub trait AsKabuContext<P, DB>
+pub trait AsKabuContext<R, P, DB>
 where
+    R: Send + Sync + Clone + 'static,
     P: Provider<Ethereum> + DebugProviderExt<Ethereum> + Send + Sync + Clone + 'static,
     DB: DatabaseRef<Error = KabuDBError>
         + Database<Error = KabuDBError>
@@ -404,11 +414,12 @@ where
         + Default
         + 'static,
 {
-    fn as_kabu_context(&self) -> Result<&KabuBuildContext<P, DB>>;
+    fn as_kabu_context(&self) -> Result<&KabuBuildContext<R, P, DB>>;
 }
 
-impl<P, DB> AsKabuContext<P, DB> for BuilderContext<KabuBuildContext<P, DB>>
+impl<R, P, DB> AsKabuContext<R, P, DB> for BuilderContext<KabuBuildContext<R, P, DB>>
 where
+    R: Send + Sync + Clone + 'static,
     P: Provider<Ethereum> + DebugProviderExt<Ethereum> + Send + Sync + Clone + 'static,
     DB: DatabaseRef<Error = KabuDBError>
         + Database<Error = KabuDBError>
@@ -421,7 +432,7 @@ where
         + Default
         + 'static,
 {
-    fn as_kabu_context(&self) -> Result<&KabuBuildContext<P, DB>> {
+    fn as_kabu_context(&self) -> Result<&KabuBuildContext<R, P, DB>> {
         Ok(&self.state)
     }
 }
@@ -433,19 +444,20 @@ impl KabuNode {
 
     /// Get the default MEV components configuration for KabuBuildContext
     #[allow(clippy::type_complexity)]
-    pub fn components<P, DB>() -> MevComponentsBuilder<
-        KabuBuildContext<P, DB>,
-        KabuPoolBuilder<P, DB>,
-        KabuNetworkBuilder<P, DB>,
-        KabuExecutorBuilder<P, DB>,
-        KabuStrategyBuilder<P, DB>,
-        KabuSignerBuilder<P, DB>,
-        KabuMarketBuilder<P, DB>,
-        KabuBroadcasterBuilder<P, DB>,
-        KabuEstimatorBuilder<P, DB>,
-        KabuHealthMonitorBuilder<P, DB>,
+    pub fn components<R, P, DB>() -> MevComponentsBuilder<
+        KabuBuildContext<R, P, DB>,
+        KabuPoolBuilder<R, P, DB>,
+        KabuNetworkBuilder<R, P, DB>,
+        KabuExecutorBuilder<R, P, DB>,
+        KabuStrategyBuilder<R, P, DB>,
+        KabuSignerBuilder<R, P, DB>,
+        KabuMarketBuilder<R, P, DB>,
+        KabuBroadcasterBuilder<R, P, DB>,
+        KabuEstimatorBuilder<R, P, DB>,
+        KabuHealthMonitorBuilder<R, P, DB>,
     >
     where
+        R: Send + Sync + Clone + 'static,
         P: Provider<Ethereum> + DebugProviderExt<Ethereum> + Send + Sync + Clone + 'static,
         DB: DatabaseRef<Error = KabuDBError>
             + Database<Error = KabuDBError>
@@ -476,24 +488,25 @@ impl KabuNode {
 // ================================================================================================
 
 #[derive(Clone)]
-pub struct KabuPoolBuilder<P, DB> {
-    _phantom: PhantomData<(P, DB)>,
+pub struct KabuPoolBuilder<R, P, DB> {
+    _phantom: PhantomData<(R, P, DB)>,
 }
 
-impl<P, DB> Default for KabuPoolBuilder<P, DB> {
+impl<R, P, DB> Default for KabuPoolBuilder<R, P, DB> {
     fn default() -> Self {
         Self::new()
     }
 }
 
-impl<P, DB> KabuPoolBuilder<P, DB> {
+impl<R, P, DB> KabuPoolBuilder<R, P, DB> {
     pub fn new() -> Self {
         Self { _phantom: PhantomData }
     }
 }
 
-impl<P, DB> PoolBuilder<KabuBuildContext<P, DB>> for KabuPoolBuilder<P, DB>
+impl<R, P, DB> PoolBuilder<KabuBuildContext<R, P, DB>> for KabuPoolBuilder<R, P, DB>
 where
+    R: Send + Sync + Clone + 'static,
     P: Provider<Ethereum> + DebugProviderExt<Ethereum> + Send + Sync + Clone + 'static,
     DB: DatabaseRef<Error = KabuDBError>
         + Database<Error = KabuDBError>
@@ -508,7 +521,7 @@ where
 {
     type Pool = PlaceholderComponent;
 
-    async fn build_pool(self, _ctx: &BuilderContext<KabuBuildContext<P, DB>>) -> Result<Self::Pool> {
+    async fn build_pool(self, _ctx: &BuilderContext<KabuBuildContext<R, P, DB>>) -> Result<Self::Pool> {
         // Mempool is already created and managed in KabuBuildContext
         // Could return a MempoolComponent here if needed
         Ok(PlaceholderComponent::new("PoolComponent"))
@@ -520,17 +533,17 @@ where
 // ================================================================================================
 
 #[derive(Clone)]
-pub struct KabuNetworkBuilder<P, DB> {
-    _phantom: PhantomData<(P, DB)>,
+pub struct KabuNetworkBuilder<R, P, DB> {
+    _phantom: PhantomData<(R, P, DB)>,
 }
 
-impl<P, DB> Default for KabuNetworkBuilder<P, DB> {
+impl<R, P, DB> Default for KabuNetworkBuilder<R, P, DB> {
     fn default() -> Self {
         Self::new()
     }
 }
 
-impl<P, DB> KabuNetworkBuilder<P, DB> {
+impl<R, P, DB> KabuNetworkBuilder<R, P, DB> {
     pub fn new() -> Self {
         Self { _phantom: PhantomData }
     }
@@ -622,8 +635,9 @@ where
     }
 }
 
-impl<P, DB> NetworkBuilder<KabuBuildContext<P, DB>> for KabuNetworkBuilder<P, DB>
+impl<R, P, DB> NetworkBuilder<KabuBuildContext<R, P, DB>> for KabuNetworkBuilder<R, P, DB>
 where
+    R: Send + Sync + Clone + 'static,
     P: Provider<Ethereum> + DebugProviderExt<Ethereum> + Send + Sync + Clone + 'static,
     DB: DatabaseRef<Error = KabuDBError>
         + Database<Error = KabuDBError>
@@ -638,7 +652,7 @@ where
 {
     type Network = CompositeNetworkComponent<P, DB>;
 
-    async fn build_network(self, ctx: &BuilderContext<KabuBuildContext<P, DB>>) -> Result<Self::Network> {
+    async fn build_network(self, ctx: &BuilderContext<KabuBuildContext<R, P, DB>>) -> Result<Self::Network> {
         let kabu_ctx = ctx.as_kabu_context()?;
 
         // Block processing component
@@ -675,24 +689,25 @@ where
 // ================================================================================================
 
 #[derive(Clone)]
-pub struct KabuExecutorBuilder<P, DB> {
-    _phantom: PhantomData<(P, DB)>,
+pub struct KabuExecutorBuilder<R, P, DB> {
+    _phantom: PhantomData<(R, P, DB)>,
 }
 
-impl<P, DB> Default for KabuExecutorBuilder<P, DB> {
+impl<R, P, DB> Default for KabuExecutorBuilder<R, P, DB> {
     fn default() -> Self {
         Self::new()
     }
 }
 
-impl<P, DB> KabuExecutorBuilder<P, DB> {
+impl<R, P, DB> KabuExecutorBuilder<R, P, DB> {
     pub fn new() -> Self {
         Self { _phantom: PhantomData }
     }
 }
 
-impl<P, DB> ExecutorBuilder<KabuBuildContext<P, DB>> for KabuExecutorBuilder<P, DB>
+impl<R, P, DB> ExecutorBuilder<KabuBuildContext<R, P, DB>> for KabuExecutorBuilder<R, P, DB>
 where
+    R: Send + Sync + Clone + 'static,
     P: Provider<Ethereum> + DebugProviderExt<Ethereum> + Send + Sync + Clone + 'static,
     DB: DatabaseRef<Error = KabuDBError>
         + Database<Error = KabuDBError>
@@ -707,7 +722,7 @@ where
 {
     type Executor = SwapRouterComponent<DB, KabuDataTypesEthereum>;
 
-    async fn build_executor(self, ctx: &BuilderContext<KabuBuildContext<P, DB>>) -> Result<Self::Executor> {
+    async fn build_executor(self, ctx: &BuilderContext<KabuBuildContext<R, P, DB>>) -> Result<Self::Executor> {
         let kabu_ctx = ctx.as_kabu_context()?;
 
         let component = SwapRouterComponent::new(
@@ -724,24 +739,25 @@ where
 // ================================================================================================
 
 #[derive(Clone)]
-pub struct KabuStrategyBuilder<P, DB> {
-    _phantom: PhantomData<(P, DB)>,
+pub struct KabuStrategyBuilder<R, P, DB> {
+    _phantom: PhantomData<(R, P, DB)>,
 }
 
-impl<P, DB> Default for KabuStrategyBuilder<P, DB> {
+impl<R, P, DB> Default for KabuStrategyBuilder<R, P, DB> {
     fn default() -> Self {
         Self::new()
     }
 }
 
-impl<P, DB> KabuStrategyBuilder<P, DB> {
+impl<R, P, DB> KabuStrategyBuilder<R, P, DB> {
     pub fn new() -> Self {
         Self { _phantom: PhantomData }
     }
 }
 
-impl<P, DB> StrategyBuilder<KabuBuildContext<P, DB>> for KabuStrategyBuilder<P, DB>
+impl<R, P, DB> StrategyBuilder<KabuBuildContext<R, P, DB>> for KabuStrategyBuilder<R, P, DB>
 where
+    R: Send + Sync + Clone + 'static,
     P: Provider<Ethereum> + DebugProviderExt<Ethereum> + Send + Sync + Clone + 'static,
     DB: DatabaseRef<Error = KabuDBError>
         + Database<Error = KabuDBError>
@@ -756,7 +772,7 @@ where
 {
     type Strategy = StateChangeArbComponent<P, Ethereum, DB, KabuDataTypesEthereum>;
 
-    async fn build_strategy(self, ctx: &BuilderContext<KabuBuildContext<P, DB>>) -> Result<Self::Strategy> {
+    async fn build_strategy(self, ctx: &BuilderContext<KabuBuildContext<R, P, DB>>) -> Result<Self::Strategy> {
         let kabu_ctx = ctx.as_kabu_context()?;
 
         let mut component = StateChangeArbComponent::<_, _, DB, _>::new(
@@ -788,24 +804,25 @@ where
 // ================================================================================================
 
 #[derive(Clone)]
-pub struct KabuSignerBuilder<P, DB> {
-    _phantom: PhantomData<(P, DB)>,
+pub struct KabuSignerBuilder<R, P, DB> {
+    _phantom: PhantomData<(R, P, DB)>,
 }
 
-impl<P, DB> Default for KabuSignerBuilder<P, DB> {
+impl<R, P, DB> Default for KabuSignerBuilder<R, P, DB> {
     fn default() -> Self {
         Self::new()
     }
 }
 
-impl<P, DB> KabuSignerBuilder<P, DB> {
+impl<R, P, DB> KabuSignerBuilder<R, P, DB> {
     pub fn new() -> Self {
         Self { _phantom: PhantomData }
     }
 }
 
-impl<P, DB> SignerBuilderTrait<KabuBuildContext<P, DB>> for KabuSignerBuilder<P, DB>
+impl<R, P, DB> SignerBuilderTrait<KabuBuildContext<R, P, DB>> for KabuSignerBuilder<R, P, DB>
 where
+    R: Send + Sync + Clone + 'static,
     P: Provider<Ethereum> + DebugProviderExt<Ethereum> + Send + Sync + Clone + 'static,
     DB: DatabaseRef<Error = KabuDBError>
         + Database<Error = KabuDBError>
@@ -820,7 +837,7 @@ where
 {
     type Signer = SignersComponent<P, Ethereum, DB, KabuDataTypesEthereum>;
 
-    async fn build_signer(self, ctx: &BuilderContext<KabuBuildContext<P, DB>>) -> Result<Self::Signer> {
+    async fn build_signer(self, ctx: &BuilderContext<KabuBuildContext<R, P, DB>>) -> Result<Self::Signer> {
         let kabu_ctx = ctx.as_kabu_context()?;
 
         let component = SignersComponent::new(
@@ -840,17 +857,17 @@ where
 // ================================================================================================
 
 #[derive(Clone)]
-pub struct KabuMarketBuilder<P, DB> {
-    _phantom: PhantomData<(P, DB)>,
+pub struct KabuMarketBuilder<R, P, DB> {
+    _phantom: PhantomData<(R, P, DB)>,
 }
 
-impl<P, DB> Default for KabuMarketBuilder<P, DB> {
+impl<R, P, DB> Default for KabuMarketBuilder<R, P, DB> {
     fn default() -> Self {
         Self::new()
     }
 }
 
-impl<P, DB> KabuMarketBuilder<P, DB> {
+impl<R, P, DB> KabuMarketBuilder<R, P, DB> {
     pub fn new() -> Self {
         Self { _phantom: PhantomData }
     }
@@ -937,8 +954,9 @@ where
     }
 }
 
-impl<P, DB> MarketBuilder<KabuBuildContext<P, DB>> for KabuMarketBuilder<P, DB>
+impl<R, P, DB> MarketBuilder<KabuBuildContext<R, P, DB>> for KabuMarketBuilder<R, P, DB>
 where
+    R: Send + Sync + Clone + 'static,
     P: Provider<Ethereum> + DebugProviderExt<Ethereum> + Send + Sync + Clone + 'static,
     DB: DatabaseRef<Error = KabuDBError>
         + Database<Error = KabuDBError>
@@ -953,7 +971,7 @@ where
 {
     type Market = CompositeMarketComponent<P, DB>;
 
-    async fn build_market(self, ctx: &BuilderContext<KabuBuildContext<P, DB>>) -> Result<Self::Market> {
+    async fn build_market(self, ctx: &BuilderContext<KabuBuildContext<R, P, DB>>) -> Result<Self::Market> {
         let kabu_ctx = ctx.as_kabu_context()?;
 
         // Signer initialization is handled externally (in main or test runner)
@@ -1010,24 +1028,25 @@ where
 // ================================================================================================
 
 #[derive(Clone)]
-pub struct KabuBroadcasterBuilder<P, DB> {
-    _phantom: PhantomData<(P, DB)>,
+pub struct KabuBroadcasterBuilder<R, P, DB> {
+    _phantom: PhantomData<(R, P, DB)>,
 }
 
-impl<P, DB> Default for KabuBroadcasterBuilder<P, DB> {
+impl<R, P, DB> Default for KabuBroadcasterBuilder<R, P, DB> {
     fn default() -> Self {
         Self::new()
     }
 }
 
-impl<P, DB> KabuBroadcasterBuilder<P, DB> {
+impl<R, P, DB> KabuBroadcasterBuilder<R, P, DB> {
     pub fn new() -> Self {
         Self { _phantom: PhantomData }
     }
 }
 
-impl<P, DB> BroadcasterBuilder<KabuBuildContext<P, DB>> for KabuBroadcasterBuilder<P, DB>
+impl<R, P, DB> BroadcasterBuilder<KabuBuildContext<R, P, DB>> for KabuBroadcasterBuilder<R, P, DB>
 where
+    R: Send + Sync + Clone + 'static,
     P: Provider<Ethereum> + DebugProviderExt<Ethereum> + Send + Sync + Clone + 'static,
     DB: DatabaseRef<Error = KabuDBError>
         + Database<Error = KabuDBError>
@@ -1042,7 +1061,7 @@ where
 {
     type Broadcaster = FlashbotsBroadcastComponent;
 
-    async fn build_broadcaster(self, ctx: &BuilderContext<KabuBuildContext<P, DB>>) -> Result<Self::Broadcaster> {
+    async fn build_broadcaster(self, ctx: &BuilderContext<KabuBuildContext<R, P, DB>>) -> Result<Self::Broadcaster> {
         let kabu_ctx = ctx.as_kabu_context()?;
 
         // Get flashbots relays from config
@@ -1069,24 +1088,25 @@ where
 // ================================================================================================
 
 #[derive(Clone)]
-pub struct KabuEstimatorBuilder<P, DB> {
-    _phantom: PhantomData<(P, DB)>,
+pub struct KabuEstimatorBuilder<R, P, DB> {
+    _phantom: PhantomData<(R, P, DB)>,
 }
 
-impl<P, DB> Default for KabuEstimatorBuilder<P, DB> {
+impl<R, P, DB> Default for KabuEstimatorBuilder<R, P, DB> {
     fn default() -> Self {
         Self::new()
     }
 }
 
-impl<P, DB> KabuEstimatorBuilder<P, DB> {
+impl<R, P, DB> KabuEstimatorBuilder<R, P, DB> {
     pub fn new() -> Self {
         Self { _phantom: PhantomData }
     }
 }
 
-impl<P, DB> EstimatorBuilder<KabuBuildContext<P, DB>> for KabuEstimatorBuilder<P, DB>
+impl<R, P, DB> EstimatorBuilder<KabuBuildContext<R, P, DB>> for KabuEstimatorBuilder<R, P, DB>
 where
+    R: Send + Sync + Clone + 'static,
     P: Provider<Ethereum> + DebugProviderExt<Ethereum> + Send + Sync + Clone + 'static,
     DB: DatabaseRef<Error = KabuDBError>
         + Database<Error = KabuDBError>
@@ -1101,7 +1121,7 @@ where
 {
     type Estimator = EvmEstimatorComponent<P, Ethereum, MulticallerSwapEncoder, DB>;
 
-    async fn build_estimator(self, ctx: &BuilderContext<KabuBuildContext<P, DB>>) -> Result<Self::Estimator> {
+    async fn build_estimator(self, ctx: &BuilderContext<KabuBuildContext<R, P, DB>>) -> Result<Self::Estimator> {
         let kabu_ctx = ctx.as_kabu_context()?;
 
         let component =
@@ -1117,24 +1137,25 @@ where
 // ================================================================================================
 
 #[derive(Clone)]
-pub struct KabuHealthMonitorBuilder<P, DB> {
-    _phantom: PhantomData<(P, DB)>,
+pub struct KabuHealthMonitorBuilder<R, P, DB> {
+    _phantom: PhantomData<(R, P, DB)>,
 }
 
-impl<P, DB> Default for KabuHealthMonitorBuilder<P, DB> {
+impl<R, P, DB> Default for KabuHealthMonitorBuilder<R, P, DB> {
     fn default() -> Self {
         Self::new()
     }
 }
 
-impl<P, DB> KabuHealthMonitorBuilder<P, DB> {
+impl<R, P, DB> KabuHealthMonitorBuilder<R, P, DB> {
     pub fn new() -> Self {
         Self { _phantom: PhantomData }
     }
 }
 
-impl<P, DB> HealthMonitorBuilderTrait<KabuBuildContext<P, DB>> for KabuHealthMonitorBuilder<P, DB>
+impl<R, P, DB> HealthMonitorBuilderTrait<KabuBuildContext<R, P, DB>> for KabuHealthMonitorBuilder<R, P, DB>
 where
+    R: Send + Sync + Clone + 'static,
     P: Provider<Ethereum> + DebugProviderExt<Ethereum> + Send + Sync + Clone + 'static,
     DB: DatabaseRef<Error = KabuDBError>
         + Database<Error = KabuDBError>
@@ -1153,7 +1174,7 @@ where
     #[cfg(not(feature = "defi-health-monitor"))]
     type HealthMonitor = PlaceholderComponent;
 
-    async fn build_health_monitor(self, ctx: &BuilderContext<KabuBuildContext<P, DB>>) -> Result<Self::HealthMonitor> {
+    async fn build_health_monitor(self, ctx: &BuilderContext<KabuBuildContext<R, P, DB>>) -> Result<Self::HealthMonitor> {
         #[cfg(feature = "defi-health-monitor")]
         {
             let kabu_ctx = ctx.as_kabu_context()?;
@@ -1182,17 +1203,17 @@ where
 // ================================================================================================
 
 #[derive(Clone)]
-pub struct KabuMergerBuilder<P, DB> {
-    _phantom: PhantomData<(P, DB)>,
+pub struct KabuMergerBuilder<R, P, DB> {
+    _phantom: PhantomData<(R, P, DB)>,
 }
 
-impl<P, DB> Default for KabuMergerBuilder<P, DB> {
+impl<R, P, DB> Default for KabuMergerBuilder<R, P, DB> {
     fn default() -> Self {
         Self::new()
     }
 }
 
-impl<P, DB> KabuMergerBuilder<P, DB> {
+impl<R, P, DB> KabuMergerBuilder<R, P, DB> {
     pub fn new() -> Self {
         Self { _phantom: PhantomData }
     }
@@ -1268,8 +1289,9 @@ where
     }
 }
 
-impl<P, DB> MergerBuilder<KabuBuildContext<P, DB>> for KabuMergerBuilder<P, DB>
+impl<R, P, DB> MergerBuilder<KabuBuildContext<R, P, DB>> for KabuMergerBuilder<R, P, DB>
 where
+    R: Send + Sync + Clone + 'static,
     P: Provider<Ethereum> + DebugProviderExt<Ethereum> + Send + Sync + Clone + 'static,
     DB: DatabaseRef<Error = KabuDBError>
         + Database<Error = KabuDBError>
@@ -1284,7 +1306,7 @@ where
 {
     type Merger = CompositeMergerComponent<P, DB>;
 
-    async fn build_merger(self, ctx: &BuilderContext<KabuBuildContext<P, DB>>) -> Result<Self::Merger> {
+    async fn build_merger(self, ctx: &BuilderContext<KabuBuildContext<R, P, DB>>) -> Result<Self::Merger> {
         let kabu_ctx = ctx.as_kabu_context()?;
 
         // Get the swap compose channel from the channels
@@ -1317,24 +1339,25 @@ where
 // ================================================================================================
 
 #[derive(Clone)]
-pub struct KabuWebServerBuilder<P, DB> {
-    _phantom: PhantomData<(P, DB)>,
+pub struct KabuWebServerBuilder<R, P, DB> {
+    _phantom: PhantomData<(R, P, DB)>,
 }
 
-impl<P, DB> Default for KabuWebServerBuilder<P, DB> {
+impl<R, P, DB> Default for KabuWebServerBuilder<R, P, DB> {
     fn default() -> Self {
         Self::new()
     }
 }
 
-impl<P, DB> KabuWebServerBuilder<P, DB> {
+impl<R, P, DB> KabuWebServerBuilder<R, P, DB> {
     pub fn new() -> Self {
         Self { _phantom: PhantomData }
     }
 }
 
-impl<P, DB> WebServerBuilder<KabuBuildContext<P, DB>> for KabuWebServerBuilder<P, DB>
+impl<R, P, DB> WebServerBuilder<KabuBuildContext<R, P, DB>> for KabuWebServerBuilder<R, P, DB>
 where
+    R: Send + Sync + Clone + 'static,
     P: Provider<Ethereum> + DebugProviderExt<Ethereum> + Send + Sync + Clone + 'static,
     DB: DatabaseRef<Error = KabuDBError>
         + Database<Error = KabuDBError>
@@ -1349,7 +1372,7 @@ where
 {
     type WebServer = PlaceholderComponent;
 
-    async fn build_web_server(self, ctx: &BuilderContext<KabuBuildContext<P, DB>>) -> Result<Self::WebServer> {
+    async fn build_web_server(self, ctx: &BuilderContext<KabuBuildContext<R, P, DB>>) -> Result<Self::WebServer> {
         let kabu_ctx = ctx.as_kabu_context()?;
 
         // For now, always return a placeholder component
@@ -1394,24 +1417,25 @@ impl Component for CompositeMonitoringComponent {
 }
 
 #[derive(Clone)]
-pub struct KabuMonitoringBuilder<P, DB> {
-    _phantom: PhantomData<(P, DB)>,
+pub struct KabuMonitoringBuilder<R, P, DB> {
+    _phantom: PhantomData<(R, P, DB)>,
 }
 
-impl<P, DB> Default for KabuMonitoringBuilder<P, DB> {
+impl<R, P, DB> Default for KabuMonitoringBuilder<R, P, DB> {
     fn default() -> Self {
         Self::new()
     }
 }
 
-impl<P, DB> KabuMonitoringBuilder<P, DB> {
+impl<R, P, DB> KabuMonitoringBuilder<R, P, DB> {
     pub fn new() -> Self {
         Self { _phantom: PhantomData }
     }
 }
 
-impl<P, DB> MonitoringBuilder<KabuBuildContext<P, DB>> for KabuMonitoringBuilder<P, DB>
+impl<R, P, DB> MonitoringBuilder<KabuBuildContext<R, P, DB>> for KabuMonitoringBuilder<R, P, DB>
 where
+    R: Send + Sync + Clone + 'static,
     P: Provider<Ethereum> + DebugProviderExt<Ethereum> + Send + Sync + Clone + 'static,
     DB: DatabaseRef<Error = KabuDBError>
         + Database<Error = KabuDBError>
@@ -1426,7 +1450,7 @@ where
 {
     type Monitoring = CompositeMonitoringComponent;
 
-    async fn build_monitoring(self, ctx: &BuilderContext<KabuBuildContext<P, DB>>) -> Result<Self::Monitoring> {
+    async fn build_monitoring(self, ctx: &BuilderContext<KabuBuildContext<R, P, DB>>) -> Result<Self::Monitoring> {
         let kabu_ctx = ctx.as_kabu_context()?;
 
         let influxdb_writer = kabu_ctx.topology_config.influxdb.as_ref().map(|influxdb_config| {
@@ -1444,18 +1468,19 @@ where
 
 /// Components builder for Kabu Ethereum node
 #[derive(Clone)]
-pub struct KabuEthereumComponentsBuilder<P, DB> {
-    _phantom: PhantomData<(P, DB)>,
+pub struct KabuEthereumComponentsBuilder<R, P, DB> {
+    _phantom: PhantomData<(R, P, DB)>,
 }
 
-impl<P, DB> Default for KabuEthereumComponentsBuilder<P, DB> {
+impl<R, P, DB> Default for KabuEthereumComponentsBuilder<R, P, DB> {
     fn default() -> Self {
         Self { _phantom: PhantomData }
     }
 }
 
-impl<P, DB> KabuNodeComponentsBuilder<KabuEthereumNode<P, DB>> for KabuEthereumComponentsBuilder<P, DB>
+impl<R, P, DB> KabuNodeComponentsBuilder<KabuEthereumNode<R, P, DB>> for KabuEthereumComponentsBuilder<R, P, DB>
 where
+    R: Send + Sync + Clone + 'static,
     P: Provider<Ethereum> + DebugProviderExt<Ethereum> + Send + Sync + Clone + 'static,
     DB: DatabaseRef<Error = KabuDBError>
         + Database<Error = KabuDBError>
@@ -1468,20 +1493,20 @@ where
         + Default
         + 'static,
 {
-    type Pool = KabuPoolBuilder<P, DB>;
-    type Network = KabuNetworkBuilder<P, DB>;
-    type Executor = KabuExecutorBuilder<P, DB>;
-    type Strategy = KabuStrategyBuilder<P, DB>;
-    type Signer = KabuSignerBuilder<P, DB>;
-    type Market = KabuMarketBuilder<P, DB>;
-    type Broadcaster = KabuBroadcasterBuilder<P, DB>;
-    type Estimator = KabuEstimatorBuilder<P, DB>;
-    type HealthMonitor = KabuHealthMonitorBuilder<P, DB>;
-    type Merger = KabuMergerBuilder<P, DB>;
-    type WebServer = KabuWebServerBuilder<P, DB>;
-    type Monitoring = KabuMonitoringBuilder<P, DB>;
+    type Pool = KabuPoolBuilder<R, P, DB>;
+    type Network = KabuNetworkBuilder<R, P, DB>;
+    type Executor = KabuExecutorBuilder<R, P, DB>;
+    type Strategy = KabuStrategyBuilder<R, P, DB>;
+    type Signer = KabuSignerBuilder<R, P, DB>;
+    type Market = KabuMarketBuilder<R, P, DB>;
+    type Broadcaster = KabuBroadcasterBuilder<R, P, DB>;
+    type Estimator = KabuEstimatorBuilder<R, P, DB>;
+    type HealthMonitor = KabuHealthMonitorBuilder<R, P, DB>;
+    type Merger = KabuMergerBuilder<R, P, DB>;
+    type WebServer = KabuWebServerBuilder<R, P, DB>;
+    type Monitoring = KabuMonitoringBuilder<R, P, DB>;
 
-    fn build_components(self) -> KabuComponentsSet<KabuBuildContext<P, DB>, Self, KabuEthereumNode<P, DB>> {
+    fn build_components(self) -> KabuComponentsSet<KabuBuildContext<R, P, DB>, Self, KabuEthereumNode<R, P, DB>> {
         KabuComponentsSet {
             pool: KabuPoolBuilder::new(),
             network: KabuNetworkBuilder::new(),
@@ -1501,8 +1526,9 @@ where
 }
 
 // Implement KabuNode trait for KabuEthereumNode
-impl<P, DB> KabuNodeTrait<KabuEthereumNode<P, DB>> for KabuEthereumNode<P, DB>
+impl<R, P, DB> KabuNodeTrait<KabuEthereumNode<R, P, DB>> for KabuEthereumNode<R, P, DB>
 where
+    R: Send + Sync + Clone + 'static,
     P: Provider<Ethereum> + DebugProviderExt<Ethereum> + Send + Sync + Clone + 'static,
     DB: DatabaseRef<Error = KabuDBError>
         + Database<Error = KabuDBError>
@@ -1515,7 +1541,7 @@ where
         + Default
         + 'static,
 {
-    type ComponentsBuilder = KabuEthereumComponentsBuilder<P, DB>;
+    type ComponentsBuilder = KabuEthereumComponentsBuilder<R, P, DB>;
 
     fn components_builder(&self) -> Self::ComponentsBuilder {
         KabuEthereumComponentsBuilder::default()
