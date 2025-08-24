@@ -8,7 +8,7 @@ use kabu_core_components::Component;
 use kabu_evm_db::DatabaseKabuExt;
 use kabu_node_debug_provider::DebugProviderExt;
 use kabu_types_blockchain::{ChainParameters, KabuBlock, KabuDataTypes};
-use kabu_types_entities::{BlockHistory, BlockHistoryManager, BlockHistoryState, LatestBlock};
+use kabu_types_entities::{BlockHistory, BlockHistoryManager, BlockHistoryState};
 use kabu_types_events::{MarketEvents, MessageBlock, MessageBlockHeader, MessageBlockLogs, MessageBlockStateUpdate};
 use kabu_types_market::MarketState;
 use reth_tasks::TaskExecutor;
@@ -23,7 +23,6 @@ use tracing::{debug, error, info, trace, warn};
 pub async fn set_chain_head<P, N, DB, LDT>(
     block_history_manager: &BlockHistoryManager<P, N, DB, LDT>,
     block_history: &mut BlockHistory<DB, LDT>,
-    latest_block: &mut LatestBlock<LDT>,
     market_events_tx: broadcast::Sender<MarketEvents>,
     header: Header,
     chain_parameters: &ChainParameters,
@@ -52,7 +51,7 @@ where
 
                 let timestamp: u64 = header.timestamp;
 
-                latest_block.update(block_number, block_hash, Some(header), None, None, None);
+                // Block history already tracks the latest block
 
                 if let Err(e) = market_events_tx.send(MarketEvents::BlockHeaderUpdate {
                     block_number,
@@ -78,7 +77,6 @@ where
 pub async fn new_block_history_worker<P, N, DB, LDT>(
     client: P,
     chain_parameters: ChainParameters,
-    latest_block: Arc<RwLock<LatestBlock<LDT>>>,
     market_state: Arc<RwLock<MarketState<DB>>>,
     block_history: Arc<RwLock<BlockHistory<DB, LDT>>>,
     mut block_header_update_rx: broadcast::Receiver<MessageBlockHeader<LDT>>,
@@ -105,7 +103,6 @@ where
                 match block_update {
                     Ok(block_header)=>{
                         let mut block_history_guard = block_history.write().await;
-                        let mut latest_block_guard = latest_block.write().await;
 
                         let header = block_header.inner.header.clone();
 
@@ -115,7 +112,6 @@ where
                         set_chain_head(
                             &block_history_manager,
                             block_history_guard.borrow_mut(),
-                            latest_block_guard.borrow_mut(),
                             market_events_tx.clone(),
                             block_header.inner.header,
                             &chain_parameters
@@ -139,12 +135,10 @@ where
                         debug!("Block Update {} {}", block_number, block_hash);
 
                         let mut block_history_guard = block_history.write().await;
-                        let mut latest_block_guard = latest_block.write().await;
 
                         match set_chain_head(
                             &block_history_manager,
                             block_history_guard.borrow_mut(),
-                            latest_block_guard.borrow_mut(),
                             market_events_tx.clone(),
                             block_header,
                             &chain_parameters
@@ -153,12 +147,9 @@ where
                                 Ok(_)=>{
                                     match block_history_guard.add_block(block.clone()) {
                                         Ok(_)=>{
-                                            if block_hash == latest_block_guard.block_hash {
-                                                latest_block_guard.update(block_number, block_hash, None, Some(block.clone()), None, None );
-
-                                                if let Err(e) = market_events_tx.send(MarketEvents::BlockTxUpdate{ block_number, block_hash}) {
-                                                    error!("market_events_tx.send : {}", e)
-                                                }
+                                            // Send block update event
+                                            if let Err(e) = market_events_tx.send(MarketEvents::BlockTxUpdate{ block_number, block_hash}) {
+                                                error!("market_events_tx.send : {}", e)
                                             }
                                         }
                                         Err(e)=>{
@@ -189,12 +180,10 @@ where
                         debug!("Block Logs Update {} {}", block_number, block_hash);
 
                         let mut block_history_guard = block_history.write().await;
-                        let mut latest_block_guard = latest_block.write().await;
 
                         match set_chain_head(
                             &block_history_manager,
                             block_history_guard.borrow_mut(),
-                            latest_block_guard.borrow_mut(),
                             market_events_tx.clone(),
                             block_header,
                             &chain_parameters
@@ -203,12 +192,9 @@ where
                             Ok(_)=>{
                                 match block_history_guard.add_logs(block_hash,blocklogs.logs.clone()) {
                                     Ok(_)=>{
-                                        if block_hash == latest_block_guard.block_hash {
-                                            latest_block_guard.update(block_number, block_hash, None, None,Some(blocklogs.logs), None );
-
-                                            if let Err(e) = market_events_tx.send(MarketEvents::BlockLogsUpdate { block_number, block_hash}) {
-                                                error!("market_events_tx.send : {}", e)
-                                            }
+                                        // Send logs update event
+                                        if let Err(e) = market_events_tx.send(MarketEvents::BlockLogsUpdate { block_number, block_hash}) {
+                                            error!("market_events_tx.send : {}", e)
                                         }
                                     }
                                     Err(e)=>{
@@ -247,18 +233,19 @@ where
 
 
                 let mut block_history_guard = block_history.write().await;
-                let mut latest_block_guard = latest_block.write().await;
                 let mut market_state_guard = market_state.write().await;
 
 
                 if let Err(e) = set_chain_head(&block_history_manager, block_history_guard.borrow_mut(),
-                    latest_block_guard.borrow_mut(),market_events_tx.clone(), msg_block_header, &chain_parameters).await {
+                    market_events_tx.clone(), msg_block_header, &chain_parameters).await {
                     error!("set_chain_head : {}", e);
                     continue
                 }
 
-                let (latest_block_number, latest_block_hash) = latest_block_guard.number_and_hash();
-                let latest_block_parent_hash = latest_block_guard.parent_hash().unwrap_or_default();
+                let latest_block_number = block_history_guard.latest_block_number;
+                let latest_block_hash = block_history_guard.get_block_hash_for_block_number(latest_block_number).unwrap_or_default();
+                let latest_block_entry = block_history_guard.get_block_history_entry(&latest_block_hash);
+                let latest_block_parent_hash = latest_block_entry.map(|e| e.parent_hash()).unwrap_or_default();
 
                 if latest_block_hash != msg_block_hash {
                     warn!(%msg_block_number, %msg_block_hash, %latest_block_number, %latest_block_hash, "State update for block that is not latest.");
@@ -266,8 +253,7 @@ where
                         error!(%err, %msg_block_number, %msg_block_hash, "Error during add_state_diff.");
                     }
                 } else{
-                    latest_block_guard.update(msg_block_number, msg_block_hash, None, None, None, Some(msg.state_update.clone()) );
-
+                    // State update is for the latest block
                     let new_market_state_db = if market_state_guard.block_hash.is_zero() || market_state_guard.block_hash == latest_block_parent_hash {
                          market_state_guard.state_db.clone()
                     } else {
@@ -359,7 +345,6 @@ where
 pub struct BlockHistoryComponent<P, N, DB, LDT: KabuDataTypes + 'static> {
     client: P,
     chain_parameters: ChainParameters,
-    latest_block: Option<Arc<RwLock<LatestBlock<LDT>>>>,
     market_state: Option<Arc<RwLock<MarketState<DB>>>>,
     block_history: Option<Arc<RwLock<BlockHistory<DB, LDT>>>>,
     block_header_update_rx: Option<broadcast::Sender<MessageBlockHeader<LDT>>>,
@@ -382,7 +367,6 @@ where
         Self {
             client,
             chain_parameters: ChainParameters::ethereum(),
-            latest_block: None,
             market_state: None,
             block_history: None,
             block_header_update_rx: None,
@@ -398,7 +382,6 @@ where
     pub fn with_channels(
         mut self,
         chain_parameters: ChainParameters,
-        latest_block: Arc<RwLock<LatestBlock<LDT>>>,
         market_state: Arc<RwLock<MarketState<DB>>>,
         block_history: Arc<RwLock<BlockHistory<DB, LDT>>>,
         block_header_update_rx: broadcast::Sender<MessageBlockHeader<LDT>>,
@@ -408,7 +391,6 @@ where
         market_events_tx: broadcast::Sender<MarketEvents>,
     ) -> Self {
         self.chain_parameters = chain_parameters;
-        self.latest_block = Some(latest_block);
         self.market_state = Some(market_state);
         self.block_history = Some(block_history);
         self.block_header_update_rx = Some(block_header_update_rx);
@@ -440,7 +422,6 @@ where
             if let Err(e) = new_block_history_worker(
                 self.client.clone(),
                 self.chain_parameters.clone(),
-                self.latest_block.clone().unwrap(),
                 self.market_state.clone().unwrap(),
                 self.block_history.clone().unwrap(),
                 block_header_rx,

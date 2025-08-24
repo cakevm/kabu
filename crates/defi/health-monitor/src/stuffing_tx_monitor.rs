@@ -1,21 +1,22 @@
 use alloy_consensus::transaction::Transaction;
-use alloy_network::{Ethereum, TransactionResponse};
+use alloy_eips::BlockNumberOrTag;
+use alloy_network::{BlockResponse, Ethereum, TransactionResponse};
 use alloy_primitives::{Address, TxHash, U256};
 use alloy_provider::Provider;
+use alloy_rpc_types::BlockTransactions;
 use eyre::{eyre, Result};
 use influxdb::{Timestamp, WriteQuery};
 use kabu_core_components::Component;
 use reth_tasks::TaskExecutor;
 use std::collections::HashMap;
 use std::sync::Arc;
+use tokio::sync::broadcast;
 use tokio::sync::broadcast::error::RecvError;
 use tokio::sync::broadcast::Receiver;
-use tokio::sync::{broadcast, RwLock};
 use tracing::{error, info};
 
 use kabu_core_blockchain::Blockchain;
 use kabu_evm_utils::NWETH;
-use kabu_types_entities::LatestBlock;
 use kabu_types_market::Token;
 use kabu_types_swap::Swap;
 
@@ -46,7 +47,6 @@ async fn calc_coinbase_diff<P: Provider<Ethereum> + 'static>(client: P, tx_hash:
 
 pub async fn stuffing_tx_monitor_worker<P: Provider<Ethereum> + Clone + 'static>(
     client: P,
-    latest_block: Arc<RwLock<LatestBlock>>,
     tx_compose_channel_rx: broadcast::Sender<MessageTxCompose>,
     market_events_rx: broadcast::Sender<MarketEvents>,
     influxdb_write_channel_tx: Option<broadcast::Sender<WriteQuery>>,
@@ -63,8 +63,28 @@ pub async fn stuffing_tx_monitor_worker<P: Provider<Ethereum> + Clone + 'static>
                 match market_event_msg {
                     Ok(market_event)=>{
                         if let MarketEvents::BlockTxUpdate{ block_number,..} = market_event {
-                            let coinbase =  latest_block.read().await.coinbase().unwrap_or_default();
-                            if let Some(txs) = latest_block.read().await.txs() {
+                            // Get block from provider to get coinbase and transactions
+                            let block = match client.get_block_by_number(BlockNumberOrTag::Number(block_number)).await {
+                                Ok(Some(block)) => block,
+                                Ok(None) => {
+                                    error!("Block {} not found", block_number);
+                                    continue;
+                                }
+                                Err(e) => {
+                                    error!("Failed to get block {}: {}", block_number, e);
+                                    continue;
+                                }
+                            };
+                            let coinbase = block.header().beneficiary;
+                            // Get transactions from the block
+                            let txs = match block.transactions() {
+                                BlockTransactions::Full(txs) => txs.clone(),
+                                _ => {
+                                    // If we don't have full transactions, skip
+                                    continue;
+                                }
+                            };
+                            if !txs.is_empty() {
                                 for (idx, tx) in txs.iter().enumerate() {
                                     let tx_hash = tx.tx_hash();
                                     if let Some(tx_to_check) = txs_to_check.get(&tx_hash).cloned(){
@@ -170,8 +190,6 @@ pub async fn stuffing_tx_monitor_worker<P: Provider<Ethereum> + Clone + 'static>
 pub struct StuffingTxMonitorActor<P> {
     client: P,
 
-    latest_block: Option<Arc<RwLock<LatestBlock>>>,
-
     tx_compose_channel_rx: Option<broadcast::Sender<MessageTxCompose>>,
 
     market_events_rx: Option<broadcast::Sender<MarketEvents>>,
@@ -181,17 +199,7 @@ pub struct StuffingTxMonitorActor<P> {
 
 impl<P: Provider<Ethereum> + Send + Sync + Clone + 'static> StuffingTxMonitorActor<P> {
     pub fn new(client: P) -> Self {
-        StuffingTxMonitorActor {
-            client,
-            latest_block: None,
-            tx_compose_channel_rx: None,
-            market_events_rx: None,
-            influxdb_write_channel_tx: None,
-        }
-    }
-
-    pub fn with_latest_block(self, latest_block: Arc<RwLock<LatestBlock>>) -> Self {
-        Self { latest_block: Some(latest_block), ..self }
+        StuffingTxMonitorActor { client, tx_compose_channel_rx: None, market_events_rx: None, influxdb_write_channel_tx: None }
     }
 
     pub fn with_tx_compose_channel(self, tx_compose_channel: broadcast::Sender<MessageTxCompose>) -> Self {
@@ -204,7 +212,6 @@ impl<P: Provider<Ethereum> + Send + Sync + Clone + 'static> StuffingTxMonitorAct
 
     pub fn on_bc(self, bc: &Blockchain) -> Self {
         Self {
-            latest_block: Some(bc.latest_block()),
             tx_compose_channel_rx: Some(bc.tx_compose_channel()),
             market_events_rx: Some(bc.market_events_channel()),
             influxdb_write_channel_tx: bc.influxdb_write_channel(),
@@ -218,20 +225,13 @@ where
     P: Provider<Ethereum> + Send + Sync + Clone + 'static,
 {
     fn spawn(self, executor: TaskExecutor) -> Result<()> {
-        let latest_block = self.latest_block.clone().ok_or_else(|| eyre!("latest_block not set"))?;
         let tx_compose_channel_rx = self.tx_compose_channel_rx.clone().ok_or_else(|| eyre!("tx_compose_channel_rx not set"))?;
         let market_events_rx = self.market_events_rx.clone().ok_or_else(|| eyre!("market_events_rx not set"))?;
         let influxdb_write_channel_tx = self.influxdb_write_channel_tx.clone();
 
         executor.spawn(async move {
-            if let Err(e) = stuffing_tx_monitor_worker(
-                self.client.clone(),
-                latest_block,
-                tx_compose_channel_rx,
-                market_events_rx,
-                influxdb_write_channel_tx,
-            )
-            .await
+            if let Err(e) =
+                stuffing_tx_monitor_worker(self.client.clone(), tx_compose_channel_rx, market_events_rx, influxdb_write_channel_tx).await
             {
                 tracing::error!("Stuffing tx monitor worker failed: {}", e);
             }

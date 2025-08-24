@@ -1,16 +1,16 @@
+use alloy_consensus::BlockHeader;
 use alloy_primitives::{Address, U256};
-use alloy_rpc_types::Header;
 use eyre::{eyre, Result};
 use kabu_core_components::Component;
+use reth_node_types::{HeaderTy, NodeTypesWithDB};
+use reth_provider::{BlockNumReader, HeaderProvider};
 use reth_tasks::TaskExecutor;
 use revm::{Database, DatabaseCommit, DatabaseRef};
-use std::sync::Arc;
-use tokio::sync::{broadcast, broadcast::error::RecvError, RwLock};
+use tokio::sync::{broadcast, broadcast::error::RecvError};
 use tracing::{debug, error};
 
 use kabu_core_blockchain::{Blockchain, Strategy};
 use kabu_evm_db::KabuDBError;
-use kabu_types_entities::LatestBlock;
 use kabu_types_events::{MarketEvents, MessageSwapCompose, SwapComposeData, SwapComposeMessage};
 use kabu_types_swap::{Swap, SwapStep};
 use revm::context::BlockEnv;
@@ -21,7 +21,8 @@ async fn arb_swap_steps_optimizer_task<
 >(
     compose_channel_tx: broadcast::Sender<MessageSwapCompose<DB>>,
     _state_db: DB,
-    header: Header,
+    block_number: u64,
+    block_timestamp: u64,
     request: SwapComposeData<DB>,
 ) -> Result<()> {
     debug!("Step Simulation started");
@@ -30,8 +31,8 @@ async fn arb_swap_steps_optimizer_task<
         let start_time = chrono::Local::now();
 
         let _block_env = BlockEnv {
-            number: U256::from(header.number + 1),
-            timestamp: U256::from(header.timestamp + 12),
+            number: U256::from(block_number + 1),
+            timestamp: U256::from(block_timestamp + 12),
             blob_excess_gas_and_price: Some(BlobExcessGasAndPrice { excess_blob_gas: 0, blob_gasprice: 0 }),
             ..Default::default()
         };
@@ -62,14 +63,19 @@ async fn arb_swap_steps_optimizer_task<
 }
 
 async fn arb_swap_path_merger_worker<
+    N: NodeTypesWithDB,
+    R: BlockNumReader + HeaderProvider<Header = HeaderTy<N>> + Send + Sync + Clone + 'static,
     DB: DatabaseRef<Error = KabuDBError> + Database<Error = KabuDBError> + DatabaseCommit + Send + Sync + Clone + 'static,
 >(
+    provider: R,
     multicaller_address: Address,
-    latest_block: Arc<RwLock<LatestBlock>>,
     market_events_rx: broadcast::Sender<MarketEvents>,
     compose_channel_rx: broadcast::Sender<MessageSwapCompose<DB>>,
     compose_channel_tx: broadcast::Sender<MessageSwapCompose<DB>>,
-) -> Result<()> {
+) -> Result<()>
+where
+    HeaderTy<N>: BlockHeader,
+{
     let mut market_events_receiver = market_events_rx.subscribe();
     let mut compose_channel_receiver = compose_channel_rx.subscribe();
 
@@ -142,9 +148,29 @@ async fn arb_swap_path_merger_worker<
 
                             match SwapStep::merge_swap_paths( req_swap.clone(), swap_path.clone(), multicaller_address ){
                                 Ok((sp0, sp1)) => {
-                                    let latest_block_guard = latest_block.read().await;
-                                    let block_header = latest_block_guard.block_header.clone().unwrap();
-                                    drop(latest_block_guard);
+                                    // Get latest block number and timestamp from provider
+                                    let (block_number, block_timestamp) = match provider.last_block_number() {
+                                        Ok(block_num) => {
+                                            match provider.sealed_header(block_num) {
+                                                Ok(Some(sealed)) => {
+                                                    let header = sealed.header();
+                                                    (header.number(), header.timestamp())
+                                                },
+                                                Ok(None) => {
+                                                    error!("No header for block {}", block_num);
+                                                    continue;
+                                                }
+                                                Err(e) => {
+                                                    error!("Failed to get header for block {}: {}", block_num, e);
+                                                    continue;
+                                                }
+                                            }
+                                        }
+                                        Err(e) => {
+                                            error!("Failed to get last block number: {}", e);
+                                            continue;
+                                        }
+                                    };
 
                                     let request = SwapComposeData{
                                         swap : Swap::BackrunSwapSteps((sp0,sp1)),
@@ -159,7 +185,8 @@ async fn arb_swap_path_merger_worker<
                                                 arb_swap_steps_optimizer_task(
                                                     compose_channel_clone,
                                                     db_clone,
-                                                    block_header,
+                                                    block_number,
+                                                    block_timestamp,
                                                     request
                                                 ).await
                                         });
@@ -189,34 +216,35 @@ async fn arb_swap_path_merger_worker<
 }
 
 #[derive(Clone)]
-pub struct ArbSwapPathMergerComponent<DB: Send + Sync + Clone + 'static> {
+pub struct ArbSwapPathMergerComponent<N, R, DB>
+where
+    N: NodeTypesWithDB,
+    R: BlockNumReader + HeaderProvider<Header = HeaderTy<N>> + Send + Sync + Clone + 'static,
+    DB: Send + Sync + Clone + 'static,
+{
+    provider: R,
     multicaller_address: Address,
-
-    latest_block: Option<Arc<RwLock<LatestBlock>>>,
-
     market_events: Option<broadcast::Sender<MarketEvents>>,
-
     compose_channel_rx: Option<broadcast::Sender<MessageSwapCompose<DB>>>,
-
     compose_channel_tx: Option<broadcast::Sender<MessageSwapCompose<DB>>>,
+    _phantom: std::marker::PhantomData<N>,
 }
 
-impl<DB> ArbSwapPathMergerComponent<DB>
+impl<N, R, DB> ArbSwapPathMergerComponent<N, R, DB>
 where
+    N: NodeTypesWithDB,
+    R: BlockNumReader + HeaderProvider<Header = HeaderTy<N>> + Send + Sync + Clone + 'static,
     DB: DatabaseRef + Send + Sync + Clone + 'static,
 {
-    pub fn new(multicaller_address: Address) -> ArbSwapPathMergerComponent<DB> {
+    pub fn new(provider: R, multicaller_address: Address) -> ArbSwapPathMergerComponent<N, R, DB> {
         ArbSwapPathMergerComponent {
+            provider,
             multicaller_address,
-            latest_block: None,
             market_events: None,
             compose_channel_rx: None,
             compose_channel_tx: None,
+            _phantom: std::marker::PhantomData,
         }
-    }
-
-    pub fn with_latest_block(self, latest_block: Arc<RwLock<LatestBlock>>) -> Self {
-        Self { latest_block: Some(latest_block), ..self }
     }
 
     pub fn with_market_events_channel(self, market_events: broadcast::Sender<MarketEvents>) -> Self {
@@ -229,7 +257,6 @@ where
 
     pub fn on_bc(self, bc: &Blockchain, strategy: &Strategy<DB>) -> Self {
         Self {
-            latest_block: Some(bc.latest_block()),
             market_events: Some(bc.market_events_channel()),
             compose_channel_tx: Some(strategy.swap_compose_channel()),
             compose_channel_rx: Some(strategy.swap_compose_channel()),
@@ -238,9 +265,12 @@ where
     }
 }
 
-impl<DB> Component for ArbSwapPathMergerComponent<DB>
+impl<N, R, DB> Component for ArbSwapPathMergerComponent<N, R, DB>
 where
+    N: NodeTypesWithDB,
+    R: BlockNumReader + HeaderProvider<Header = HeaderTy<N>> + Send + Sync + Clone + 'static,
     DB: DatabaseRef<Error = KabuDBError> + Database<Error = KabuDBError> + DatabaseCommit + Send + Sync + Clone + 'static,
+    HeaderTy<N>: BlockHeader,
 {
     fn spawn(self, executor: TaskExecutor) -> Result<()> {
         let name = self.name();
@@ -248,12 +278,11 @@ where
         let compose_channel_rx = self.compose_channel_rx.ok_or_else(|| eyre!("compose_channel_rx not set"))?;
         let compose_channel_tx = self.compose_channel_tx.ok_or_else(|| eyre!("compose_channel_tx not set"))?;
         let market_events_rx = self.market_events.ok_or_else(|| eyre!("market_events not set"))?;
-        let latest_block = self.latest_block.ok_or_else(|| eyre!("latest_block not set"))?;
 
         executor.spawn_critical(name, async move {
-            if let Err(e) = arb_swap_path_merger_worker(
+            if let Err(e) = arb_swap_path_merger_worker::<N, _, _>(
+                self.provider,
                 self.multicaller_address,
-                latest_block,
                 market_events_rx,
                 compose_channel_rx,
                 compose_channel_tx,

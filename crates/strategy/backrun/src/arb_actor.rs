@@ -14,7 +14,7 @@ use tokio::sync::{broadcast, RwLock};
 use kabu_evm_db::KabuDBError;
 use kabu_node_debug_provider::DebugProviderExt;
 use kabu_types_blockchain::{KabuDataTypes, Mempool};
-use kabu_types_entities::{BlockHistory, LatestBlock};
+use kabu_types_entities::BlockHistory;
 use kabu_types_events::{MarketEvents, MempoolEvents, MessageHealthEvent, MessageSwapCompose, StateUpdateEvent};
 use kabu_types_market::{Market, MarketState};
 use revm::{Database, DatabaseCommit, DatabaseRef};
@@ -32,8 +32,6 @@ pub struct StateChangeArbComponent<P, N, DB: Clone + Send + Sync + 'static, LDT:
     mempool: Option<Arc<RwLock<Mempool<LDT>>>>,
 
     chain_parameters: ChainParameters,
-
-    latest_block: Option<Arc<RwLock<LatestBlock<LDT>>>>,
 
     market_state: Option<Arc<RwLock<MarketState<DB>>>>,
 
@@ -68,7 +66,6 @@ where
             chain_parameters: ChainParameters::ethereum(),
             market: None,
             mempool: None,
-            latest_block: None,
             block_history: None,
             market_state: None,
             mempool_events_tx: None,
@@ -86,10 +83,6 @@ where
 
     pub fn with_mempool(self, mempool: Arc<RwLock<Mempool<LDT>>>) -> Self {
         Self { mempool: Some(mempool), ..self }
-    }
-
-    pub fn with_latest_block(self, latest_block: Arc<RwLock<LatestBlock<LDT>>>) -> Self {
-        Self { latest_block: Some(latest_block), ..self }
     }
 
     pub fn with_market_state(self, market_state: Arc<RwLock<MarketState<DB>>>) -> Self {
@@ -153,8 +146,7 @@ where
                 )
                 .with_market(self.market.clone().unwrap())
                 .with_mempool(self.mempool.clone())
-                .with_market_state(self.market_state.clone().unwrap())
-                .with_latest_block(self.latest_block.clone().unwrap());
+                .with_market_state(self.market_state.clone().unwrap());
             pending_tx_processor.spawn(executor.clone())?;
             info!("Pending tx state processor component started successfully");
         }

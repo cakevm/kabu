@@ -1,7 +1,7 @@
 use alloy::primitives::ChainId;
 use kabu_types_blockchain::ChainParameters;
 use kabu_types_blockchain::{KabuDataTypes, KabuDataTypesEthereum, Mempool};
-use kabu_types_entities::{AccountNonceAndBalanceState, LatestBlock};
+use kabu_types_entities::AccountNonceAndBalanceState;
 use kabu_types_market::Market;
 use std::sync::Arc;
 use tokio::sync::{broadcast, RwLock};
@@ -11,7 +11,6 @@ pub struct AppState<LDT: KabuDataTypes + 'static = KabuDataTypesEthereum> {
     pub chain_id: ChainId,
     pub chain_parameters: ChainParameters,
     pub market: Arc<RwLock<Market>>,
-    pub latest_block: Arc<RwLock<LatestBlock<LDT>>>,
     pub mempool: Arc<RwLock<Mempool<LDT>>>,
     pub account_nonce_and_balance: Arc<RwLock<AccountNonceAndBalanceState>>,
 }
@@ -27,7 +26,6 @@ where
             chain_id,
             chain_parameters,
             market: Arc::new(RwLock::new(Market::default())),
-            latest_block: Arc::new(RwLock::new(LatestBlock::new(0, Default::default()))),
             mempool: Arc::new(RwLock::new(Default::default())),
             account_nonce_and_balance: Arc::new(RwLock::new(AccountNonceAndBalanceState::new())),
         }

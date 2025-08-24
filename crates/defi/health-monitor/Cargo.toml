@@ -15,7 +15,6 @@ kabu-defi-address-book.workspace = true
 kabu-evm-db.workspace = true
 kabu-evm-utils.workspace = true
 kabu-types-blockchain.workspace = true
-kabu-types-entities.workspace = true
 kabu-types-events.workspace = true
 kabu-types-market.workspace = true
 kabu-types-swap.workspace = true
@@ -34,6 +33,7 @@ alloy-eips.workspace = true
 alloy-network.workspace = true
 alloy-primitives.workspace = true
 alloy-provider.workspace = true
+alloy-rpc-types.workspace = true
 
 #revm
 revm.workspace = true

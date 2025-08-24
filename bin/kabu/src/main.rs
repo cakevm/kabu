@@ -31,7 +31,7 @@ use reth::tasks::TaskManager;
 use reth_db_api::database_metrics::DatabaseMetrics;
 use reth_db_api::Database as RethDatabase;
 use reth_node_ethereum::node::EthereumAddOns;
-use reth_node_ethereum::EthereumNode;
+use reth_node_ethereum::{EthEvmConfig, EthereumNode};
 use reth_provider::providers::BlockchainProvider;
 use reth_storage_rpc_provider::{RpcBlockchainProvider, RpcBlockchainProviderConfig};
 use tracing::{error, info};
@@ -76,10 +76,12 @@ fn main() -> eyre::Result<()> {
 
             let bc_clone = bc.clone();
             let reth_provider = node.provider.clone();
+            let evm_config = node.evm_config.clone();
             let kabu_handle = tokio::task::spawn(async move {
-                start_kabu_mev::<_, _, EthereumNode, _>(
+                start_kabu_mev::<_, _, EthereumNode, _, _>(
                     reth_provider,
                     ipc_provider,
+                    evm_config,
                     bc_clone,
                     bc_state,
                     topology_config,
@@ -143,9 +145,12 @@ fn main() -> eyre::Result<()> {
 
                 chain_notifications_forwarder(&task_executor, provider.clone(), reth_provider.clone()).await?;
 
-                let handle = start_kabu_mev::<_, _, EthereumNode, _>(
+                let evm_config = EthEvmConfig::mainnet();
+
+                let handle = start_kabu_mev::<_, _, EthereumNode, _, _>(
                     reth_provider,
                     provider,
+                    evm_config,
                     bc_clone,
                     bc_state,
                     topology_config,
@@ -165,9 +170,10 @@ fn main() -> eyre::Result<()> {
 }
 
 #[allow(clippy::too_many_arguments)]
-async fn start_kabu_mev<RethProvider, RpcProvider, Types, DB>(
+async fn start_kabu_mev<RethProvider, RpcProvider, Types, DB, EvmConfig>(
     reth_provider: RethProvider,
     provider: RpcProvider,
+    evm_config: EvmConfig,
     bc: Blockchain,
     bc_state: BlockchainState<KabuDB, KabuDataTypesEthereum>,
     topology_config: TopologyConfig,
@@ -180,6 +186,7 @@ where
     Types: NodeTypes,
     DB: RethDatabase + DatabaseMetrics + Clone + Unpin + 'static,
     RpcProvider: alloy::providers::Provider<Ethereum> + DebugProviderExt<Ethereum> + Send + Sync + Clone + 'static,
+    EvmConfig: reth_evm::ConfigureEvm + 'static,
 {
     let chain_id = provider.get_chain_id().await?;
     info!(chain_id = ?chain_id, "Starting Kabu MEV bot");
@@ -208,6 +215,7 @@ where
     let kabu_context = KabuBuildContext::builder(
         reth_provider,
         provider.clone(),
+        evm_config,
         bc,
         bc_state.clone(),
         topology_config.clone(),
@@ -228,7 +236,7 @@ where
     info!("Building MEV components using KabuBuilder with KabuEthereumNode");
 
     let handle = KabuBuilder::new(kabu_context)
-        .node(KabuEthereumNode::<RethProvider, RpcProvider, KabuDB>::default())
+        .node(KabuEthereumNode::<NodeTypesWithDBAdapter<Types, DB>, RethProvider, RpcProvider, KabuDB, EvmConfig>::default())
         .build()
         .launch(task_executor.clone())
         .await?;

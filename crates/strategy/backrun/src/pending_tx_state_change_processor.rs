@@ -23,7 +23,6 @@ use tracing::{debug, error, warn};
 use kabu_core_blockchain::{Blockchain, BlockchainState, Strategy};
 use kabu_node_debug_provider::DebugProviderExt;
 use kabu_types_blockchain::{debug_trace_call_diff, GethStateUpdateVec, KabuDataTypes, KabuTx, Mempool, TRACING_CALL_OPTS};
-use kabu_types_entities::LatestBlock;
 use kabu_types_events::{MarketEvents, MempoolEvents, StateUpdateEvent};
 use kabu_types_market::{accounts_vec_len, storage_vec_len};
 use kabu_types_market::{Market, MarketState};
@@ -43,7 +42,6 @@ pub async fn pending_tx_state_change_task<P, N, DB, LDT>(
     tx_hash: TxHash,
     market: Arc<RwLock<Market>>,
     mempool: Arc<RwLock<Mempool<LDT>>>,
-    latest_block: Arc<RwLock<LatestBlock<LDT>>>,
     market_state: Arc<RwLock<MarketState<DB>>>,
     affecting_tx: Arc<RwLock<HashMap<TxHash, bool>>>,
     cur_block_number: BlockNumber,
@@ -165,14 +163,9 @@ where
 
     affecting_tx.write().await.insert(tx_hash, !affected_pools.is_empty());
 
-    //TODO : Fix Latest header is empty
-    let Some(latest_header) = latest_block.read().await.block_header.clone() else {
-        error!("Latest header is empty");
-        return Err(eyre!("LATEST_HEADER_EMPTY"));
-    };
-
-    let next_block_number = latest_header.number + 1;
-    let next_block_timestamp = latest_header.timestamp + 12;
+    // Use the passed in block number and time (already incremented in worker)
+    let next_block_number = cur_block_number;
+    let next_block_timestamp = cur_block_time;
 
     if !affected_pools.is_empty() {
         let cur_state_db = market_state.read().await.state_db.clone();
@@ -220,9 +213,10 @@ where
 
                 debug!("Mempool code pools {} {} update len : {}", tx_hash, source, affected_pools.len());
 
-                if let Some(latest_header) = latest_block.read().await.block_header.clone() {
-                    let block_number = latest_header.number + 1;
-                    let block_timestamp = latest_header.timestamp + 12;
+                {
+                    // Use the passed in block number and time (already incremented in worker)
+                    let block_number = cur_block_number;
+                    let block_timestamp = cur_block_time;
 
                     if !affected_pools.is_empty() {
                         let cur_state_db = market_state.read().await.state_db.clone();
@@ -244,8 +238,6 @@ where
                             error!("state_updates_broadcaster : {}", e)
                         }
                     }
-                } else {
-                    error!("Latest header is empty")
                 }
             }
             Err(e) => {
@@ -261,7 +253,6 @@ pub async fn pending_tx_state_change_worker<P, N, DB, LDT>(
     client: P,
     market: Arc<RwLock<Market>>,
     mempool: Arc<RwLock<Mempool<LDT>>>,
-    latest_block: Arc<RwLock<LatestBlock<LDT>>>,
     market_state: Arc<RwLock<MarketState<DB>>>,
     mempool_events_rx: broadcast::Sender<MempoolEvents>,
     market_events_rx: broadcast::Sender<MarketEvents>,
@@ -296,7 +287,8 @@ where
                         for _counter in 0..5  {
                             if let Ok(msg) = market_events_receiver.recv().await {
                                 if matches!(msg, MarketEvents::BlockStateUpdate{..} ) {
-                                    cur_state_override = latest_block.read().await.node_state_override();
+                                    // TODO: Get state override from elsewhere if needed
+                                    cur_state_override = StateOverride::default();
                                     debug!("Block state update received {} {}", block_number, block_hash);
                                     break;
                                 }
@@ -320,7 +312,6 @@ where
                                 tx_hash,
                                 market.clone(),
                                 mempool.clone(),
-                                latest_block.clone(),
                                 market_state.clone(),
                                 affecting_tx.clone(),
                                 cur_block_number.unwrap_or_default(),
@@ -346,8 +337,6 @@ pub struct PendingTxStateChangeProcessorComponent<P, N, DB: Clone + Send + Sync 
 
     market_state: Option<Arc<RwLock<MarketState<DB>>>>,
 
-    latest_block: Option<Arc<RwLock<LatestBlock<LDT>>>>,
-
     market_events_rx: Option<broadcast::Sender<MarketEvents>>,
 
     mempool_events_rx: Option<broadcast::Sender<MempoolEvents>>,
@@ -369,7 +358,6 @@ where
             market: None,
             mempool: None,
             market_state: None,
-            latest_block: None,
             market_events_rx: None,
             mempool_events_rx: None,
             state_updates_tx: None,
@@ -382,7 +370,6 @@ where
             market: Some(bc.market()),
             mempool: Some(bc.mempool()),
             market_state: Some(state.market_state()),
-            latest_block: Some(bc.latest_block()),
             market_events_rx: Some(bc.market_events_channel()),
             mempool_events_rx: Some(bc.mempool_events_channel()),
             state_updates_tx: Some(strategy.state_update_channel()),
@@ -415,10 +402,6 @@ where
     pub fn with_market_state(self, market_state: Arc<RwLock<MarketState<DB>>>) -> Self {
         Self { market_state: Some(market_state), ..self }
     }
-
-    pub fn with_latest_block(self, latest_block: Arc<RwLock<LatestBlock<LDT>>>) -> Self {
-        Self { latest_block: Some(latest_block), ..self }
-    }
 }
 
 impl<P, N, DB, LDT> Component for PendingTxStateChangeProcessorComponent<P, N, DB, LDT>
@@ -436,7 +419,6 @@ where
         let state_updates_tx = self.state_updates_tx.ok_or_else(|| eyre!("state_updates_tx not set"))?;
         let market = self.market.ok_or_else(|| eyre!("market not set"))?;
         let mempool = self.mempool.ok_or_else(|| eyre!("mempool not set"))?;
-        let latest_block = self.latest_block.ok_or_else(|| eyre!("latest_block not set"))?;
         let market_state = self.market_state.ok_or_else(|| eyre!("market_state not set"))?;
 
         executor.spawn_critical(name, async move {
@@ -444,7 +426,6 @@ where
                 self.client.clone(),
                 market,
                 mempool,
-                latest_block,
                 market_state,
                 mempool_events_rx,
                 market_events_rx,

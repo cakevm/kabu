@@ -158,7 +158,6 @@ mod test {
         assert_eq!(state.market_state().read().await.state_db.basic_ref(ADDR_01)?.unwrap().balance, U256::from(5));
         assert_eq!(state.market_state().read().await.state_db.storage_ref(ADDR_01, U256::from(1))?, U256::from(3));
 
-        assert_eq!(bc.latest_block().read().await.block_hash, block_2_1.header.hash);
         assert_eq!(state.block_history().read().await.latest_block_number, block_2_1.header.number);
         assert_eq!(
             state.block_history().read().await.get_block_hash_for_block_number(block_2_1.header.number).unwrap(),
@@ -167,7 +166,6 @@ mod test {
 
         broadcast_to_channels(&bc, block_3_0.header.clone(), Some(block_3_0.clone()), Some(vec![]), Some(vec![])).await?; // broadcast 3#0, chain_head must change
 
-        assert_eq!(bc.latest_block().read().await.block_hash, block_3_0.header.hash);
         assert_eq!(state.block_history().read().await.latest_block_number, block_3_0.header.number);
         assert_eq!(
             state.block_history().read().await.get_block_hash_for_block_number(block_3_0.header.number).unwrap(),
@@ -274,7 +272,6 @@ mod test {
         // Since we're in a tokio test, manually start the component worker
         let client = provider.clone();
         let chain_parameters = kabu_types_blockchain::ChainParameters::ethereum();
-        let latest_block = blockchain.latest_block();
         let market_state = bc_state.market_state();
         let block_history = bc_state.block_history();
         let block_header_rx = blockchain.new_block_headers_channel().subscribe();
@@ -288,7 +285,6 @@ mod test {
             if let Err(e) = new_block_history_worker(
                 client,
                 chain_parameters,
-                latest_block,
                 market_state,
                 block_history,
                 block_header_rx,

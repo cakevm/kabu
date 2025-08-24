@@ -30,13 +30,16 @@ use kabu::types::market::{Pool, PoolWrapper, RequiredStateReader};
 use kabu::types::swap::Swap;
 use kabu_core_components::{KabuBuilder, MevComponentChannels};
 use kabu_core_node::{KabuBuildContext, KabuEthereumNode};
+use reth::api::NodeTypesWithDBAdapter;
 use reth::chainspec::MAINNET;
-use reth_node_ethereum::EthereumNode;
+use reth_db::DatabaseEnv;
+use reth_node_ethereum::{EthEvmConfig, EthereumNode};
 use reth_storage_rpc_provider::{RpcBlockchainProvider, RpcBlockchainProviderConfig};
 use reth_tasks::TaskManager;
 use std::env;
 use std::fmt::{Display, Formatter};
 use std::process::exit;
+use std::sync::Arc;
 use std::time::{Duration, Instant};
 use tracing::{debug, error, info, warn};
 use tracing_subscriber::layer::SubscriberExt;
@@ -178,7 +181,6 @@ async fn main() -> Result<()> {
 
     // Get references we need for setup
     let market_instance = blockchain.market();
-    let latest_block = blockchain.latest_block();
 
     // Update the market with our test tokens
     {
@@ -191,14 +193,6 @@ async fn main() -> Result<()> {
 
     // Update latest block with current block info
     let (_, post) = debug_trace_block(client.clone(), BlockId::Number(BlockNumberOrTag::Number(block_number)), true).await?;
-    latest_block.write().await.update(
-        block_number,
-        block_header.hash,
-        Some(block_header.clone()),
-        Some(block_header_with_txes.clone()),
-        None,
-        Some(post.clone()),
-    );
 
     info!("Starting initialize signers actor");
 
@@ -276,10 +270,14 @@ async fn main() -> Result<()> {
     let reth_provider =
         RpcBlockchainProvider::<_, EthereumNode, Ethereum>::new_with_config(client.clone(), config).with_chain_spec(MAINNET.clone());
 
+    // Create EVM config
+    let evm_config = EthEvmConfig::mainnet();
+
     // Create KabuBuildContext with our channels
     let kabu_context = KabuBuildContext::builder(
         reth_provider.clone(),
         client.clone(),
+        evm_config.clone(),
         blockchain.clone(),
         blockchain_state.clone(),
         topology_config.clone(),
@@ -311,8 +309,10 @@ async fn main() -> Result<()> {
     }
 
     // Build and launch components with KabuEthereumNode - now SignersComponent will have signers configured
+    // Using Arc<DatabaseEnv> as the DB type for testing (DatabaseEnv itself doesn't implement Clone)
+    type TestNodeTypes = NodeTypesWithDBAdapter<EthereumNode, Arc<DatabaseEnv>>;
     let _handle = KabuBuilder::new(kabu_context)
-        .node(KabuEthereumNode::<RpcBlockchainProvider<_, EthereumNode, Ethereum>, _, KabuDB>::default())
+        .node(KabuEthereumNode::<TestNodeTypes, RpcBlockchainProvider<_, EthereumNode, Ethereum>, _, KabuDB, EthEvmConfig>::default())
         .build()
         .launch(task_executor.clone())
         .await?;

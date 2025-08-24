@@ -20,7 +20,7 @@ use kabu_evm_utils::evm_env::tx_req_to_env;
 use kabu_evm_utils::evm_transact;
 use kabu_node_debug_provider::DebugProviderExt;
 use kabu_types_blockchain::{debug_trace_call_pre_state, GethStateUpdate, GethStateUpdateVec, KabuDataTypes, KabuTx, TRACING_CALL_OPTS};
-use kabu_types_entities::{DataFetcher, FetchState, LatestBlock};
+use kabu_types_entities::{DataFetcher, FetchState};
 use kabu_types_events::{MarketEvents, MessageSwapCompose, SwapComposeData, SwapComposeMessage, TxComposeData};
 use kabu_types_market::MarketState;
 use kabu_types_swap::Swap;
@@ -254,7 +254,6 @@ async fn same_path_merger_worker<
     DB: DatabaseRef<Error = KabuDBError> + Database<Error = KabuDBError> + DatabaseCommit + Send + Sync + Clone + 'static,
 >(
     client: P,
-    latest_block: Arc<RwLock<LatestBlock>>,
     market_state: Arc<RwLock<MarketState<DB>>>,
     mut market_events_rx: broadcast::Receiver<MarketEvents>,
     mut compose_channel_rx: broadcast::Receiver<MessageSwapCompose<DB>>,
@@ -290,7 +289,9 @@ async fn same_path_merger_worker<
                         for _counter in 0..5  {
                             if let Ok(MarketEvents::BlockStateUpdate{block_hash}) = market_events_rx.recv().await {
                                 if new_block_hash == block_hash {
-                                    cur_state_override = latest_block.read().await.node_state_override();
+                                    // State override now comes from the market state update itself
+                                    // TODO: Get state override from provider if needed
+                                    cur_state_override = StateOverride::default();
                                     debug!("Block state update received {} {}", block_number, block_hash);
                                     break;
                                 }
@@ -365,7 +366,6 @@ pub struct SamePathMergerComponent<P, N, DB: Send + Sync + Clone + 'static> {
     client: P,
     //encoder: SwapStepEncoder,
     market_state: Option<Arc<RwLock<MarketState<DB>>>>,
-    latest_block: Option<Arc<RwLock<LatestBlock>>>,
     market_events: Option<broadcast::Sender<MarketEvents>>,
     compose_channel_rx: Option<broadcast::Sender<MessageSwapCompose<DB>>>,
     compose_channel_tx: Option<broadcast::Sender<MessageSwapCompose<DB>>>,
@@ -379,23 +379,11 @@ where
     DB: DatabaseRef<Error = KabuDBError> + DatabaseRef<Error = KabuDBError> + DatabaseCommit + Send + Sync + Clone + 'static,
 {
     pub fn new(client: P) -> Self {
-        Self {
-            client,
-            market_state: None,
-            latest_block: None,
-            market_events: None,
-            compose_channel_rx: None,
-            compose_channel_tx: None,
-            _n: PhantomData,
-        }
+        Self { client, market_state: None, market_events: None, compose_channel_rx: None, compose_channel_tx: None, _n: PhantomData }
     }
 
     pub fn with_market_state(self, market_state: Arc<RwLock<MarketState<DB>>>) -> Self {
         Self { market_state: Some(market_state), ..self }
-    }
-
-    pub fn with_latest_block(self, latest_block: Arc<RwLock<LatestBlock>>) -> Self {
-        Self { latest_block: Some(latest_block), ..self }
     }
 
     pub fn with_market_events_channel(self, market_events: broadcast::Sender<MarketEvents>) -> Self {
@@ -409,7 +397,6 @@ where
     pub fn on_bc<LDT: KabuDataTypes>(self, bc: &Blockchain, state: &BlockchainState<DB, LDT>, strategy: &Strategy<DB>) -> Self {
         Self {
             market_state: Some(state.market_state_commit()),
-            latest_block: Some(bc.latest_block()),
             market_events: Some(bc.market_events_channel()),
             compose_channel_tx: Some(strategy.swap_compose_channel()),
             compose_channel_rx: Some(strategy.swap_compose_channel()),
@@ -430,19 +417,11 @@ where
         let market_events_rx = self.market_events.ok_or_else(|| eyre!("market_events not set"))?.subscribe();
         let compose_channel_rx = self.compose_channel_rx.ok_or_else(|| eyre!("compose_channel_rx not set"))?.subscribe();
         let compose_channel_tx = self.compose_channel_tx.ok_or_else(|| eyre!("compose_channel_tx not set"))?;
-        let latest_block = self.latest_block.ok_or_else(|| eyre!("latest_block not set"))?;
         let market_state = self.market_state.ok_or_else(|| eyre!("market_state not set"))?;
 
         executor.spawn_critical(
             name,
-            same_path_merger_worker(
-                self.client.clone(),
-                latest_block,
-                market_state,
-                market_events_rx,
-                compose_channel_rx,
-                compose_channel_tx,
-            ),
+            same_path_merger_worker(self.client.clone(), market_state, market_events_rx, compose_channel_rx, compose_channel_tx),
         );
 
         Ok(())

@@ -1,10 +1,9 @@
 use crate::blockchain_tokens::add_default_tokens_to_market;
-use alloy::primitives::BlockHash;
 use alloy::primitives::ChainId;
 use influxdb::WriteQuery;
 use kabu_types_blockchain::{ChainParameters, Mempool};
 use kabu_types_blockchain::{KabuDataTypes, KabuDataTypesEthereum};
-use kabu_types_entities::{AccountNonceAndBalanceState, LatestBlock};
+use kabu_types_entities::AccountNonceAndBalanceState;
 use kabu_types_events::{
     LoomTask, MarketEvents, MempoolEvents, MessageBlock, MessageBlockHeader, MessageBlockLogs, MessageBlockStateUpdate, MessageHealthEvent,
     MessageMempoolDataUpdate, MessageTxCompose,
@@ -19,7 +18,6 @@ pub struct Blockchain<LDT: KabuDataTypes + 'static = KabuDataTypesEthereum> {
     chain_id: ChainId,
     chain_parameters: ChainParameters,
     market: Arc<RwLock<Market>>,
-    latest_block: Arc<RwLock<LatestBlock<LDT>>>,
     mempool: Arc<RwLock<Mempool<LDT>>>,
     account_nonce_and_balance: Arc<RwLock<AccountNonceAndBalanceState>>,
 
@@ -69,7 +67,6 @@ impl Blockchain<KabuDataTypesEthereum> {
             chain_parameters: ChainParameters::ethereum(),
             market: Arc::new(RwLock::new(market_instance)),
             mempool: Arc::new(RwLock::new(Mempool::<KabuDataTypesEthereum>::new())),
-            latest_block: Arc::new(RwLock::new(LatestBlock::new(0, BlockHash::ZERO))),
             account_nonce_and_balance: Arc::new(RwLock::new(AccountNonceAndBalanceState::new())),
             new_block_headers_channel,
             new_block_with_tx_channel,
@@ -97,10 +94,6 @@ impl<LDT: KabuDataTypes> Blockchain<LDT> {
 
     pub fn market(&self) -> Arc<RwLock<Market>> {
         self.market.clone()
-    }
-
-    pub fn latest_block(&self) -> Arc<RwLock<LatestBlock<LDT>>> {
-        self.latest_block.clone()
     }
 
     pub fn mempool(&self) -> Arc<RwLock<Mempool<LDT>>> {

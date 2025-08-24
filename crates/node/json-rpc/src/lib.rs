@@ -3,7 +3,5 @@ pub use mempool_processing_component::{MempoolProcessingComponent, MempoolProces
 pub use wait_for_node_sync_actor::WaitForNodeSyncOneShotBlockingActor;
 
 mod block_processing_component;
-mod eth;
 mod mempool_processing_component;
-mod op;
 mod wait_for_node_sync_actor;

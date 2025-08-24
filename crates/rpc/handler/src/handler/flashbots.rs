@@ -22,7 +22,21 @@ where
             bundle_param.target_block,
             bundle_param.transactions.len()
         );
-        let last_block_header = app_state.bc.latest_block().read().await.block_header.clone().unwrap_or_default();
+        // Get latest block from block history
+        let block_history_guard = app_state.state.block_history();
+        let block_history = block_history_guard.read().await;
+        let latest_block_number = block_history.latest_block_number;
+
+        let last_block_header = if let Some(block_hash) = block_history.get_block_hash_for_block_number(latest_block_number) {
+            if let Some(entry) = block_history.get_block_history_entry(&block_hash) {
+                entry.header.clone()
+            } else {
+                return Err((StatusCode::INTERNAL_SERVER_ERROR, "No block header found".to_string()));
+            }
+        } else {
+            return Err((StatusCode::INTERNAL_SERVER_ERROR, "No block header found".to_string()));
+        };
+
         let target_block = bundle_param.target_block.unwrap_or_default().to::<u64>();
         if target_block <= last_block_header.number {
             return Err((

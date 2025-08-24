@@ -6,11 +6,9 @@ pub use account_nonce_balance::{AccountNonceAndBalanceState, AccountNonceAndBala
 pub use block_history::{BlockHistory, BlockHistoryEntry, BlockHistoryManager, BlockHistoryState};
 pub use datafetcher::{DataFetcher, FetchState};
 pub use keystore::KeyStore;
-pub use latest_block::LatestBlock;
 pub use signers::{LoomTxSigner, TxSignerEth, TxSigners};
 
 mod block_history;
-mod latest_block;
 
 pub mod account_nonce_balance;
 pub mod private;
