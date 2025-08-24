@@ -30,4 +30,4 @@ swaps_encoded = 1
 swaps_ok = 5
 #best_profit_eth = 0.23
 # TODO: Fix merger
-best_profit_eth = 0.10
+best_profit_eth = 0.09
