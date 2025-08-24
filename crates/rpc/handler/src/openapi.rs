@@ -34,7 +34,6 @@ pub struct BlockApi;
 )]
 pub struct MarketApi;
 
-#[allow(dead_code)]
 #[derive(OpenApi)]
 #[openapi(
     nest(

@@ -11,9 +11,10 @@ exclude.workspace = true
 [dependencies]
 kabu-types-entities.workspace = true
 
-aes.workspace = true
+aes-gcm.workspace = true
 clap.workspace = true
 eyre.workspace = true
 hex.workspace = true
+pbkdf2.workspace = true
 rand.workspace = true
 sha2.workspace = true

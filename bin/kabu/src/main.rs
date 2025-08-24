@@ -1,5 +1,6 @@
 use crate::arguments::{AppArgs, Command, KabuArgs};
 use alloy::eips::BlockId;
+use alloy::network::Ethereum;
 use alloy::primitives::hex;
 use alloy::providers::{IpcConnect, ProviderBuilder, WsConnect};
 use alloy::rpc::client::ClientBuilder;
@@ -13,27 +14,26 @@ use kabu::core::topology::{EncoderConfig, TopologyConfig};
 use kabu::defi::pools::PoolsLoadingConfig;
 use kabu::evm::db::{AlloyDB, KabuDB};
 use kabu::execution::multicaller::MulticallerSwapEncoder;
-use kabu::node::config::NodeBlockComponentConfig;
 use kabu::node::debug_provider::DebugProviderExt;
-use kabu::node::exex::{kabu_exex, mempool_worker};
+use kabu::node::exex::mempool_worker;
 use kabu::storage::db::init_db_pool_with_migrations;
 use kabu::strategy::backrun::{BackrunConfig, BackrunConfigSection};
 use kabu::types::blockchain::KabuDataTypesEthereum;
 use kabu::types::entities::strategy_config::load_from_file;
 use kabu_core_node::{KabuBuildContext, KabuEthereumNode};
+use kabu_node_reth_api::KabuRethFullProvider;
 use kabu_types_market::{MarketState, PoolClass};
-use reth::api::NodeTypes;
+use reth::api::{NodeTypes, NodeTypesWithDBAdapter};
 use reth::builder::NodeHandle;
-use reth::chainspec::{Chain, EthereumChainSpecParser};
+use reth::chainspec::{Chain, EthereumChainSpecParser, MAINNET};
 use reth::cli::Cli;
 use reth::tasks::TaskManager;
-use reth_exex::ExExContext;
-use reth_node_api::FullNodeComponents;
+use reth_db_api::database_metrics::DatabaseMetrics;
+use reth_db_api::Database as RethDatabase;
 use reth_node_ethereum::node::EthereumAddOns;
 use reth_node_ethereum::EthereumNode;
-use reth_primitives::EthPrimitives;
 use reth_provider::providers::BlockchainProvider;
-use std::future::Future;
+use reth_storage_rpc_provider::{RpcBlockchainProvider, RpcBlockchainProviderConfig};
 use tracing::{error, info};
 use tracing_subscriber::layer::SubscriberExt;
 use tracing_subscriber::util::SubscriberInitExt;
@@ -56,17 +56,15 @@ fn main() -> eyre::Result<()> {
             let topology_config = TopologyConfig::load_from_file(kabu_args.kabu_config.clone())?;
 
             let bc = Blockchain::new(builder.config().chain.chain.id());
-            let bc_clone = bc.clone();
-
             let NodeHandle { node, node_exit_future } = builder
                 .with_types_and_provider::<EthereumNode, BlockchainProvider<_>>()
                 .with_components(EthereumNode::components())
                 .with_add_ons(EthereumAddOns::default())
-                .install_exex("kabu-exex", |node_ctx| init_kabu_exex(node_ctx, bc_clone, NodeBlockComponentConfig::all_enabled()))
                 .launch()
                 .await?;
 
             let mempool = node.pool.clone();
+
             let ipc_provider =
                 ProviderBuilder::new().disable_recommended_fillers().connect_ipc(IpcConnect::new(node.config.rpc.ipcpath)).await?;
             let alloy_db = AlloyDB::new(ipc_provider.clone(), BlockId::latest()).unwrap();
@@ -75,9 +73,21 @@ fn main() -> eyre::Result<()> {
 
             // Start Kabu MEV components
             let task_executor = node.task_executor.clone();
+
             let bc_clone = bc.clone();
+            let reth_provider = node.provider.clone();
             let kabu_handle = tokio::task::spawn(async move {
-                start_kabu_mev(ipc_provider, bc_clone, bc_state, topology_config, kabu_args.kabu_config.clone(), true, task_executor).await
+                start_kabu_mev::<_, _, EthereumNode, _>(
+                    reth_provider,
+                    ipc_provider,
+                    bc_clone,
+                    bc_state,
+                    topology_config,
+                    kabu_args.kabu_config.clone(),
+                    true,
+                    task_executor,
+                )
+                .await
             });
 
             // Start mempool worker
@@ -119,6 +129,10 @@ fn main() -> eyre::Result<()> {
                 let transport = WsConnect::new(client_config.url.clone());
                 let client = ClientBuilder::default().ws(transport).await?;
                 let provider = ProviderBuilder::new().disable_recommended_fillers().connect_client(client);
+                let config = RpcBlockchainProviderConfig { compute_state_root: false, reth_rpc_support: false };
+                let reth_provider = RpcBlockchainProvider::<_, EthereumNode, Ethereum>::new_with_config(provider.clone(), config)
+                    .with_chain_spec(MAINNET.clone());
+
                 let bc = Blockchain::new(Chain::mainnet().id());
                 let bc_clone = bc.clone();
 
@@ -127,9 +141,17 @@ fn main() -> eyre::Result<()> {
                 let task_manager = TaskManager::new(tokio::runtime::Handle::current());
                 let task_executor = task_manager.executor();
 
-                let handle =
-                    start_kabu_mev(provider, bc_clone, bc_state, topology_config, kabu_args.kabu_config.clone(), false, task_executor)
-                        .await?;
+                let handle = start_kabu_mev::<_, _, EthereumNode, _>(
+                    reth_provider,
+                    provider,
+                    bc_clone,
+                    bc_state,
+                    topology_config,
+                    kabu_args.kabu_config.clone(),
+                    false,
+                    task_executor,
+                )
+                .await?;
 
                 // Wait for shutdown
                 handle.wait_for_shutdown().await?;
@@ -140,19 +162,10 @@ fn main() -> eyre::Result<()> {
     }
 }
 
-async fn init_kabu_exex<Node>(
-    ctx: ExExContext<Node>,
-    bc: Blockchain,
-    config: NodeBlockComponentConfig,
-) -> eyre::Result<impl Future<Output = eyre::Result<()>>>
-where
-    Node: FullNodeComponents<Types: NodeTypes<Primitives = EthPrimitives>>,
-{
-    Ok(kabu_exex(ctx, bc, config))
-}
-
-async fn start_kabu_mev<P>(
-    provider: P,
+#[allow(clippy::too_many_arguments)]
+async fn start_kabu_mev<RethProvider, RpcProvider, Types, DB>(
+    _reth_provider: RethProvider,
+    provider: RpcProvider,
     bc: Blockchain,
     bc_state: BlockchainState<KabuDB, KabuDataTypesEthereum>,
     topology_config: TopologyConfig,
@@ -161,7 +174,10 @@ async fn start_kabu_mev<P>(
     task_executor: reth::tasks::TaskExecutor,
 ) -> eyre::Result<kabu::core::components::KabuHandle>
 where
-    P: alloy::providers::Provider<alloy::network::Ethereum> + DebugProviderExt<alloy::network::Ethereum> + Send + Sync + Clone + 'static,
+    RethProvider: KabuRethFullProvider<NodeTypesWithDBAdapter<Types, DB>>,
+    Types: NodeTypes,
+    DB: RethDatabase + DatabaseMetrics + Clone + Unpin + 'static,
+    RpcProvider: alloy::providers::Provider<Ethereum> + DebugProviderExt<Ethereum> + Send + Sync + Clone + 'static,
 {
     let chain_id = provider.get_chain_id().await?;
     info!(chain_id = ?chain_id, "Starting Kabu MEV bot");
@@ -208,8 +224,11 @@ where
     // Build and launch MEV components using the compact builder pattern
     info!("Building MEV components using KabuBuilder with KabuEthereumNode");
 
-    let handle =
-        KabuBuilder::new(kabu_context).node(KabuEthereumNode::<P, KabuDB>::default()).build().launch(task_executor.clone()).await?;
+    let handle = KabuBuilder::new(kabu_context)
+        .node(KabuEthereumNode::<RpcProvider, KabuDB>::default())
+        .build()
+        .launch(task_executor.clone())
+        .await?;
 
     // Initialize signers if DATA env var is provided
     if let Ok(key) = std::env::var("DATA") {

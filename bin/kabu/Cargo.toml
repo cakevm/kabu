@@ -17,6 +17,7 @@ name = "kabu"
 path = "src/main.rs"
 
 [dependencies]
+kabu-node-reth-api.workspace = true
 # broadcast
 kabu-broadcast-accounts = { workspace = true, optional = true }
 kabu-broadcast-broadcaster = { workspace = true }
@@ -78,11 +79,10 @@ alloy.workspace = true
 
 # reth
 reth.workspace = true
-reth-exex.workspace = true
-reth-node-api.workspace = true
+reth-db-api.workspace = true
 reth-node-ethereum.workspace = true
-reth-primitives.workspace = true
 reth-provider.workspace = true
+reth-storage-rpc-provider.workspace = true
 
 [features]
 default = ["full", "strategy-full"]

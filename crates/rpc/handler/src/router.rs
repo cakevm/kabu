@@ -3,10 +3,13 @@ use crate::handler::flashbots::flashbots;
 use crate::handler::pools::{market_stats, pool, pool_quote, pools};
 use crate::handler::ws::ws_handler;
 //use crate::openapi::ApiDoc;
+use crate::openapi::ApiDoc;
 use axum::routing::{get, post};
 use axum::Router;
 use kabu_rpc_state::AppState;
 use revm::{DatabaseCommit, DatabaseRef};
+use utoipa::OpenApi;
+use utoipa_swagger_ui::SwaggerUi;
 //use utoipa::OpenApi;
 //use utoipa_swagger_ui::SwaggerUi;
 
@@ -22,7 +25,7 @@ pub fn router<DB: DatabaseRef<Error = kabu_evm_db::KabuDBError> + DatabaseCommit
                 .nest("/flashbots", Router::new().route("/", post(flashbots))),
         )
         .route("/ws", get(ws_handler))
-        //.merge(SwaggerUi::new("/swagger-ui").url("/api-docs/openapi.json", ApiDoc::openapi()))
+        .merge(SwaggerUi::new("/swagger-ui").url("/api-docs/openapi.json", ApiDoc::openapi()))
         .with_state(app_state)
 }
 

@@ -10,26 +10,12 @@ version.workspace = true
 
 [dependencies]
 kabu-core-blockchain.workspace = true
-kabu-evm-utils.workspace = true
-kabu-node-config.workspace = true
 kabu-types-blockchain.workspace = true
 kabu-types-events.workspace = true
 
 eyre.workspace = true
-futures.workspace = true
-revm.workspace = true
 tokio.workspace = true
 tracing.workspace = true
 
-# alloy
-alloy-eips.workspace = true
-alloy-network.workspace = true
-alloy-primitives.workspace = true
-alloy-rpc-types.workspace = true
-
-#reth
-reth-exex.workspace = true
-reth-node-api.workspace = true
-reth-primitives.workspace = true
-reth-provider.workspace = true
+# reth
 reth-transaction-pool.workspace = true

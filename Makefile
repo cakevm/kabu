@@ -117,6 +117,16 @@ bench:
 clippy:
 	cargo clippy --all-targets --all-features --tests --benches -- -D warnings
 
+# Target to automatically fix clippy warnings
+.PHONY: clippy-fix
+clippy-fix:
+	cargo clippy --all-targets --all-features --tests --benches --fix --allow-dirty --allow-staged
+
+# Target to automatically fix compiler warnings
+.PHONY: fix
+fix:
+	cargo fix --all-targets --all-features --allow-dirty --allow-staged
+
 # format kabu
 .PHONY: fmt
 fmt:
