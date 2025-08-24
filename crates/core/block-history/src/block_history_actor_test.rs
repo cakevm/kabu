@@ -1,36 +1,34 @@
 #[cfg(test)]
 mod test {
-    use alloy_network::Ethereum;
-    use alloy_provider::Provider;
-    use kabu_core_blockchain::{Blockchain, BlockchainState};
-    use kabu_types_blockchain::KabuDataTypesEthereum;
-    use kabu_types_events::{BlockLogs, BlockStateUpdate, BlockUpdate, MessageBlockHeader};
-    use revm::DatabaseRef;
-    use tracing::error;
-
     use alloy_eips::BlockNumberOrTag;
+    use alloy_network::Ethereum;
     use alloy_node_bindings::Anvil;
     use alloy_primitives::{Address, B256, U256};
     use alloy_provider::ext::AnvilApi;
+    use alloy_provider::Provider;
     use alloy_provider::ProviderBuilder;
     use alloy_rpc_client::ClientBuilder;
-    use alloy_rpc_types::{Block, Filter, Header, Log};
+    use alloy_rpc_types::{Block, Header};
     use eyre::eyre;
+    use kabu_core_blockchain::{Blockchain, BlockchainState};
     use kabu_evm_db::{DatabaseKabuExt, KabuDB, KabuDBType};
     use kabu_evm_utils::geth_state_update::{
         account_state_add_storage, account_state_with_nonce_and_balance, geth_state_update_add_account,
     };
+    use kabu_types_blockchain::KabuDataTypesEthereum;
     use kabu_types_blockchain::{GethStateUpdate, GethStateUpdateVec};
     use kabu_types_events::{BlockHeaderEventData, Message};
+    use kabu_types_events::{BlockStateUpdate, BlockUpdate, MessageBlockHeader};
     use kabu_types_market::MarketState;
+    use revm::DatabaseRef;
     use std::time::Duration;
+    use tracing::error;
     use tracing::info;
 
     async fn broadcast_to_channels(
         bc: &Blockchain,
         header: Header,
         block: Option<Block>,
-        logs: Option<Vec<Log>>,
         state_update: Option<GethStateUpdateVec>,
     ) -> eyre::Result<()> {
         let header_msg: MessageBlockHeader = Message::new(BlockHeaderEventData::new(header.clone()));
@@ -63,13 +61,10 @@ mod test {
         P: Provider<Ethereum> + Send + Sync + Clone + 'static,
     {
         let block = provider.get_block_by_number(BlockNumberOrTag::Latest).full().await?.unwrap();
-        let filter = Filter::new().at_block_hash(block.header.hash);
-
-        let logs = provider.get_logs(&filter).await?;
 
         let state_update = state_update.unwrap_or_default();
 
-        broadcast_to_channels(bc, block.header.clone(), Some(block), Some(logs), Some(state_update)).await
+        broadcast_to_channels(bc, block.header.clone(), Some(block), Some(state_update)).await
     }
 
     async fn test_actor_block_history_actor_chain_head_worker<P>(
@@ -154,7 +149,7 @@ mod test {
             block_2_1.header.hash
         );
 
-        broadcast_to_channels(&bc, block_3_0.header.clone(), Some(block_3_0.clone()), Some(vec![]), Some(vec![])).await?; // broadcast 3#0, chain_head must change
+        broadcast_to_channels(&bc, block_3_0.header.clone(), Some(block_3_0.clone()), Some(vec![])).await?; // broadcast 3#0, chain_head must change
 
         assert_eq!(state.block_history().read().await.latest_block_number, block_3_0.header.number);
         assert_eq!(

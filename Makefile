@@ -97,11 +97,21 @@ clean-book:
 	rm -rf target/book
 
 ## Development commands
-# Target to run all tests (excluding loom-defi-abi doc tests and flashbots env-dependent tests)
+# Target to run all tests using nextest
 .PHONY: test
 test:
-	cargo test --all --all-features --workspace --exclude kabu-defi-abi --lib --bins --tests -- --skip test_send_bundle --skip test_client_send_bundle
-	cargo test --all --all-features --workspace --exclude kabu-defi-abi --doc
+	@command -v cargo-nextest >/dev/null 2>&1 || cargo install cargo-nextest --locked
+	cargo nextest run --all-features --workspace --bins --lib --tests
+
+# Target to run tests using standard cargo test
+.PHONY: test-cargo
+test-cargo:
+	cargo test --all --all-features --workspace --lib --bins --tests
+
+# Target to run doc tests only
+.PHONY: test-doc
+test-doc:
+	cargo test --doc --all-features
 
 # Target to clean build artifacts
 .PHONY: clean
@@ -172,6 +182,8 @@ pre-release:
 	make clippy
 	make taplo
 	make udeps
+	make test
+	make test-doc
 
 # replayer test
 .PHONY: replayer
