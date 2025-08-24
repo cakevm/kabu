@@ -21,6 +21,8 @@ help:
 	@echo "  make bench        - Run benchmarks"
 	@echo "  make fmt          - Format code"
 	@echo "  make clippy       - Run linter"
+	@echo "  make clippy-fix   - Auto-fix clippy warnings"
+	@echo "  make fix          - Auto-fix compiler warnings"
 	@echo "  make check        - Check for warnings"
 	@echo "  make pre-release  - Run all checks before release"
 	@echo "  make clean        - Clean all build artifacts"

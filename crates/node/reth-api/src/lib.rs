@@ -33,14 +33,15 @@ where
     }
 }
 
-pub async fn chain_notifications_forwarder<P, Node>(
+pub async fn chain_notifications_forwarder<P, Node, N>(
     executor: &TaskExecutor,
     provider: P,
-    reth_provider: RpcBlockchainProvider<P, Node>,
+    reth_provider: RpcBlockchainProvider<P, Node, N>,
 ) -> eyre::Result<()>
 where
     P: RethApi + Send + Sync + 'static,
     Node: NodeTypes<Primitives = EthPrimitives>,
+    N: alloy_network::Network,
 {
     let chain_notifications = match provider.subscribe_chain_notifications().await {
         Ok(subscription) => subscription,

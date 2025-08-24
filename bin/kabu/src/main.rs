@@ -21,7 +21,7 @@ use kabu::strategy::backrun::{BackrunConfig, BackrunConfigSection};
 use kabu::types::blockchain::KabuDataTypesEthereum;
 use kabu::types::entities::strategy_config::load_from_file;
 use kabu_core_node::{KabuBuildContext, KabuEthereumNode};
-use kabu_node_reth_api::KabuRethFullProvider;
+use kabu_node_reth_api::{chain_notifications_forwarder, KabuRethFullProvider};
 use kabu_types_market::{MarketState, PoolClass};
 use reth::api::{NodeTypes, NodeTypesWithDBAdapter};
 use reth::builder::NodeHandle;
@@ -140,6 +140,8 @@ fn main() -> eyre::Result<()> {
 
                 let task_manager = TaskManager::new(tokio::runtime::Handle::current());
                 let task_executor = task_manager.executor();
+
+                chain_notifications_forwarder(&task_executor, provider.clone(), reth_provider.clone()).await?;
 
                 let handle = start_kabu_mev::<_, _, EthereumNode, _>(
                     reth_provider,
