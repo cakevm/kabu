@@ -5,7 +5,6 @@ use kabu_types_market::PoolId;
 pub enum MarketEvents {
     BlockHeaderUpdate { block_number: BlockNumber, block_hash: BlockHash, timestamp: u64, base_fee: u64, next_base_fee: u64 },
     BlockTxUpdate { block_number: BlockNumber, block_hash: BlockHash },
-    BlockLogsUpdate { block_number: BlockNumber, block_hash: BlockHash },
     BlockStateUpdate { block_hash: BlockHash },
     NewPoolLoaded { pool_id: PoolId, swap_path_idx_vec: Vec<usize> },
 }

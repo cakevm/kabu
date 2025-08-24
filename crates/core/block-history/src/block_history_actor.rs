@@ -9,7 +9,7 @@ use kabu_evm_db::DatabaseKabuExt;
 use kabu_node_debug_provider::DebugProviderExt;
 use kabu_types_blockchain::{ChainParameters, KabuBlock, KabuDataTypes};
 use kabu_types_entities::{BlockHistory, BlockHistoryManager, BlockHistoryState};
-use kabu_types_events::{MarketEvents, MessageBlock, MessageBlockHeader, MessageBlockLogs, MessageBlockStateUpdate};
+use kabu_types_events::{MarketEvents, MessageBlock, MessageBlockHeader, MessageBlockStateUpdate};
 use kabu_types_market::MarketState;
 use reth_tasks::TaskExecutor;
 use revm::{Database, DatabaseCommit, DatabaseRef};
@@ -81,7 +81,6 @@ pub async fn new_block_history_worker<P, N, DB, LDT>(
     block_history: Arc<RwLock<BlockHistory<DB, LDT>>>,
     mut block_header_update_rx: broadcast::Receiver<MessageBlockHeader<LDT>>,
     mut block_update_rx: broadcast::Receiver<MessageBlock<LDT>>,
-    mut log_update_rx: broadcast::Receiver<MessageBlockLogs<LDT>>,
     mut state_update_rx: broadcast::Receiver<MessageBlockStateUpdate<LDT>>,
     market_events_tx: broadcast::Sender<MarketEvents>,
 ) -> Result<()>
@@ -167,51 +166,6 @@ where
                         error!("block_update error {}", e)
                     }
                 }
-            }
-            msg = log_update_rx.recv() => {
-                let log_update : Result<MessageBlockLogs<LDT>, RecvError>  = msg;
-                match log_update {
-                    Ok(msg) =>{
-                        let blocklogs = msg.inner;
-                        let block_header = blocklogs.block_header.clone();
-                        let block_hash : BlockHash = block_header.hash;
-                        let block_number : BlockNumber = block_header.number;
-
-                        debug!("Block Logs Update {} {}", block_number, block_hash);
-
-                        let mut block_history_guard = block_history.write().await;
-
-                        match set_chain_head(
-                            &block_history_manager,
-                            block_history_guard.borrow_mut(),
-                            market_events_tx.clone(),
-                            block_header,
-                            &chain_parameters
-                        ).await
-                        {
-                            Ok(_)=>{
-                                match block_history_guard.add_logs(block_hash,blocklogs.logs.clone()) {
-                                    Ok(_)=>{
-                                        // Send logs update event
-                                        if let Err(e) = market_events_tx.send(MarketEvents::BlockLogsUpdate { block_number, block_hash}) {
-                                            error!("market_events_tx.send : {}", e)
-                                        }
-                                    }
-                                    Err(e)=>{
-                                        error!("block_logs_update add_logs error at block {} with hash {} : {}", block_number, block_hash, e);
-                                    }
-                                }
-                            }
-                            Err(e)=>{
-                                error!("block_logs_update {}", e);
-                            }
-                        }
-                    }
-                    Err(e)=>{
-                        error!("block_update error {}", e)
-                    }
-                }
-
             }
             msg = state_update_rx.recv() => {
 
@@ -349,7 +303,6 @@ pub struct BlockHistoryComponent<P, N, DB, LDT: KabuDataTypes + 'static> {
     block_history: Option<Arc<RwLock<BlockHistory<DB, LDT>>>>,
     block_header_update_rx: Option<broadcast::Sender<MessageBlockHeader<LDT>>>,
     block_update_rx: Option<broadcast::Sender<MessageBlock<LDT>>>,
-    log_update_rx: Option<broadcast::Sender<MessageBlockLogs<LDT>>>,
     state_update_rx: Option<broadcast::Sender<MessageBlockStateUpdate<LDT>>>,
     market_events_tx: Option<broadcast::Sender<MarketEvents>>,
     _n: PhantomData<N>,
@@ -371,7 +324,6 @@ where
             block_history: None,
             block_header_update_rx: None,
             block_update_rx: None,
-            log_update_rx: None,
             state_update_rx: None,
             market_events_tx: None,
             _n: PhantomData,
@@ -386,7 +338,6 @@ where
         block_history: Arc<RwLock<BlockHistory<DB, LDT>>>,
         block_header_update_rx: broadcast::Sender<MessageBlockHeader<LDT>>,
         block_update_rx: broadcast::Sender<MessageBlock<LDT>>,
-        log_update_rx: broadcast::Sender<MessageBlockLogs<LDT>>,
         state_update_rx: broadcast::Sender<MessageBlockStateUpdate<LDT>>,
         market_events_tx: broadcast::Sender<MarketEvents>,
     ) -> Self {
@@ -395,7 +346,6 @@ where
         self.block_history = Some(block_history);
         self.block_header_update_rx = Some(block_header_update_rx);
         self.block_update_rx = Some(block_update_rx);
-        self.log_update_rx = Some(log_update_rx);
         self.state_update_rx = Some(state_update_rx);
         self.market_events_tx = Some(market_events_tx);
         self
@@ -415,7 +365,6 @@ where
 
         let block_header_rx = self.block_header_update_rx.ok_or_else(|| eyre!("block_header_update_rx not set"))?.subscribe();
         let block_rx = self.block_update_rx.ok_or_else(|| eyre!("block_update_rx not set"))?.subscribe();
-        let log_rx = self.log_update_rx.ok_or_else(|| eyre!("log_update_rx not set"))?.subscribe();
         let state_rx = self.state_update_rx.ok_or_else(|| eyre!("state_update_rx not set"))?.subscribe();
 
         executor.spawn_critical(name, async move {
@@ -426,7 +375,6 @@ where
                 self.block_history.clone().unwrap(),
                 block_header_rx,
                 block_rx,
-                log_rx,
                 state_rx,
                 self.market_events_tx.clone().unwrap(),
             )

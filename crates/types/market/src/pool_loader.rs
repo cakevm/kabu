@@ -1,9 +1,8 @@
 use crate::pool_config::PoolsLoadingConfig;
 use crate::{PoolClass, PoolId, PoolWrapper};
 use alloy_network::{Ethereum, Network};
-use alloy_primitives::Bytes;
+use alloy_primitives::{Bytes, Log};
 use alloy_provider::Provider;
-use alloy_rpc_types::Log;
 use eyre::{eyre, Result};
 use kabu_evm_db::KabuDBError;
 use kabu_types_blockchain::{KabuDataTypes, KabuDataTypesEthereum};

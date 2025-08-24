@@ -8,6 +8,9 @@ use std::marker::PhantomData;
 use std::sync::Arc;
 use tokio::sync::RwLock;
 
+use reth_chain_state::CanonStateSubscriptions;
+use reth_ethereum_primitives::EthPrimitives;
+
 // Core component framework imports
 use kabu_core_components::{
     BroadcasterBuilder, BuilderContext, Component, EstimatorBuilder, ExecutorBuilder, HealthMonitorBuilderTrait, KabuComponentsSet,
@@ -687,7 +690,6 @@ where
         .with_channels(
             Some(kabu_ctx.blockchain.new_block_headers_channel()),
             Some(kabu_ctx.blockchain.new_block_with_tx_channel()),
-            Some(kabu_ctx.blockchain.new_block_logs_channel()),
             Some(kabu_ctx.blockchain.new_block_state_update_channel()),
         );
 
@@ -698,7 +700,6 @@ where
             kabu_ctx.block_history.clone(),
             kabu_ctx.blockchain.new_block_headers_channel(),
             kabu_ctx.blockchain.new_block_with_tx_channel(),
-            kabu_ctx.blockchain.new_block_logs_channel(),
             kabu_ctx.blockchain.new_block_state_update_channel(),
             kabu_ctx.channels.market_events.clone(),
         );
@@ -902,9 +903,10 @@ impl<R, P, DB> KabuMarketBuilder<R, P, DB> {
 }
 
 /// Composite market component that manages multiple market-related sub-components
-pub struct CompositeMarketComponent<P, DB>
+pub struct CompositeMarketComponent<P, R, DB>
 where
     P: Provider<Ethereum> + DebugProviderExt<Ethereum> + Send + Sync + Clone + 'static,
+    R: Send + Sync + Clone + 'static,
     DB: DatabaseRef<Error = KabuDBError>
         + Database<Error = KabuDBError>
         + DatabaseCommit
@@ -919,14 +921,15 @@ where
     signer_initializer: Option<InitializeSignersOneShotBlockingComponent<KabuDataTypesEthereum>>,
     market_state_preload: MarketStatePreloadedOneShotComponent<P, Ethereum, DB>,
     price_component: PriceComponent<P, Ethereum>,
-    account_monitor: AccountMonitorComponent<P, Ethereum, KabuDataTypesEthereum>,
+    account_monitor: AccountMonitorComponent<P, R, Ethereum, KabuDataTypesEthereum>,
     protocol_loader: ProtocolPoolLoaderComponent<P, P, Ethereum>,
     history_loader: HistoryPoolLoaderComponent<P, P, Ethereum>,
 }
 
-impl<P, DB> Clone for CompositeMarketComponent<P, DB>
+impl<P, R, DB> Clone for CompositeMarketComponent<P, R, DB>
 where
     P: Provider<Ethereum> + DebugProviderExt<Ethereum> + Send + Sync + Clone + 'static,
+    R: Send + Sync + Clone + 'static,
     DB: DatabaseRef<Error = KabuDBError>
         + Database<Error = KabuDBError>
         + DatabaseCommit
@@ -950,9 +953,10 @@ where
     }
 }
 
-impl<P, DB> Component for CompositeMarketComponent<P, DB>
+impl<P, R, DB> Component for CompositeMarketComponent<P, R, DB>
 where
     P: Provider<Ethereum> + DebugProviderExt<Ethereum> + Send + Sync + Clone + 'static,
+    R: CanonStateSubscriptions<Primitives = EthPrimitives> + Send + Sync + Clone + 'static,
     DB: DatabaseRef<Error = KabuDBError>
         + Database<Error = KabuDBError>
         + DatabaseCommit
@@ -985,7 +989,7 @@ where
 impl<N, R, P, DB, Evm> MarketBuilder<KabuBuildContext<N, R, P, DB, Evm>> for KabuMarketBuilder<R, P, DB>
 where
     N: NodeTypesWithDB,
-    R: Send + Sync + Clone + 'static,
+    R: CanonStateSubscriptions<Primitives = EthPrimitives> + Send + Sync + Clone + 'static,
     P: Provider<Ethereum> + DebugProviderExt<Ethereum> + Send + Sync + Clone + 'static,
     DB: DatabaseRef<Error = KabuDBError>
         + Database<Error = KabuDBError>
@@ -999,7 +1003,7 @@ where
         + 'static,
     Evm: ConfigureEvm + 'static,
 {
-    type Market = CompositeMarketComponent<P, DB>;
+    type Market = CompositeMarketComponent<P, R, DB>;
 
     async fn build_market(self, ctx: &BuilderContext<KabuBuildContext<N, R, P, DB, Evm>>) -> Result<Self::Market> {
         let kabu_ctx = ctx.as_kabu_context()?;
@@ -1016,13 +1020,14 @@ where
         // Price component (one-shot)
         let price_component = PriceComponent::new(kabu_ctx.provider.clone()).only_once().with_market(kabu_ctx.market.clone());
 
-        // Account monitor
-        let account_monitor = AccountMonitorComponent::<P, Ethereum, KabuDataTypesEthereum>::new(
+        // Account monitor - uses regular provider for queries and reth provider for canonical state
+        let account_monitor = AccountMonitorComponent::<P, R, Ethereum, KabuDataTypesEthereum>::new(
             kabu_ctx.provider.clone(),
             kabu_ctx.channels.account_state.clone(),
             kabu_ctx.channels.signers.clone(),
             std::time::Duration::from_secs(1),
-        );
+        )
+        .with_reth_provider(kabu_ctx.reth_provider.clone());
 
         // Pool loaders
         let pool_loaders = Arc::new(PoolLoadersBuilder::<_, _, KabuDataTypesEthereum>::default_pool_loaders(
@@ -1527,7 +1532,13 @@ impl<N, R, P, DB> Default for KabuEthereumComponentsBuilder<N, R, P, DB> {
 impl<N, R, P, DB, Evm> KabuNodeComponentsBuilder<KabuEthereumNode<N, R, P, DB, Evm>> for KabuEthereumComponentsBuilder<N, R, P, DB>
 where
     N: reth_node_types::NodeTypesWithDB,
-    R: reth_provider::BlockNumReader + reth_provider::HeaderProvider<Header = reth_node_types::HeaderTy<N>> + Send + Sync + Clone + 'static,
+    R: reth_provider::BlockNumReader
+        + reth_provider::HeaderProvider<Header = reth_node_types::HeaderTy<N>>
+        + CanonStateSubscriptions<Primitives = EthPrimitives>
+        + Send
+        + Sync
+        + Clone
+        + 'static,
     P: Provider<Ethereum> + DebugProviderExt<Ethereum> + Send + Sync + Clone + 'static,
     DB: DatabaseRef<Error = KabuDBError>
         + Database<Error = KabuDBError>
@@ -1577,7 +1588,13 @@ where
 impl<N, R, P, DB, Evm> KabuNodeTrait<KabuEthereumNode<N, R, P, DB, Evm>> for KabuEthereumNode<N, R, P, DB, Evm>
 where
     N: NodeTypesWithDB,
-    R: reth_provider::BlockNumReader + reth_provider::HeaderProvider<Header = reth_node_types::HeaderTy<N>> + Send + Sync + Clone + 'static,
+    R: reth_provider::BlockNumReader
+        + reth_provider::HeaderProvider<Header = reth_node_types::HeaderTy<N>>
+        + CanonStateSubscriptions<Primitives = EthPrimitives>
+        + Send
+        + Sync
+        + Clone
+        + 'static,
     P: Provider<Ethereum> + DebugProviderExt<Ethereum> + Send + Sync + Clone + 'static,
     DB: DatabaseRef<Error = KabuDBError>
         + Database<Error = KabuDBError>

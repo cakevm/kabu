@@ -1,7 +1,6 @@
 use crate::protocols::CurveProtocol;
 use crate::{pool_loader, CurvePool};
-use alloy::primitives::Bytes;
-use alloy_rpc_types::Log;
+use alloy::primitives::{Bytes, Log};
 use async_stream::stream;
 use eyre::eyre;
 use futures::Stream;

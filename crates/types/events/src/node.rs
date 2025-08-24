@@ -1,6 +1,6 @@
 use crate::Message;
 use alloy_primitives::TxHash;
-use alloy_rpc_types::{Header, Log};
+use alloy_rpc_types::Header;
 use kabu_types_blockchain::{GethStateUpdateVec, MempoolTx};
 use kabu_types_blockchain::{KabuDataTypes, KabuDataTypesEthereum};
 use std::marker::PhantomData;
@@ -24,14 +24,6 @@ pub struct BlockStateUpdate<LDT: KabuDataTypes = KabuDataTypesEthereum> {
     pub _phantom: PhantomData<LDT>,
 }
 
-#[derive(Clone, Debug)]
-pub struct BlockLogs<LDT: KabuDataTypes = KabuDataTypesEthereum> {
-    pub block_header: Header,
-    pub logs: Vec<Log>,
-    #[doc(hidden)]
-    pub _phantom: PhantomData<LDT>,
-}
-
 #[derive(Clone, Debug, Default)]
 pub struct BlockHeaderEventData<LDT: KabuDataTypes = KabuDataTypesEthereum> {
     pub header: Header,
@@ -45,7 +37,6 @@ pub type MessageMempoolDataUpdate<LDT = KabuDataTypesEthereum> = Message<NodeMem
 
 pub type MessageBlockHeader<LDT = KabuDataTypesEthereum> = Message<BlockHeaderEventData<LDT>>;
 pub type MessageBlock<LDT = KabuDataTypesEthereum> = Message<BlockUpdate<LDT>>;
-pub type MessageBlockLogs<LDT = KabuDataTypesEthereum> = Message<BlockLogs<LDT>>;
 pub type MessageBlockStateUpdate<LDT = KabuDataTypesEthereum> = Message<BlockStateUpdate<LDT>>;
 
 impl<LDT: KabuDataTypes> BlockHeaderEventData<LDT> {

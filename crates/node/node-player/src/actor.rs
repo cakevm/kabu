@@ -14,7 +14,7 @@ use kabu_evm_db::{DatabaseKabuExt, KabuDBError};
 use kabu_node_debug_provider::DebugProviderExt;
 use kabu_types_blockchain::Mempool;
 use kabu_types_blockchain::{KabuDataTypes, KabuDataTypesEthereum};
-use kabu_types_events::{MessageBlock, MessageBlockHeader, MessageBlockLogs, MessageBlockStateUpdate, MessageTxCompose};
+use kabu_types_events::{MessageBlock, MessageBlockHeader, MessageBlockStateUpdate, MessageTxCompose};
 use kabu_types_market::MarketState;
 use reth_tasks::TaskExecutor;
 use tokio::sync::{broadcast, RwLock};
@@ -29,7 +29,6 @@ pub struct NodeBlockPlayerComponent<P, N, DB: Send + Sync + Clone + 'static> {
     compose_channel: Option<broadcast::Sender<MessageTxCompose<KabuDataTypesEthereum>>>,
     block_header_channel: Option<broadcast::Sender<MessageBlockHeader>>,
     block_with_tx_channel: Option<broadcast::Sender<MessageBlock>>,
-    block_logs_channel: Option<broadcast::Sender<MessageBlockLogs>>,
     block_state_update_channel: Option<broadcast::Sender<MessageBlockStateUpdate>>,
     _n: PhantomData<N>,
 }
@@ -57,7 +56,6 @@ where
             compose_channel: None,
             block_header_channel: None,
             block_with_tx_channel: None,
-            block_logs_channel: None,
             block_state_update_channel: None,
             _n: PhantomData,
         }
@@ -71,7 +69,6 @@ where
         compose_channel: broadcast::Sender<MessageTxCompose<KabuDataTypesEthereum>>,
         block_header_channel: broadcast::Sender<MessageBlockHeader>,
         block_with_tx_channel: broadcast::Sender<MessageBlock>,
-        block_logs_channel: broadcast::Sender<MessageBlockLogs>,
         block_state_update_channel: broadcast::Sender<MessageBlockStateUpdate>,
     ) -> Self {
         Self {
@@ -80,7 +77,6 @@ where
             compose_channel: Some(compose_channel),
             block_header_channel: Some(block_header_channel),
             block_with_tx_channel: Some(block_with_tx_channel),
-            block_logs_channel: Some(block_logs_channel),
             block_state_update_channel: Some(block_state_update_channel),
             ..self
         }
@@ -116,7 +112,6 @@ where
                 self.market_state.clone(),
                 self.block_header_channel.clone(),
                 self.block_with_tx_channel.clone(),
-                self.block_logs_channel.clone(),
                 self.block_state_update_channel.clone(),
             )
             .await

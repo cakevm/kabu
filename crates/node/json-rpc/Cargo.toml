@@ -15,19 +15,12 @@ kabu-node-debug-provider.workspace = true
 kabu-types-blockchain.workspace = true
 kabu-types-events.workspace = true
 
-chrono.workspace = true
 eyre.workspace = true
-futures.workspace = true
 reth-tasks.workspace = true
 tokio.workspace = true
 tracing.workspace = true
 
 # alloy
 alloy-network.workspace = true
-alloy-primitives.workspace = true
 alloy-provider.workspace = true
-alloy-pubsub.workspace = true
 alloy-rpc-types.workspace = true
-
-#op-alloy
-op-alloy.workspace = true

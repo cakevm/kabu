@@ -3,7 +3,7 @@ use alloy_eips::BlockId;
 use alloy_network::Ethereum;
 use alloy_primitives::BlockNumber;
 use alloy_provider::Provider;
-use alloy_rpc_types::{BlockTransactions, Filter};
+use alloy_rpc_types::BlockTransactions;
 use std::sync::Arc;
 use tokio::sync::{broadcast, RwLock};
 
@@ -11,8 +11,7 @@ use kabu_evm_db::{DatabaseKabuExt, KabuDBError};
 use kabu_node_debug_provider::DebugProviderExt;
 use kabu_types_blockchain::{debug_trace_block, KabuDataTypesEthereum, Mempool};
 use kabu_types_events::{
-    BlockHeaderEventData, BlockLogs, BlockStateUpdate, BlockUpdate, Message, MessageBlock, MessageBlockHeader, MessageBlockLogs,
-    MessageBlockStateUpdate,
+    BlockHeaderEventData, BlockStateUpdate, BlockUpdate, Message, MessageBlock, MessageBlockHeader, MessageBlockStateUpdate,
 };
 use kabu_types_market::MarketState;
 use revm::{Database, DatabaseCommit, DatabaseRef};
@@ -29,7 +28,6 @@ pub async fn node_player_worker<P, DB>(
     market_state: Option<Arc<RwLock<MarketState<DB>>>>,
     new_block_headers_channel: Option<broadcast::Sender<MessageBlockHeader>>,
     new_block_with_tx_channel: Option<broadcast::Sender<MessageBlock>>,
-    new_block_logs_channel: Option<broadcast::Sender<MessageBlockLogs>>,
     new_block_state_update_channel: Option<broadcast::Sender<MessageBlockStateUpdate>>,
 ) -> eyre::Result<()>
 where
@@ -107,36 +105,6 @@ where
                             }
                         } else {
                             error!("Block is empty")
-                        }
-                    }
-                    Err(e) => {
-                        error!("get_logs error: {e}")
-                    }
-                }
-            }
-
-            if let Some(block_logs_channel) = &new_block_logs_channel {
-                let filter = Filter::new().at_block_hash(curblock_hash);
-
-                let mut logs = if let Some(mempool) = mempool.clone() {
-                    let guard = mempool.read().await;
-
-                    if !guard.is_empty() {
-                        guard.filter_on_block(curblock_number).into_iter().flat_map(|x| x.logs.clone().unwrap_or_default()).collect()
-                    } else {
-                        vec![]
-                    }
-                } else {
-                    vec![]
-                };
-
-                match provider.get_logs(&filter).await {
-                    Ok(block_logs) => {
-                        debug!("Mempool logs : {}", logs.len());
-                        logs.extend(block_logs);
-                        let logs_update = BlockLogs { block_header: block_header.clone(), logs, _phantom: std::marker::PhantomData };
-                        if let Err(e) = block_logs_channel.send(Message::new_with_time(logs_update)) {
-                            error!("new_block_logs_channel.send error: {e}");
                         }
                     }
                     Err(e) => {

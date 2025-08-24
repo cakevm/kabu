@@ -1,6 +1,6 @@
 use alloy_network::Network;
+use alloy_primitives::Log;
 use alloy_provider::Provider;
-use alloy_rpc_types::Log;
 use eyre::Result;
 use std::collections::HashMap;
 use tokio::sync::broadcast;
@@ -24,7 +24,7 @@ where
     for log_entry in log_entries.into_iter() {
         if let Some((pool_id, pool_class)) = pool_loaders.determine_pool_class(&log_entry) {
             // was this pool already processed?
-            if processed_pools.insert(log_entry.address(), true).is_some() {
+            if processed_pools.insert(log_entry.address, true).is_some() {
                 continue;
             }
 

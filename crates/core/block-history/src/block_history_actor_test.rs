@@ -48,16 +48,6 @@ mod test {
 
         tokio::time::sleep(Duration::from_millis(100)).await;
 
-        if let Some(logs) = logs {
-            let logs_msg = BlockLogs { block_header: header.clone(), logs, _phantom: std::marker::PhantomData };
-
-            if let Err(e) = bc.new_block_logs_channel().send(Message::new(logs_msg)) {
-                error!("bc.new_block_with_tx_channel().send : {}", e)
-            }
-        }
-
-        tokio::time::sleep(Duration::from_millis(100)).await;
-
         if let Some(state_update) = state_update {
             let state_update_msg = BlockStateUpdate { block_header: header.clone(), state_update, _phantom: std::marker::PhantomData };
             if let Err(e) = bc.new_block_state_update_channel().send(Message::new(state_update_msg)) {
@@ -276,7 +266,6 @@ mod test {
         let block_history = bc_state.block_history();
         let block_header_rx = blockchain.new_block_headers_channel().subscribe();
         let block_rx = blockchain.new_block_with_tx_channel().subscribe();
-        let log_rx = blockchain.new_block_logs_channel().subscribe();
         let state_rx = blockchain.new_block_state_update_channel().subscribe();
         let market_events_tx = blockchain.market_events_channel();
 
@@ -289,7 +278,6 @@ mod test {
                 block_history,
                 block_header_rx,
                 block_rx,
-                log_rx,
                 state_rx,
                 market_events_tx,
             )

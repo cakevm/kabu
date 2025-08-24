@@ -80,6 +80,7 @@ alloy.workspace = true
 # reth
 reth.workspace = true
 reth-db-api.workspace = true
+reth-ethereum-primitives.workspace = true
 reth-evm.workspace = true
 reth-node-ethereum.workspace = true
 reth-provider.workspace = true

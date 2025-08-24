@@ -24,10 +24,15 @@ tracing.workspace = true
 alloy-network.workspace = true
 alloy-primitives.workspace = true
 alloy-provider.workspace = true
-alloy-rpc-types.workspace = true
 
 # reth
+reth-chain-state.workspace = true
+reth-ethereum-primitives.workspace = true
+reth-execution-types.workspace = true
 reth-tasks.workspace = true
+
+# futures
+futures-util.workspace = true
 
 # revm
 revm.workspace = true

@@ -232,6 +232,7 @@ reth-db = { git = "https://github.com/paradigmxyz/reth", rev = "ce2ce23" }
 reth-db-api = { git = "https://github.com/paradigmxyz/reth", rev = "ce2ce23" }
 reth-ethereum-primitives = { git = "https://github.com/paradigmxyz/reth", rev = "ce2ce23" }
 reth-evm = { git = "https://github.com/paradigmxyz/reth", rev = "ce2ce23" }
+reth-execution-types = { git = "https://github.com/paradigmxyz/reth", rev = "ce2ce23" }
 reth-exex = { git = "https://github.com/paradigmxyz/reth", rev = "ce2ce23", features = ["serde"] }
 reth-node-api = { git = "https://github.com/paradigmxyz/reth", rev = "ce2ce23" }
 reth-node-ethereum = { git = "https://github.com/paradigmxyz/reth", rev = "ce2ce23" }

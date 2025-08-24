@@ -117,7 +117,6 @@ async fn main() -> Result<()> {
 
     let mut header_sub = bc.new_block_headers_channel().subscribe();
     let mut block_sub = bc.new_block_with_tx_channel().subscribe();
-    let mut logs_sub = bc.new_block_logs_channel().subscribe();
     let mut state_update_sub = bc.new_block_state_update_channel().subscribe();
 
     //let memepool = bc.mempool();
@@ -175,6 +174,7 @@ async fn main() -> Result<()> {
                 }
             }
 
+            /*
             logs = logs_sub.recv() => {
                 match logs{
                     Ok(logs_update)=>{
@@ -185,6 +185,7 @@ async fn main() -> Result<()> {
                     }
                 }
             }
+             */
 
             block = block_sub.recv() => {
                 match block {

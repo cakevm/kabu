@@ -243,7 +243,6 @@ async fn collect_stat_task(
 
     let mut block_header_subscription = bc.new_block_headers_channel().subscribe();
     let mut block_with_tx_subscription = bc.new_block_with_tx_channel().subscribe();
-    let mut block_logs_subscription = bc.new_block_logs_channel().subscribe();
     let mut block_state_subscription = bc.new_block_state_update_channel().subscribe();
 
     let mut pending_tx_subscription = bc.mempool_events_channel().subscribe();
@@ -292,24 +291,6 @@ async fn collect_stat_task(
                     }
                 }
             }
-            logs = block_logs_subscription.recv() => {
-                match logs {
-                    Ok(logs)=>{
-                        let block_number = stat.read().await.blocks.get(&logs.block_header.hash).cloned().unwrap_or_default();
-
-                        if blocks_counter >= warn_up_blocks {
-                            let recv_time = stat.write().await.block_logs.entry(block_number).or_default().add_now(id);
-                            println!("{id} : {} block logs received {} {}", block_number, logs.block_header.hash, recv_time - ping_time);
-                        }else{
-                            println!("Warming up {id} : {} block logs received {}", block_number, logs.block_header.hash);
-                        }
-                    }
-                    Err(e)=>{
-                        println!("Error receiving block logs {id} {e}");
-                    }
-                }
-            }
-
 
             state_update = block_state_subscription.recv() => {
                 match state_update  {

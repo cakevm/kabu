@@ -1,10 +1,8 @@
 use crate::protocols::{fetch_uni2_factory, UniswapV2Protocol};
 use crate::{pool_loader, UniswapV2Pool};
-use alloy::primitives::Bytes;
-use alloy::primitives::Log as EVMLog;
+use alloy::primitives::{Bytes, Log};
 use alloy::sol_types::SolEventInterface;
 use alloy_evm::EvmEnv;
-use alloy_rpc_types::Log;
 use eyre::eyre;
 use futures::Stream;
 use kabu_defi_abi::uniswap2::IUniswapV2Pair::IUniswapV2PairEvents;
@@ -26,7 +24,7 @@ where
     LDT: KabuDataTypes + 'static,
 {
     fn get_pool_class_by_log(&self, log_entry: &Log) -> Option<(PoolId, PoolClass)> {
-        let log_entry: Option<EVMLog> = EVMLog::new(log_entry.address(), log_entry.topics().to_vec(), log_entry.data().data.clone());
+        let log_entry: Option<Log> = Log::new(log_entry.address, log_entry.data.topics().to_vec(), log_entry.data.data.clone());
         match log_entry {
             Some(log_entry) => match IUniswapV2PairEvents::decode_log(&log_entry) {
                 Ok(event) => match event.data {

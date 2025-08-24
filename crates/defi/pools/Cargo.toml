@@ -29,7 +29,6 @@ tracing.workspace = true
 # alloy
 alloy.workspace = true
 alloy-evm.workspace = true
-alloy-rpc-types.workspace = true
 
 [features]
 debug-calculation = []

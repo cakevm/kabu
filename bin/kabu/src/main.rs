@@ -30,6 +30,7 @@ use reth::cli::Cli;
 use reth::tasks::TaskManager;
 use reth_db_api::database_metrics::DatabaseMetrics;
 use reth_db_api::Database as RethDatabase;
+use reth_ethereum_primitives::EthPrimitives;
 use reth_node_ethereum::node::EthereumAddOns;
 use reth_node_ethereum::{EthEvmConfig, EthereumNode};
 use reth_provider::providers::BlockchainProvider;
@@ -183,7 +184,7 @@ async fn start_kabu_mev<RethProvider, RpcProvider, Types, DB, EvmConfig>(
 ) -> eyre::Result<kabu::core::components::KabuHandle>
 where
     RethProvider: KabuRethFullProvider<NodeTypesWithDBAdapter<Types, DB>>,
-    Types: NodeTypes,
+    Types: NodeTypes<Primitives = EthPrimitives>,
     DB: RethDatabase + DatabaseMetrics + Clone + Unpin + 'static,
     RpcProvider: alloy::providers::Provider<Ethereum> + DebugProviderExt<Ethereum> + Send + Sync + Clone + 'static,
     EvmConfig: reth_evm::ConfigureEvm + 'static,

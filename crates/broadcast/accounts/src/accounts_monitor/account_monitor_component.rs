@@ -6,21 +6,25 @@ use tokio::sync::{broadcast, RwLock};
 use tracing::{debug, error, info, warn};
 
 use alloy_network::Network;
-use alloy_primitives::{Address, U256};
+use alloy_primitives::{Address, Log, U256};
 use alloy_provider::Provider;
-use alloy_rpc_types::Log;
+use futures_util::StreamExt;
+use reth_chain_state::{CanonStateNotification, CanonStateNotificationStream, CanonStateSubscriptions};
+use reth_ethereum_primitives::EthPrimitives;
 
 use kabu_core_components::Component;
 use kabu_types_blockchain::{KabuBlock, KabuDataTypes, KabuDataTypesEthereum, KabuTx};
 use kabu_types_entities::{AccountNonceAndBalanceState, TxSigners};
-use kabu_types_events::{MessageBlock, MessageBlockHeader, MessageBlockLogs};
+use kabu_types_events::{MessageBlock, MessageBlockHeader};
 use reth_tasks::TaskExecutor;
 
 /// Component that monitors account nonces and balances for managed accounts
 #[derive(Clone)]
-pub struct AccountMonitorComponent<P, N, LDT: KabuDataTypes + 'static = KabuDataTypesEthereum> {
+pub struct AccountMonitorComponent<P, R, N, LDT: KabuDataTypes + 'static = KabuDataTypesEthereum> {
     /// JSON-RPC provider for fetching account data
     client: P,
+    /// Reth provider for canonical state subscriptions
+    reth_provider: Option<R>,
     /// Shared state containing account nonces and balances
     account_state: Arc<RwLock<AccountNonceAndBalanceState>>,
     /// Signers to monitor accounts for
@@ -29,17 +33,16 @@ pub struct AccountMonitorComponent<P, N, LDT: KabuDataTypes + 'static = KabuData
     block_header_tx: Option<broadcast::Sender<MessageBlockHeader<LDT>>>,
     /// Channel to receive blocks with transactions
     block_tx: Option<broadcast::Sender<MessageBlock<LDT>>>,
-    /// Channel to receive block logs
-    block_logs_tx: Option<broadcast::Sender<MessageBlockLogs<LDT>>>,
     /// Update interval for fetching account data
     update_interval: Duration,
     /// Phantom data for network type
     _network: std::marker::PhantomData<N>,
 }
 
-impl<P, N, LDT> AccountMonitorComponent<P, N, LDT>
+impl<P, R, N, LDT> AccountMonitorComponent<P, R, N, LDT>
 where
     P: Provider<N> + Send + Sync + Clone + 'static,
+    R: CanonStateSubscriptions<Primitives = EthPrimitives> + Send + Sync + Clone + 'static,
     N: Network + 'static,
     LDT: KabuDataTypes + 'static,
 {
@@ -51,25 +54,28 @@ where
     ) -> Self {
         Self {
             client,
+            reth_provider: None,
             account_state,
             signers,
             block_header_tx: None,
             block_tx: None,
-            block_logs_tx: None,
             update_interval,
             _network: std::marker::PhantomData,
         }
+    }
+
+    pub fn with_reth_provider(mut self, reth_provider: R) -> Self {
+        self.reth_provider = Some(reth_provider);
+        self
     }
 
     pub fn with_channels(
         mut self,
         block_header_channel: broadcast::Sender<MessageBlockHeader<LDT>>,
         block_channel: broadcast::Sender<MessageBlock<LDT>>,
-        block_logs_channel: broadcast::Sender<MessageBlockLogs<LDT>>,
     ) -> Self {
         self.block_header_tx = Some(block_header_channel);
         self.block_tx = Some(block_channel);
-        self.block_logs_tx = Some(block_logs_channel);
         self
     }
 
@@ -95,8 +101,16 @@ where
 
         // Extract receivers
         let mut block_rx = self.block_tx.map(|tx| tx.subscribe());
-        let mut block_logs_rx = self.block_logs_tx.map(|tx| tx.subscribe());
         let account_state = self.account_state;
+
+        // Try to subscribe to canonical state notifications if reth provider is available
+        let mut canon_stream: Option<CanonStateNotificationStream<EthPrimitives>> = if let Some(ref reth_provider) = self.reth_provider {
+            info!("Successfully subscribed to canonical state notifications");
+            Some(reth_provider.canonical_state_stream())
+        } else {
+            warn!("No reth provider configured. Token balance tracking will be disabled.");
+            None
+        };
 
         // Main event loop
         loop {
@@ -108,10 +122,16 @@ where
                         }
                     }
                 }
-                logs_msg = recv_logs_msg(&mut block_logs_rx) => {
-                    if let Some(logs) = logs_msg {
-                        if let Err(e) = handle_block_logs(&account_state, logs).await {
-                            error!("Error handling block logs: {}", e);
+                canon_notification = async {
+                    if let Some(ref mut stream) = canon_stream {
+                        stream.next().await
+                    } else {
+                        futures_util::future::pending().await
+                    }
+                } => {
+                    if let Some(notification) = canon_notification {
+                        if let Err(e) = handle_canon_state_notification(&account_state, notification).await {
+                            error!("Error handling canonical state notification: {}", e);
                         }
                     }
                 }
@@ -184,28 +204,6 @@ async fn recv_block_msg<LDT: KabuDataTypes>(block_rx: &mut Option<broadcast::Rec
     }
 }
 
-async fn recv_logs_msg<LDT: KabuDataTypes>(
-    block_logs_rx: &mut Option<broadcast::Receiver<MessageBlockLogs<LDT>>>,
-) -> Option<MessageBlockLogs<LDT>> {
-    if let Some(ref mut rx) = block_logs_rx {
-        match rx.recv().await {
-            Ok(msg) => Some(msg),
-            Err(broadcast::error::RecvError::Lagged(missed)) => {
-                warn!("Account monitor missed {} log messages", missed);
-                None
-            }
-            Err(broadcast::error::RecvError::Closed) => {
-                error!("Logs channel closed");
-                None
-            }
-        }
-    } else {
-        // No logs channel, sleep a bit
-        tokio::time::sleep(Duration::from_millis(100)).await;
-        None
-    }
-}
-
 async fn handle_block_update<LDT: KabuDataTypes>(
     account_state: &Arc<RwLock<AccountNonceAndBalanceState>>,
     block_msg: MessageBlock<LDT>,
@@ -216,19 +214,6 @@ async fn handle_block_update<LDT: KabuDataTypes>(
     update_nonces_from_block::<LDT>(account_state, block).await?;
 
     debug!("Updated account nonces from block {}", block.get_header().number);
-    Ok(())
-}
-
-async fn handle_block_logs<LDT: KabuDataTypes>(
-    account_state: &Arc<RwLock<AccountNonceAndBalanceState>>,
-    logs_msg: MessageBlockLogs<LDT>,
-) -> Result<()> {
-    let logs = &logs_msg.inner.logs;
-
-    // Update token balances based on Transfer events
-    update_balances_from_logs(account_state, logs).await?;
-
-    debug!("Updated account balances from {} logs in block {}", logs.len(), logs_msg.inner.block_header.number);
     Ok(())
 }
 
@@ -259,6 +244,47 @@ async fn update_nonces_from_block<LDT: KabuDataTypes>(
     Ok(())
 }
 
+async fn handle_canon_state_notification(
+    account_state: &Arc<RwLock<AccountNonceAndBalanceState>>,
+    notification: CanonStateNotification<EthPrimitives>,
+) -> Result<()> {
+    match notification {
+        CanonStateNotification::Reorg { old: _, new } => {
+            debug!("Processing reorg with new chain");
+            process_canonical_chain_logs(account_state, new).await?;
+        }
+        CanonStateNotification::Commit { new } => {
+            debug!("Processing committed chain");
+            process_canonical_chain_logs(account_state, new).await?;
+        }
+    }
+    Ok(())
+}
+
+async fn process_canonical_chain_logs(
+    account_state: &Arc<RwLock<AccountNonceAndBalanceState>>,
+    chain: Arc<reth_execution_types::Chain<EthPrimitives>>,
+) -> Result<()> {
+    // Get receipts from the chain's execution outcome
+    let receipts = chain.execution_outcome().receipts();
+
+    // Collect all logs from all receipts
+    let mut all_logs = Vec::new();
+    for receipt_vec in receipts {
+        for receipt in receipt_vec {
+            all_logs.extend(receipt.logs.clone());
+        }
+    }
+
+    if !all_logs.is_empty() {
+        // Process the logs to update balances
+        update_balances_from_logs(account_state, &all_logs).await?;
+        debug!("Updated account balances from {} logs", all_logs.len());
+    }
+
+    Ok(())
+}
+
 async fn update_balances_from_logs(account_state: &Arc<RwLock<AccountNonceAndBalanceState>>, logs: &[Log]) -> Result<()> {
     let mut state = account_state.write().await;
 
@@ -266,14 +292,14 @@ async fn update_balances_from_logs(account_state: &Arc<RwLock<AccountNonceAndBal
     let transfer_signature = alloy_primitives::keccak256("Transfer(address,address,uint256)");
 
     for log in logs {
-        if log.topics().len() >= 3 && log.topics()[0] == transfer_signature {
+        if log.data.topics().len() >= 3 && log.data.topics()[0] == transfer_signature {
             // Extract from, to, and amount from the Transfer event
-            let from = Address::from_word(log.topics()[1]);
-            let to = Address::from_word(log.topics()[2]);
-            let token = log.address();
+            let from = Address::from_word(log.data.topics()[1]);
+            let to = Address::from_word(log.data.topics()[2]);
+            let token = log.address;
 
-            if log.data().data.len() == 32 {
-                let amount = U256::from_be_slice(&log.data().data);
+            if log.data.data.len() == 32 {
+                let amount = U256::from_be_slice(&log.data.data);
 
                 // Update balances for monitored accounts
                 if state.is_monitored(&from) {
@@ -296,9 +322,10 @@ async fn update_balances_from_logs(account_state: &Arc<RwLock<AccountNonceAndBal
     Ok(())
 }
 
-impl<P, N, LDT> Component for AccountMonitorComponent<P, N, LDT>
+impl<P, R, N, LDT> Component for AccountMonitorComponent<P, R, N, LDT>
 where
     P: Provider<N> + Send + Sync + Clone + 'static,
+    R: CanonStateSubscriptions<Primitives = EthPrimitives> + Send + Sync + Clone + 'static,
     N: Network + 'static,
     LDT: KabuDataTypes + 'static,
 {
@@ -391,14 +418,15 @@ impl AccountMonitorComponentBuilder {
         self
     }
 
-    pub fn build<P, N, LDT>(
+    pub fn build<P, R, N, LDT>(
         self,
         client: P,
         account_state: Arc<RwLock<AccountNonceAndBalanceState>>,
         signers: Arc<RwLock<TxSigners<LDT>>>,
-    ) -> AccountMonitorComponent<P, N, LDT>
+    ) -> AccountMonitorComponent<P, R, N, LDT>
     where
         P: Provider<N> + Send + Sync + Clone + 'static,
+        R: CanonStateSubscriptions<Primitives = EthPrimitives> + Send + Sync + Clone + 'static,
         N: Network + 'static,
         LDT: KabuDataTypes + 'static,
     {

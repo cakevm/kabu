@@ -5,7 +5,7 @@ use kabu_types_blockchain::{ChainParameters, Mempool};
 use kabu_types_blockchain::{KabuDataTypes, KabuDataTypesEthereum};
 use kabu_types_entities::AccountNonceAndBalanceState;
 use kabu_types_events::{
-    LoomTask, MarketEvents, MempoolEvents, MessageBlock, MessageBlockHeader, MessageBlockLogs, MessageBlockStateUpdate, MessageHealthEvent,
+    LoomTask, MarketEvents, MempoolEvents, MessageBlock, MessageBlockHeader, MessageBlockStateUpdate, MessageHealthEvent,
     MessageMempoolDataUpdate, MessageTxCompose,
 };
 use kabu_types_market::Market;
@@ -24,7 +24,6 @@ pub struct Blockchain<LDT: KabuDataTypes + 'static = KabuDataTypesEthereum> {
     new_block_headers_channel: broadcast::Sender<MessageBlockHeader<LDT>>,
     new_block_with_tx_channel: broadcast::Sender<MessageBlock<LDT>>,
     new_block_state_update_channel: broadcast::Sender<MessageBlockStateUpdate<LDT>>,
-    new_block_logs_channel: broadcast::Sender<MessageBlockLogs<LDT>>,
     new_mempool_tx_channel: broadcast::Sender<MessageMempoolDataUpdate<LDT>>,
     market_events_channel: broadcast::Sender<MarketEvents>,
     mempool_events_channel: broadcast::Sender<MempoolEvents>,
@@ -44,7 +43,6 @@ impl Blockchain<KabuDataTypesEthereum> {
         let new_block_headers_channel: broadcast::Sender<MessageBlockHeader> = broadcast::channel(10).0;
         let new_block_with_tx_channel: broadcast::Sender<MessageBlock> = broadcast::channel(10).0;
         let new_block_state_update_channel: broadcast::Sender<MessageBlockStateUpdate> = broadcast::channel(10).0;
-        let new_block_logs_channel: broadcast::Sender<MessageBlockLogs> = broadcast::channel(10).0;
 
         let new_mempool_tx_channel: broadcast::Sender<MessageMempoolDataUpdate> = broadcast::channel(5000).0;
 
@@ -71,7 +69,6 @@ impl Blockchain<KabuDataTypesEthereum> {
             new_block_headers_channel,
             new_block_with_tx_channel,
             new_block_state_update_channel,
-            new_block_logs_channel,
             new_mempool_tx_channel,
             market_events_channel,
             mempool_events_channel,
@@ -114,10 +111,6 @@ impl<LDT: KabuDataTypes> Blockchain<LDT> {
 
     pub fn new_block_state_update_channel(&self) -> broadcast::Sender<MessageBlockStateUpdate<LDT>> {
         self.new_block_state_update_channel.clone()
-    }
-
-    pub fn new_block_logs_channel(&self) -> broadcast::Sender<MessageBlockLogs<LDT>> {
-        self.new_block_logs_channel.clone()
     }
 
     pub fn new_mempool_tx_channel(&self) -> broadcast::Sender<MessageMempoolDataUpdate<LDT>> {

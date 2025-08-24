@@ -8,7 +8,7 @@ use tracing::{debug, error, info};
 use kabu_core_components::Component;
 use kabu_node_config::NodeBlockComponentConfig;
 use kabu_types_blockchain::KabuDataTypes;
-use kabu_types_events::{MessageBlock, MessageBlockHeader, MessageBlockLogs, MessageBlockStateUpdate};
+use kabu_types_events::{MessageBlock, MessageBlockHeader, MessageBlockStateUpdate};
 use reth_tasks::TaskExecutor;
 
 /// Simplified component that processes blockchain data from Ethereum nodes
@@ -22,8 +22,6 @@ pub struct BlockProcessingComponent<P, N, LDT: KabuDataTypes + 'static> {
     block_headers_tx: Option<broadcast::Sender<MessageBlockHeader<LDT>>>,
     /// Channel to send new blocks with transactions
     blocks_tx: Option<broadcast::Sender<MessageBlock<LDT>>>,
-    /// Channel to send new block logs
-    block_logs_tx: Option<broadcast::Sender<MessageBlockLogs<LDT>>>,
     /// Channel to send block state updates
     state_updates_tx: Option<broadcast::Sender<MessageBlockStateUpdate<LDT>>>,
     /// Phantom data for network type
@@ -37,27 +35,17 @@ where
     LDT: KabuDataTypes + 'static,
 {
     pub fn new(client: P, config: NodeBlockComponentConfig) -> Self {
-        Self {
-            client,
-            config,
-            block_headers_tx: None,
-            blocks_tx: None,
-            block_logs_tx: None,
-            state_updates_tx: None,
-            _phantom: std::marker::PhantomData,
-        }
+        Self { client, config, block_headers_tx: None, blocks_tx: None, state_updates_tx: None, _phantom: std::marker::PhantomData }
     }
 
     pub fn with_channels(
         mut self,
         block_headers_tx: Option<broadcast::Sender<MessageBlockHeader<LDT>>>,
         blocks_tx: Option<broadcast::Sender<MessageBlock<LDT>>>,
-        block_logs_tx: Option<broadcast::Sender<MessageBlockLogs<LDT>>>,
         state_updates_tx: Option<broadcast::Sender<MessageBlockStateUpdate<LDT>>>,
     ) -> Self {
         self.block_headers_tx = block_headers_tx;
         self.blocks_tx = blocks_tx;
-        self.block_logs_tx = block_logs_tx;
         self.state_updates_tx = state_updates_tx;
         self
     }
@@ -115,13 +103,6 @@ where
             }
         }
 
-        // Process block logs
-        if self.config.block_logs && self.block_logs_tx.is_some() {
-            if let Err(e) = self.process_block_logs(block_num).await {
-                error!("Error processing block logs {}: {}", block_num, e);
-            }
-        }
-
         // Process state updates
         if self.config.block_state_update && self.state_updates_tx.is_some() {
             if let Err(e) = self.process_state_update(block_num).await {
@@ -170,27 +151,6 @@ where
             }
             Err(e) => {
                 error!("Error fetching block {}: {}", block_num, e);
-                return Err(e.into());
-            }
-        }
-        Ok(())
-    }
-
-    async fn process_block_logs(&self, block_num: u64) -> Result<()> {
-        // Get logs for this block
-        let filter = alloy_rpc_types::Filter::new().from_block(block_num).to_block(block_num);
-
-        match self.client.get_logs(&filter).await {
-            Ok(logs) => {
-                debug!("Processed {} logs for block {}", logs.len(), block_num);
-                // let header = // get header somehow
-                // let msg = MessageBlockLogs::new(header, logs);
-                // if let Some(ref tx) = self.block_logs_tx {
-                //     let _ = tx.send(msg);
-                // }
-            }
-            Err(e) => {
-                error!("Error fetching logs for block {}: {}", block_num, e);
                 return Err(e.into());
             }
         }
