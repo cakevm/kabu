@@ -5,7 +5,7 @@ use kabu_core_components::Component;
 use kabu_core_blockchain::{Blockchain, BlockchainState};
 use kabu_rpc_state::AppState;
 use kabu_storage_db::DbPool;
-use kabu_types_blockchain::KabuDataTypesEthereum;
+use reth_ethereum_primitives::EthPrimitives;
 use revm::{DatabaseCommit, DatabaseRef};
 use std::net::SocketAddr;
 use tokio::net::TcpListener;
@@ -17,7 +17,7 @@ pub async fn start_web_server_worker<S, DB>(
     host: String,
     extra_router: Router<S>,
     bc: Blockchain,
-    state: BlockchainState<DB, KabuDataTypesEthereum>,
+    state: BlockchainState<DB, EthPrimitives>,
     db_pool: DbPool,
     shutdown_token: CancellationToken,
 ) -> eyre::Result<()>
@@ -51,7 +51,7 @@ pub struct WebServerComponent<S, DB: Clone + Send + Sync + 'static> {
     shutdown_token: CancellationToken,
     db_pool: DbPool,
     bc: Option<Blockchain>,
-    state: Option<BlockchainState<DB, KabuDataTypesEthereum>>,
+    state: Option<BlockchainState<DB, EthPrimitives>>,
 }
 
 impl<S, DB> WebServerComponent<S, DB>
@@ -64,7 +64,7 @@ where
         Self { host, extra_router, shutdown_token, db_pool, bc: None, state: None }
     }
 
-    pub fn on_bc(self, bc: &Blockchain, state: &BlockchainState<DB, KabuDataTypesEthereum>) -> Self {
+    pub fn on_bc(self, bc: &Blockchain, state: &BlockchainState<DB, EthPrimitives>) -> Self {
         Self { bc: Some(bc.clone()), state: Some(state.clone()), ..self }
     }
 }

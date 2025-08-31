@@ -1,22 +1,22 @@
-use alloy_consensus::transaction::Recovered;
-use alloy_consensus::{SignableTransaction, TxEnvelope};
+use alloy_consensus::SignableTransaction;
 use alloy_network::{TransactionBuilder, TxSigner as AlloyTxSigner, TxSignerSync};
 use alloy_primitives::{hex, Address, Bytes, B256};
-use alloy_rpc_types::{Transaction, TransactionRequest};
+use alloy_rpc_types::TransactionRequest;
 use alloy_signer_local::PrivateKeySigner;
 use eyre::{eyre, OptionExt, Result};
 use indexmap::IndexMap;
-use kabu_types_blockchain::{KabuDataTypes, KabuDataTypesEthereum};
 use rand::prelude::IteratorRandom;
+use reth_ethereum_primitives::{EthPrimitives, TransactionSigned};
+use reth_node_types::NodePrimitives;
 use std::fmt;
 use std::fmt::Debug;
 use std::future::Future;
 use std::pin::Pin;
 use std::sync::Arc;
 
-pub trait LoomTxSigner<LDT: KabuDataTypes>: Send + Sync + Debug {
-    fn sign<'a>(&'a self, tx: LDT::TransactionRequest) -> Pin<Box<dyn std::future::Future<Output = Result<LDT::Transaction>> + Send + 'a>>;
-    fn sign_sync(&self, tx: LDT::TransactionRequest) -> Result<LDT::Transaction>;
+pub trait LoomTxSigner<N: NodePrimitives>: Send + Sync + Debug {
+    fn sign<'a>(&'a self, tx: TransactionRequest) -> Pin<Box<dyn std::future::Future<Output = Result<N::SignedTx>> + Send + 'a>>;
+    fn sign_sync(&self, tx: TransactionRequest) -> Result<N::SignedTx>;
     fn address(&self) -> Address;
 }
 
@@ -39,11 +39,11 @@ impl fmt::Debug for TxSignerEth {
     }
 }
 
-impl LoomTxSigner<KabuDataTypesEthereum> for TxSignerEth {
+impl LoomTxSigner<EthPrimitives> for TxSignerEth {
     fn address(&self) -> Address {
         self.address
     }
-    fn sign<'a>(&'a self, tx_req: TransactionRequest) -> Pin<Box<dyn Future<Output = Result<Transaction>> + Send + 'a>> {
+    fn sign<'a>(&'a self, tx_req: TransactionRequest) -> Pin<Box<dyn Future<Output = Result<TransactionSigned>> + Send + 'a>> {
         let fut = async move {
             let mut typed_tx = tx_req
                 .build_typed_tx()
@@ -53,23 +53,13 @@ impl LoomTxSigner<KabuDataTypesEthereum> for TxSignerEth {
                 .clone();
             let signature = self.wallet.sign_transaction(&mut typed_tx).await?;
             let signed_tx = typed_tx.clone().into_signed(signature);
-            let tx_env: TxEnvelope = signed_tx.into();
 
-            let recovered = Recovered::new_unchecked(tx_env, self.address);
-
-            let tx =
-                Transaction { inner: recovered, block_hash: None, block_number: None, transaction_index: None, effective_gas_price: None };
-            eyre::Result::<Transaction>::Ok(tx)
+            Ok(signed_tx.into())
         };
         Box::pin(fut)
-
-        //let hash = signed_tx.signature_hash();
-        //let tx_env: TxEnvelope = signed_tx.into();
-        //let tx_data = tx_env.encoded_2718();
-        //Ok((hash, Bytes::from(tx_data)))
     }
 
-    fn sign_sync(&self, tx_req: TransactionRequest) -> Result<Transaction> {
+    fn sign_sync(&self, tx_req: TransactionRequest) -> Result<TransactionSigned> {
         let mut typed_tx = tx_req
             .build_unsigned()
             .map_err(|e| eyre!(format!("CANNOT_BUILD_UNSIGNED with error: {}", e)))?
@@ -80,13 +70,7 @@ impl LoomTxSigner<KabuDataTypesEthereum> for TxSignerEth {
         let signature = self.wallet.sign_transaction_sync(&mut typed_tx)?;
         let signed_tx = typed_tx.clone().into_signed(signature);
 
-        let hash = signed_tx.signature_hash();
-        let tx_env: TxEnvelope = signed_tx.into();
-
-        let recovered = Recovered::new_unchecked(tx_env, self.address);
-
-        let tx = Transaction { inner: recovered, block_hash: None, block_number: None, transaction_index: None, effective_gas_price: None };
-        Ok(tx)
+        Ok(signed_tx.into())
     }
 }
 
@@ -97,11 +81,11 @@ impl TxSignerEth {
 }
 
 #[derive(Clone, Default)]
-pub struct TxSigners<LDT: KabuDataTypes = KabuDataTypesEthereum> {
-    signers: IndexMap<Address, Arc<dyn LoomTxSigner<LDT>>>,
+pub struct TxSigners<N: NodePrimitives = EthPrimitives> {
+    signers: IndexMap<Address, Arc<dyn LoomTxSigner<N>>>,
 }
 
-impl TxSigners<KabuDataTypesEthereum> {
+impl TxSigners<EthPrimitives> {
     pub fn add_privkey(&mut self, priv_key: Bytes) -> TxSignerEth {
         let wallet = PrivateKeySigner::from_bytes(&B256::from_slice(priv_key.as_ref())).unwrap();
         self.signers.insert(wallet.address(), Arc::new(TxSignerEth::new(wallet.clone())));
@@ -113,8 +97,8 @@ impl TxSigners<KabuDataTypesEthereum> {
     }
 }
 
-impl<LDT: KabuDataTypes> TxSigners<LDT> {
-    pub fn new() -> TxSigners<LDT> {
+impl<N: NodePrimitives> TxSigners<N> {
+    pub fn new() -> TxSigners<N> {
         TxSigners { signers: IndexMap::new() }
     }
 
@@ -126,7 +110,7 @@ impl<LDT: KabuDataTypes> TxSigners<LDT> {
         self.signers.is_empty()
     }
 
-    pub fn get_random_signer(&self) -> Option<Arc<dyn LoomTxSigner<LDT>>> {
+    pub fn get_random_signer(&self) -> Option<Arc<dyn LoomTxSigner<N>>> {
         if self.is_empty() {
             None
         } else {
@@ -134,14 +118,14 @@ impl<LDT: KabuDataTypes> TxSigners<LDT> {
             self.signers.values().choose(&mut rng).cloned()
         }
     }
-    pub fn get_signer_by_index(&self, index: usize) -> Result<Arc<dyn LoomTxSigner<LDT>>> {
+    pub fn get_signer_by_index(&self, index: usize) -> Result<Arc<dyn LoomTxSigner<N>>> {
         match self.signers.get_index(index) {
             Some((_, s)) => Ok(s.clone()),
             None => Err(eyre!("SIGNER_NOT_FOUND")),
         }
     }
 
-    pub fn get_signer_by_address(&self, address: &Address) -> Result<Arc<dyn LoomTxSigner<LDT>>> {
+    pub fn get_signer_by_address(&self, address: &Address) -> Result<Arc<dyn LoomTxSigner<N>>> {
         match self.signers.get(address) {
             Some(s) => Ok(s.clone()),
             None => Err(eyre!("SIGNER_NOT_FOUND")),
@@ -156,11 +140,10 @@ impl<LDT: KabuDataTypes> TxSigners<LDT> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use alloy_network::eip2718::Encodable2718;
     use alloy_primitives::{address, TxHash};
     use alloy_rpc_types::TransactionRequest;
     use eyre::Result;
-    use kabu_types_blockchain::KabuTx;
-    // TxSigner tests
 
     #[test]
     fn test_new_signer() {
@@ -187,9 +170,9 @@ mod tests {
             .with_max_fee_per_gas(1)
             .with_max_priority_fee_per_gas(1);
         let tx = signer.sign(tx_req).await?;
-        let tx_hash = tx.get_tx_hash();
-        let tx_rlp = tx.encode();
-        assert_eq!(tx_hash, TxHash::from(hex!("a43d09cb299eb6269f5a63fb10ea078c649cbf6a5f159cfd5b6f4be7ad0dfcfd")));
+        let tx_hash = tx.tx_hash();
+        let tx_rlp = tx.encoded_2718();
+        assert_eq!(tx_hash, &TxHash::from(hex!("a43d09cb299eb6269f5a63fb10ea078c649cbf6a5f159cfd5b6f4be7ad0dfcfd")));
         assert!(!tx_rlp.is_empty());
         Ok(())
     }
@@ -205,9 +188,9 @@ mod tests {
             .with_max_fee_per_gas(1)
             .with_max_priority_fee_per_gas(1);
         let tx = signer.sign_sync(tx_req)?;
-        let tx_hash = tx.get_tx_hash();
-        let tx_rlp = tx.encode();
-        assert_eq!(tx_hash, TxHash::from(hex!("a43d09cb299eb6269f5a63fb10ea078c649cbf6a5f159cfd5b6f4be7ad0dfcfd")));
+        let tx_hash = tx.tx_hash();
+        let tx_rlp = tx.encoded_2718();
+        assert_eq!(tx_hash, &TxHash::from(hex!("a43d09cb299eb6269f5a63fb10ea078c649cbf6a5f159cfd5b6f4be7ad0dfcfd")));
         assert!(!tx_rlp.is_empty());
         Ok(())
     }
@@ -216,7 +199,7 @@ mod tests {
 
     #[test]
     fn test_new_signers() {
-        let signers: TxSigners<KabuDataTypesEthereum> = TxSigners::new();
+        let signers: TxSigners<EthPrimitives> = TxSigners::new();
         assert!(signers.is_empty());
     }
 

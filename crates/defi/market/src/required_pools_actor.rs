@@ -16,24 +16,24 @@ use crate::pool_loader_actor::fetch_and_add_pool_by_pool_id;
 use kabu_core_blockchain::{Blockchain, BlockchainState};
 use kabu_evm_db::KabuDBError;
 use kabu_node_debug_provider::DebugProviderExt;
-use kabu_types_blockchain::KabuDataTypes;
 use kabu_types_market::required_state::{RequiredState, RequiredStateReader};
 use kabu_types_market::MarketState;
 use kabu_types_market::{Market, PoolClass, PoolId, PoolLoaders};
+use reth_node_types::NodePrimitives;
 
-async fn required_pools_loader_worker<P, N, DB, LDT>(
+async fn required_pools_loader_worker<P, N, DB, NP>(
     client: P,
-    pool_loaders: Arc<PoolLoaders<P, N, LDT>>,
+    pool_loaders: Arc<PoolLoaders<P, N, NP>>,
     pools: Vec<(PoolId, PoolClass)>,
     required_state: Option<RequiredState>,
     market: Arc<RwLock<Market>>,
     market_state: Arc<RwLock<MarketState<DB>>>,
 ) -> Result<String>
 where
-    N: Network<TransactionRequest = LDT::TransactionRequest>,
+    N: Network<TransactionRequest = alloy_rpc_types::TransactionRequest>,
     P: Provider<N> + DebugProviderExt<N> + Send + Sync + Clone + 'static,
     DB: Database<Error = KabuDBError> + DatabaseRef<Error = KabuDBError> + DatabaseCommit + Send + Sync + Clone + 'static,
-    LDT: KabuDataTypes + 'static,
+    NP: NodePrimitives + 'static,
 {
     for (pool_id, pool_class) in pools {
         debug!(class=%pool_class, %pool_id, "Loading pool");
@@ -74,22 +74,22 @@ where
     // }
 
     if let Some(required_state) = required_state {
-        let update = RequiredStateReader::<LDT>::fetch_calls_and_slots(client.clone(), required_state, None).await?;
+        let update = RequiredStateReader::fetch_calls_and_slots(client.clone(), required_state, None).await?;
         market_state.write().await.apply_geth_update(update);
     }
 
     Ok("required_pools_loader_worker".to_string())
 }
 
-pub struct RequiredPoolLoaderActor<P, N, DB, LDT>
+pub struct RequiredPoolLoaderActor<P, N, DB, NP>
 where
     N: Network,
     P: Provider<N> + DebugProviderExt<N> + Send + Sync + Clone + 'static,
     DB: Database + DatabaseRef + DatabaseCommit + Clone + Send + Sync + 'static,
-    LDT: KabuDataTypes + 'static,
+    NP: NodePrimitives + 'static,
 {
     client: P,
-    pool_loaders: Arc<PoolLoaders<P, N, LDT>>,
+    pool_loaders: Arc<PoolLoaders<P, N, NP>>,
     pools: Vec<(PoolId, PoolClass)>,
     required_state: Option<RequiredState>,
 
@@ -99,14 +99,14 @@ where
     _n: PhantomData<N>,
 }
 
-impl<P, N, DB, LDT> RequiredPoolLoaderActor<P, N, DB, LDT>
+impl<P, N, DB, NP> RequiredPoolLoaderActor<P, N, DB, NP>
 where
     N: Network,
     P: Provider<N> + DebugProviderExt<N> + Send + Sync + Clone + 'static,
     DB: Database + DatabaseRef + DatabaseCommit + Clone + Send + Sync + 'static,
-    LDT: KabuDataTypes + 'static,
+    NP: NodePrimitives + 'static,
 {
-    pub fn new(client: P, pool_loaders: Arc<PoolLoaders<P, N, LDT>>) -> Self {
+    pub fn new(client: P, pool_loaders: Arc<PoolLoaders<P, N, NP>>) -> Self {
         Self { client, pools: Vec::new(), pool_loaders, required_state: None, market: None, market_state: None, _n: PhantomData }
     }
 
@@ -116,7 +116,7 @@ where
         Self { pools, ..self }
     }
 
-    pub fn on_bc(self, bc: &Blockchain<LDT>, state: &BlockchainState<DB, LDT>) -> Self {
+    pub fn on_bc(self, bc: &Blockchain<NP>, state: &BlockchainState<DB, NP>) -> Self {
         Self { market: Some(bc.market()), market_state: Some(state.market_state_commit()), ..self }
     }
 
@@ -125,12 +125,12 @@ where
     }
 }
 
-impl<P, N, DB, LDT> Component for RequiredPoolLoaderActor<P, N, DB, LDT>
+impl<P, N, DB, NP> Component for RequiredPoolLoaderActor<P, N, DB, NP>
 where
-    N: Network<TransactionRequest = LDT::TransactionRequest>,
+    N: Network<TransactionRequest = alloy_rpc_types::TransactionRequest>,
     P: Provider<N> + DebugProviderExt<N> + Send + Sync + Clone + 'static,
     DB: Database<Error = KabuDBError> + DatabaseRef<Error = KabuDBError> + DatabaseCommit + Send + Sync + Clone + 'static,
-    LDT: KabuDataTypes + 'static,
+    NP: NodePrimitives + 'static,
 {
     fn spawn(self, executor: TaskExecutor) -> Result<()> {
         let _name = self.name();

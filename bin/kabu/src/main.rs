@@ -18,7 +18,6 @@ use kabu::node::debug_provider::DebugProviderExt;
 use kabu::node::exex::mempool_worker;
 use kabu::storage::db::init_db_pool_with_migrations;
 use kabu::strategy::backrun::{BackrunConfig, BackrunConfigSection};
-use kabu::types::blockchain::KabuDataTypesEthereum;
 use kabu::types::entities::strategy_config::load_from_file;
 use kabu_core_node::{KabuBuildContext, KabuEthereumNode};
 use kabu_node_reth_api::{chain_notifications_forwarder, KabuRethFullProvider};
@@ -70,7 +69,7 @@ fn main() -> eyre::Result<()> {
                 ProviderBuilder::new().disable_recommended_fillers().connect_ipc(IpcConnect::new(node.config.rpc.ipcpath)).await?;
             let alloy_db = AlloyDB::new(ipc_provider.clone(), BlockId::latest()).unwrap();
             let state_db = KabuDB::new().with_ext_db(alloy_db);
-            let bc_state = BlockchainState::<KabuDB, KabuDataTypesEthereum>::new_with_market_state(MarketState::new(state_db));
+            let bc_state = BlockchainState::<KabuDB, EthPrimitives>::new_with_market_state(MarketState::new(state_db));
 
             // Start Kabu MEV components
             let task_executor = node.task_executor.clone();
@@ -139,7 +138,7 @@ fn main() -> eyre::Result<()> {
                 let bc = Blockchain::new(Chain::mainnet().id());
                 let bc_clone = bc.clone();
 
-                let bc_state = BlockchainState::<KabuDB, KabuDataTypesEthereum>::new();
+                let bc_state = BlockchainState::<KabuDB, EthPrimitives>::new();
 
                 let task_manager = TaskManager::new(tokio::runtime::Handle::current());
                 let task_executor = task_manager.executor();
@@ -176,7 +175,7 @@ async fn start_kabu_mev<RethProvider, RpcProvider, Types, DB, EvmConfig>(
     provider: RpcProvider,
     evm_config: EvmConfig,
     bc: Blockchain,
-    bc_state: BlockchainState<KabuDB, KabuDataTypesEthereum>,
+    bc_state: BlockchainState<KabuDB, EthPrimitives>,
     topology_config: TopologyConfig,
     kabu_config_filepath: String,
     is_exex: bool,
@@ -246,7 +245,7 @@ where
     if let Ok(key) = std::env::var("DATA") {
         info!("Initializing signers from DATA environment variable");
         let private_key_encrypted = hex::decode(key)?;
-        let signer_initializer = InitializeSignersOneShotBlockingComponent::<KabuDataTypesEthereum>::new(Some(private_key_encrypted))
+        let signer_initializer = InitializeSignersOneShotBlockingComponent::<EthPrimitives>::new(Some(private_key_encrypted))
             .with_signers(signers)
             .with_monitor(account_state);
 

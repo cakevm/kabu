@@ -6,7 +6,6 @@ use kabu_defi_pools::{UniswapV2Pool, UniswapV3Pool};
 use kabu_evm_db::KabuDBType;
 use kabu_node_debug_provider::AnvilDebugProviderFactory;
 use kabu_strategy_backrun::SwapCalculator;
-use kabu_types_blockchain::KabuDataTypesEthereum;
 use kabu_types_market::required_state::RequiredStateReader;
 use kabu_types_market::swap_path::SwapPath;
 use kabu_types_market::{Market, PoolClass, PoolId, PoolWrapper, Token};
@@ -48,9 +47,7 @@ pub fn bench_swap_calculator(c: &mut Criterion) {
                 }
 
                 let state_required = pool.get_state_required()?;
-                let state_update =
-                    RequiredStateReader::<KabuDataTypesEthereum>::fetch_calls_and_slots(client.clone(), state_required, Some(block_number))
-                        .await?;
+                let state_update = RequiredStateReader::fetch_calls_and_slots(client.clone(), state_required, Some(block_number)).await?;
                 state_db.apply_geth_update(state_update);
                 let _ = market.add_pool(pool);
             }

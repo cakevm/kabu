@@ -28,14 +28,19 @@ tokio.workspace = true
 toml.workspace = true
 tracing.workspace = true
 
+# alloy
 alloy-consensus.workspace = true
-alloy-json-rpc.workspace = true
 alloy-network.workspace = true
 alloy-primitives.workspace = true
 alloy-provider.workspace = true
 alloy-rpc-types.workspace = true
 alloy-signer-local.workspace = true
 
+# reth
+reth-ethereum-primitives.workspace = true
+reth-node-types.workspace = true
+reth-primitives-traits.workspace = true
+reth-rpc-convert.workspace = true
 
 [build-dependencies]
 hex.workspace = true

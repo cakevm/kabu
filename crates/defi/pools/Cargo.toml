@@ -30,6 +30,10 @@ tracing.workspace = true
 alloy.workspace = true
 alloy-evm.workspace = true
 
+# reth
+reth-ethereum-primitives.workspace = true
+reth-node-types.workspace = true
+
 [features]
 debug-calculation = []
 

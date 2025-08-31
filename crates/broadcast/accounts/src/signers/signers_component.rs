@@ -9,15 +9,16 @@ use alloy_primitives::{Address, U256};
 use alloy_provider::Provider;
 
 use kabu_core_components::Component;
-use kabu_types_blockchain::{KabuDataTypes, KabuDataTypesEthereum};
 use kabu_types_entities::{AccountNonceAndBalanceState, TxSigners};
 use kabu_types_events::{MessageSwapCompose, SwapComposeMessage};
 use kabu_types_swap::Swap;
+use reth_ethereum_primitives::EthPrimitives;
+use reth_node_types::NodePrimitives;
 use reth_tasks::TaskExecutor;
 use revm::DatabaseRef;
 
 /// Component that handles transaction signing for MEV bot operations
-pub struct SignersComponent<P, N, DB: Send + Sync + Clone + 'static, LDT: KabuDataTypes + 'static = KabuDataTypesEthereum> {
+pub struct SignersComponent<P, N, DB: Send + Sync + Clone + 'static, LDT: NodePrimitives + 'static = EthPrimitives> {
     /// JSON-RPC provider for chain interactions
     client: P,
     /// Transaction signers with private keys
@@ -39,7 +40,7 @@ where
     P: Provider<N> + Send + Sync + Clone + 'static,
     N: Network + 'static,
     DB: DatabaseRef + Send + Sync + Clone + 'static,
-    LDT: KabuDataTypes + 'static,
+    LDT: NodePrimitives + 'static,
 {
     pub fn new(
         client: P,
@@ -117,7 +118,7 @@ where
 }
 
 /// Standalone helper function to receive swap compose messages
-async fn recv_swap_compose_msg<DB: Send + Sync + Clone + 'static, LDT: KabuDataTypes>(
+async fn recv_swap_compose_msg<DB: Send + Sync + Clone + 'static, LDT: NodePrimitives>(
     swap_compose_rx: &mut Option<broadcast::Receiver<MessageSwapCompose<DB, LDT>>>,
 ) -> Option<MessageSwapCompose<DB, LDT>> {
     if let Some(ref mut rx) = swap_compose_rx {
@@ -152,7 +153,7 @@ where
     P: Provider<N> + Send + Sync + Clone + 'static,
     N: Network + 'static,
     DB: DatabaseRef + Send + Sync + Clone + 'static,
-    LDT: KabuDataTypes + 'static,
+    LDT: NodePrimitives + 'static,
 {
     // Only process messages that are ready for signing
     let swap_compose_data = match &swap_compose_msg.inner {
@@ -218,7 +219,7 @@ where
 }
 
 /// Select the most appropriate signer for a given swap
-async fn select_signer_for_swap<LDT: KabuDataTypes>(
+async fn select_signer_for_swap<LDT: NodePrimitives>(
     signers: &Arc<RwLock<TxSigners<LDT>>>,
     account_state: &Arc<RwLock<AccountNonceAndBalanceState>>,
     _swap: &Swap,
@@ -261,7 +262,7 @@ where
     P: Provider<N> + Send + Sync + Clone + 'static,
     N: Network + 'static,
     DB: DatabaseRef + Send + Sync + Clone + 'static,
-    LDT: KabuDataTypes + 'static,
+    LDT: NodePrimitives + 'static,
 {
     fn spawn(self, executor: TaskExecutor) -> Result<()> {
         executor.spawn_critical(self.name(), async move {
@@ -303,7 +304,7 @@ impl SignersComponentBuilder {
         P: Provider<N> + Send + Sync + Clone + 'static,
         N: Network + 'static,
         DB: DatabaseRef + Send + Sync + Clone + 'static,
-        LDT: KabuDataTypes + 'static,
+        LDT: NodePrimitives + 'static,
     {
         SignersComponent::new(client, signers, account_state, self.gas_price_buffer)
     }

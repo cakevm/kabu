@@ -5,13 +5,13 @@ use tokio::sync::{broadcast, RwLock};
 use tracing::{debug, error, info};
 
 use kabu_core_components::Component;
-use kabu_types_blockchain::{KabuDataTypes, KabuDataTypesEthereum};
 use kabu_types_entities::{AccountNonceAndBalanceState, TxSigners};
 use kabu_types_events::{MessageSwapCompose, SwapComposeData, SwapComposeMessage, TxComposeData};
+use reth_node_types::NodePrimitives;
 use revm::DatabaseRef;
 
 /// Swap router component that handles routing of swap requests
-pub struct SwapRouterComponent<DB: Send + Sync + Clone + 'static, LDT: KabuDataTypes + 'static = KabuDataTypesEthereum> {
+pub struct SwapRouterComponent<DB: Send + Sync + Clone + 'static, LDT: NodePrimitives + 'static = reth_ethereum_primitives::EthPrimitives> {
     signers: Arc<RwLock<TxSigners<LDT>>>,
     account_nonce_balance: Arc<RwLock<AccountNonceAndBalanceState>>,
     swap_compose_rx: broadcast::Receiver<MessageSwapCompose<DB, LDT>>,
@@ -21,7 +21,7 @@ pub struct SwapRouterComponent<DB: Send + Sync + Clone + 'static, LDT: KabuDataT
 impl<DB, LDT> SwapRouterComponent<DB, LDT>
 where
     DB: DatabaseRef + Send + Sync + Clone + 'static,
-    LDT: KabuDataTypes + 'static,
+    LDT: NodePrimitives + 'static,
 {
     pub fn new(
         signers: Arc<RwLock<TxSigners<LDT>>>,
@@ -89,7 +89,7 @@ where
 impl<DB, LDT> Component for SwapRouterComponent<DB, LDT>
 where
     DB: DatabaseRef + Send + Sync + Clone + 'static,
-    LDT: KabuDataTypes + 'static,
+    LDT: NodePrimitives + 'static,
 {
     fn spawn(self, executor: TaskExecutor) -> Result<()> {
         executor.spawn_critical(self.name(), async move {
@@ -122,7 +122,7 @@ impl SwapRouterComponentBuilder {
     ) -> SwapRouterComponent<DB, LDT>
     where
         DB: DatabaseRef + Send + Sync + Clone + 'static,
-        LDT: KabuDataTypes + 'static,
+        LDT: NodePrimitives + 'static,
     {
         SwapRouterComponent::new(signers, account_nonce_balance, swap_compose_tx)
     }

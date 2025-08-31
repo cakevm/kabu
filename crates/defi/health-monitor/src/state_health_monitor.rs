@@ -15,9 +15,9 @@ use tracing::{error, info, warn};
 
 use kabu_core_blockchain::{Blockchain, BlockchainState};
 use kabu_evm_db::DatabaseKabuExt;
-use kabu_types_blockchain::KabuDataTypes;
 use kabu_types_events::{MarketEvents, MessageTxCompose, TxComposeMessageType};
 use kabu_types_market::{MarketState, PoolId};
+use reth_node_types::NodePrimitives;
 use revm::DatabaseRef;
 
 async fn verify_pool_state_task<P: Provider<Ethereum> + 'static, DB: DatabaseKabuExt>(
@@ -147,7 +147,7 @@ where
         StateHealthMonitorActor { client, market_state: None, tx_compose_channel_rx: None, market_events_rx: None }
     }
 
-    pub fn on_bc<LDT: KabuDataTypes>(self, bc: &Blockchain, state: &BlockchainState<DB, LDT>) -> Self {
+    pub fn on_bc<NP: NodePrimitives>(self, bc: &Blockchain, state: &BlockchainState<DB, NP>) -> Self {
         Self {
             market_state: Some(state.market_state()),
             tx_compose_channel_rx: Some(bc.tx_compose_channel()),

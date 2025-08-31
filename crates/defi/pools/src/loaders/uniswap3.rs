@@ -7,9 +7,9 @@ use eyre::eyre;
 use futures::Stream;
 use kabu_defi_abi::uniswap3::IUniswapV3Pool::IUniswapV3PoolEvents;
 use kabu_evm_db::KabuDBError;
-use kabu_types_blockchain::{KabuDataTypes, KabuDataTypesEthereum};
 use kabu_types_market::PoolClass;
 use kabu_types_market::{get_protocol_by_factory, PoolId, PoolLoader, PoolProtocol, PoolWrapper};
+use reth_ethereum_primitives::EthPrimitives;
 use revm::DatabaseRef;
 use std::future::Future;
 use std::pin::Pin;
@@ -22,7 +22,7 @@ impl<P, N, LDT> PoolLoader<P, N, LDT> for UniswapV3PoolLoader<P, N, LDT>
 where
     N: Network,
     P: Provider<N> + Clone + 'static,
-    LDT: KabuDataTypes + 'static,
+    LDT: Send + Sync + 'static,
 {
     fn get_pool_class_by_log(&self, log_entry: &Log) -> Option<(PoolId, PoolClass)> {
         let log_entry: Option<Log> = Log::new(log_entry.address, log_entry.data.topics().to_vec(), log_entry.data.data.clone());

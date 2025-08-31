@@ -1,5 +1,5 @@
 [workspace]
-default-members = ["bin/kabu", "bin/keys", "testing/backtest-runner", "testing/gasbench", "testing/nodebench", "testing/replayer"]
+default-members = ["bin/kabu", "bin/keys", "testing/backtest-runner"]
 members = [
   "bin/kabu",
   "bin/keys",
@@ -29,7 +29,6 @@ members = [
   "crates/node/exex",
   "crates/node/json-rpc",
   "crates/node/node-config",
-  "crates/node/node-player",
   "crates/node/reth-api",
   "crates/rpc/handler",
   "crates/rpc/state",
@@ -42,9 +41,6 @@ members = [
   "crates/types/market",
   "crates/types/swap",
   "testing/backtest-runner",
-  "testing/gasbench",
-  "testing/nodebench",
-  "testing/replayer",
 ]
 resolver = "2"
 
@@ -93,7 +89,6 @@ kabu-node-config = { path = "crates/node/node-config" }
 kabu-node-debug-provider = { path = "crates/node/debug-provider" }
 kabu-node-exex = { path = "crates/node/exex" }
 kabu-node-json-rpc = { path = "crates/node/json-rpc" }
-kabu-node-player = { path = "crates/node/node-player" }
 kabu-node-reth-api = { path = "crates/node/reth-api" }
 # rpc
 kabu-rpc-handler = { path = "crates/rpc/handler" }
@@ -239,6 +234,7 @@ reth-primitives = { git = "https://github.com/paradigmxyz/reth", rev = "ce2ce23"
 reth-primitives-traits = { git = "https://github.com/paradigmxyz/reth", rev = "ce2ce23" }
 reth-provider = { git = "https://github.com/paradigmxyz/reth", rev = "ce2ce23" }
 reth-revm = { git = "https://github.com/paradigmxyz/reth", rev = "ce2ce23" }
+reth-rpc-convert = { git = "https://github.com/paradigmxyz/reth", rev = "ce2ce23" }
 reth-rpc-eth-types = { git = "https://github.com/paradigmxyz/reth", rev = "ce2ce23" }
 reth-storage-api = { git = "https://github.com/paradigmxyz/reth", rev = "ce2ce23" }
 reth-storage-rpc-provider = { git = "https://github.com/paradigmxyz/reth", rev = "ce2ce23" }

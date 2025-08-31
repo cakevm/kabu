@@ -1,29 +1,31 @@
 use eyre::Result;
 use kabu_core_components::Component;
-use kabu_types_blockchain::{ChainParameters, KabuDataTypes, Mempool};
+use kabu_types_blockchain::{ChainParameters, Mempool};
 use kabu_types_events::{MempoolEvents, MessageBlock, MessageBlockHeader, MessageMempoolDataUpdate};
+use reth_ethereum_primitives::EthPrimitives;
+use reth_node_types::NodePrimitives;
 use reth_tasks::TaskExecutor;
 use std::sync::Arc;
 use tokio::sync::{broadcast, RwLock};
 use tracing::{error, info};
 
-pub struct MempoolComponent<LDT: KabuDataTypes> {
+pub struct MempoolComponent<N: NodePrimitives = EthPrimitives> {
     chain_parameters: ChainParameters,
-    mempool: Arc<RwLock<Mempool<LDT>>>,
-    mempool_update_rx: broadcast::Receiver<MessageMempoolDataUpdate<LDT>>,
-    block_header_rx: broadcast::Receiver<MessageBlockHeader<LDT>>,
-    block_with_txs_rx: broadcast::Receiver<MessageBlock<LDT>>,
+    mempool: Arc<RwLock<Mempool<N>>>,
+    mempool_update_rx: broadcast::Receiver<MessageMempoolDataUpdate<N>>,
+    block_header_rx: broadcast::Receiver<MessageBlockHeader<N>>,
+    block_with_txs_rx: broadcast::Receiver<MessageBlock<N>>,
     mempool_events_tx: broadcast::Sender<MempoolEvents>,
     influxdb_tx: Option<broadcast::Sender<influxdb::WriteQuery>>,
 }
 
-impl<LDT: KabuDataTypes> MempoolComponent<LDT> {
+impl<N: NodePrimitives> MempoolComponent<N> {
     pub fn new(
         chain_parameters: ChainParameters,
-        mempool: Arc<RwLock<Mempool<LDT>>>,
-        mempool_update_rx: broadcast::Receiver<MessageMempoolDataUpdate<LDT>>,
-        block_header_rx: broadcast::Receiver<MessageBlockHeader<LDT>>,
-        block_with_txs_rx: broadcast::Receiver<MessageBlock<LDT>>,
+        mempool: Arc<RwLock<Mempool<N>>>,
+        mempool_update_rx: broadcast::Receiver<MessageMempoolDataUpdate<N>>,
+        block_header_rx: broadcast::Receiver<MessageBlockHeader<N>>,
+        block_with_txs_rx: broadcast::Receiver<MessageBlock<N>>,
         mempool_events_tx: broadcast::Sender<MempoolEvents>,
         influxdb_tx: Option<broadcast::Sender<influxdb::WriteQuery>>,
     ) -> Self {
@@ -31,7 +33,7 @@ impl<LDT: KabuDataTypes> MempoolComponent<LDT> {
     }
 }
 
-impl<LDT: KabuDataTypes + 'static> Component for MempoolComponent<LDT> {
+impl<N: NodePrimitives + 'static> Component for MempoolComponent<N> {
     fn spawn(self, executor: TaskExecutor) -> Result<()> {
         let name = self.name();
 

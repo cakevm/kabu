@@ -4,11 +4,13 @@ use kabu_core_components::Component;
 use std::sync::Arc;
 use tokio::sync::{broadcast, RwLock};
 
+use alloy_consensus::BlockHeader as AlloyBlockHeader;
 use kabu_core_blockchain::{Blockchain, BlockchainState};
 use kabu_evm_db::DatabaseKabuExt;
-use kabu_types_blockchain::KabuDataTypes;
 use kabu_types_events::MessageBlockHeader;
 use kabu_types_market::{Market, MarketState};
+use reth_node_types::NodePrimitives;
+use reth_primitives_traits::BlockHeader;
 use reth_tasks::TaskExecutor;
 use revm::DatabaseRef;
 use std::time::Duration;
@@ -16,12 +18,15 @@ use tikv_jemalloc_ctl::stats;
 use tokio::sync::broadcast::error::RecvError;
 use tracing::{error, info};
 
-async fn metrics_recorder_worker<DB: DatabaseKabuExt + DatabaseRef + Send + Sync + 'static, LDT: KabuDataTypes>(
+async fn metrics_recorder_worker<DB: DatabaseKabuExt + DatabaseRef + Send + Sync + 'static, NP: NodePrimitives>(
     market: Arc<RwLock<Market>>,
     market_state: Arc<RwLock<MarketState<DB>>>,
-    block_header_update_rx: broadcast::Sender<MessageBlockHeader<LDT>>,
+    block_header_update_rx: broadcast::Sender<MessageBlockHeader<NP>>,
     influx_channel_tx: Option<broadcast::Sender<WriteQuery>>,
-) -> Result<()> {
+) -> Result<()>
+where
+    NP::BlockHeader: BlockHeader,
+{
     let mut block_header_update_receiver = block_header_update_rx.subscribe();
     loop {
         let block_header = match block_header_update_receiver.recv().await {
@@ -39,7 +44,7 @@ async fn metrics_recorder_worker<DB: DatabaseKabuExt + DatabaseRef + Send + Sync
         };
 
         let current_timestamp = chrono::Utc::now();
-        let block_latency = current_timestamp.timestamp() as f64 - block_header.inner.header.timestamp as f64;
+        let block_latency = current_timestamp.timestamp() as f64 - block_header.inner.header.timestamp() as f64;
 
         // check if we received twice the same block number
 
@@ -59,7 +64,7 @@ async fn metrics_recorder_worker<DB: DatabaseKabuExt + DatabaseRef + Send + Sync
 
         let influx_channel_clone = influx_channel_tx.clone();
 
-        let block_number = block_header.inner.header.number;
+        let block_number = block_header.inner.header.number();
 
         if let Some(influx_tx) = influx_channel_clone {
             if let Err(e) = tokio::time::timeout(Duration::from_secs(2), async move {
@@ -127,36 +132,36 @@ async fn metrics_recorder_worker<DB: DatabaseKabuExt + DatabaseRef + Send + Sync
     }
 }
 
-pub struct MetricsRecorderActor<DB: Clone + Send + Sync + 'static, LDT: KabuDataTypes + 'static> {
+pub struct MetricsRecorderActor<DB: Clone + Send + Sync + 'static, NP: NodePrimitives + 'static> {
     market: Option<Arc<RwLock<Market>>>,
 
     market_state: Option<Arc<RwLock<MarketState<DB>>>>,
 
-    block_header_rx: Option<broadcast::Sender<MessageBlockHeader<LDT>>>,
+    block_header_rx: Option<broadcast::Sender<MessageBlockHeader<NP>>>,
 
     influxdb_write_channel_tx: Option<broadcast::Sender<WriteQuery>>,
 }
 
-impl<DB, LDT> Default for MetricsRecorderActor<DB, LDT>
+impl<DB, NP> Default for MetricsRecorderActor<DB, NP>
 where
     DB: DatabaseRef + DatabaseKabuExt + Clone + Send + Sync + 'static,
-    LDT: KabuDataTypes + 'static,
+    NP: NodePrimitives + 'static,
 {
     fn default() -> Self {
         Self::new()
     }
 }
 
-impl<DB, LDT> MetricsRecorderActor<DB, LDT>
+impl<DB, NP> MetricsRecorderActor<DB, NP>
 where
     DB: DatabaseRef + DatabaseKabuExt + Clone + Send + Sync + 'static,
-    LDT: KabuDataTypes + 'static,
+    NP: NodePrimitives + 'static,
 {
     pub fn new() -> Self {
         Self { market: None, market_state: None, block_header_rx: None, influxdb_write_channel_tx: None }
     }
 
-    pub fn on_bc(self, bc: &Blockchain<LDT>, bc_state: &BlockchainState<DB, LDT>) -> Self {
+    pub fn on_bc(self, bc: &Blockchain<NP>, bc_state: &BlockchainState<DB, NP>) -> Self {
         Self {
             market: Some(bc.market()),
             market_state: Some(bc_state.market_state()),
@@ -166,10 +171,10 @@ where
     }
 }
 
-impl<DB, LDT> Component for MetricsRecorderActor<DB, LDT>
+impl<DB, NP> Component for MetricsRecorderActor<DB, NP>
 where
     DB: DatabaseRef + DatabaseKabuExt + Clone + Send + Sync + 'static,
-    LDT: KabuDataTypes + 'static,
+    NP: NodePrimitives + 'static,
 {
     fn spawn(self, executor: TaskExecutor) -> Result<()> {
         let name = self.name();

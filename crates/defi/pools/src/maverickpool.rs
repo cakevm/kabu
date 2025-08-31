@@ -444,7 +444,6 @@ mod tests {
     use kabu_defi_abi::maverick::IMaverickQuoter::IMaverickQuoterInstance;
     use kabu_evm_db::KabuDBType;
     use kabu_node_debug_provider::AnvilDebugProviderFactory;
-    use kabu_types_blockchain::KabuDataTypesEthereum;
     use kabu_types_market::RequiredStateReader;
     use revm::database::CacheDB;
     use std::env;
@@ -466,8 +465,7 @@ mod tests {
 
         let state_required = pool.get_state_required()?;
 
-        let state_required =
-            RequiredStateReader::<KabuDataTypesEthereum>::fetch_calls_and_slots(client.clone(), state_required, Some(20045799)).await?;
+        let state_required = RequiredStateReader::fetch_calls_and_slots(client.clone(), state_required, Some(20045799)).await?;
         debug!("{:?}", state_required);
 
         let block_number = 20045799u64;

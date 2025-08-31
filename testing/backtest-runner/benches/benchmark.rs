@@ -22,7 +22,6 @@ use kabu::evm::db::{KabuDB, KabuDBType};
 use kabu::node::debug_provider::AnvilDebugProviderFactory;
 use kabu::types::market::required_state::RequiredStateReader;
 use kabu::types::market::{MarketState, Pool, PoolWrapper};
-use kabu_types_blockchain::KabuDataTypesEthereum;
 
 #[allow(dead_code)]
 async fn performance_test() {
@@ -68,8 +67,7 @@ async fn fetch_data_and_pool() -> Result<(MarketState<KabuDB>, PoolWrapper)> {
 
     let state_required = pool.get_state_required()?;
 
-    let state_required =
-        RequiredStateReader::<KabuDataTypesEthereum>::fetch_calls_and_slots(client.clone(), state_required, Some(block_number)).await?;
+    let state_required = RequiredStateReader::fetch_calls_and_slots(client.clone(), state_required, Some(block_number)).await?;
 
     market_state.state_db.apply_geth_update(state_required);
 

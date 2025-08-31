@@ -6,12 +6,13 @@ use tokio::sync::RwLock;
 use tracing::info;
 
 use kabu_core_blockchain::Blockchain;
-use kabu_types_blockchain::{KabuDataTypes, KabuDataTypesEthereum};
 use kabu_types_entities::{AccountNonceAndBalanceState, KeyStore, LoomTxSigner, TxSigners};
+use reth_ethereum_primitives::EthPrimitives;
+use reth_node_types::NodePrimitives;
 
 /// The one-shot component adds a new signer to the signers and monitor list after and stops.
 #[derive(Clone)]
-pub struct InitializeSignersOneShotBlockingComponent<LDT: KabuDataTypes> {
+pub struct InitializeSignersOneShotBlockingComponent<LDT: NodePrimitives> {
     key: Option<Vec<u8>>,
     signers: Option<Arc<RwLock<TxSigners<LDT>>>>,
     monitor: Option<Arc<RwLock<AccountNonceAndBalanceState>>>,
@@ -19,7 +20,7 @@ pub struct InitializeSignersOneShotBlockingComponent<LDT: KabuDataTypes> {
 
 async fn initialize_signers_one_shot_worker(
     key: Vec<u8>,
-    signers: Arc<RwLock<TxSigners<KabuDataTypesEthereum>>>,
+    signers: Arc<RwLock<TxSigners<EthPrimitives>>>,
     monitor: Arc<RwLock<AccountNonceAndBalanceState>>,
 ) -> eyre::Result<()> {
     let new_signer = signers.write().await.add_privkey(Bytes::from(key));
@@ -28,7 +29,7 @@ async fn initialize_signers_one_shot_worker(
     Ok(())
 }
 
-impl<LDT: KabuDataTypes> InitializeSignersOneShotBlockingComponent<LDT> {
+impl<LDT: NodePrimitives> InitializeSignersOneShotBlockingComponent<LDT> {
     pub fn new(key: Option<Vec<u8>>) -> InitializeSignersOneShotBlockingComponent<LDT> {
         let key = key.unwrap_or_else(|| B256::random().to_vec());
 
@@ -68,7 +69,7 @@ impl<LDT: KabuDataTypes> InitializeSignersOneShotBlockingComponent<LDT> {
     }
 }
 
-impl Component for InitializeSignersOneShotBlockingComponent<KabuDataTypesEthereum> {
+impl Component for InitializeSignersOneShotBlockingComponent<EthPrimitives> {
     fn spawn(self, executor: reth_tasks::TaskExecutor) -> eyre::Result<()> {
         let name = self.name();
         let key = self.key.ok_or_else(|| eyre!("No signer keys found"))?;

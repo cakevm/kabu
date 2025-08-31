@@ -206,7 +206,7 @@ where
 
     let mut tx_with_state: Vec<TxState> = stuffing_txs_rlp.into_iter().map(TxState::ReadyForBroadcastStuffing).collect();
 
-    tx_with_state.push(TxState::SignatureRequired(tx_request));
+    tx_with_state.push(TxState::SignatureRequired(Box::new(tx_request)));
 
     let total_tips = tips_vec.into_iter().map(|v| v.tips).sum();
     let profit_eth = estimate_request.swap.arb_profit_eth();

@@ -5,6 +5,7 @@ use axum::{
 };
 
 use crate::dto::block::{BlockHeader, WebSocketMessage};
+use alloy_consensus::BlockHeader as AlloyBlockHeader;
 use kabu_rpc_state::AppState;
 use kabu_types_blockchain::ChainParameters;
 use revm::{DatabaseCommit, DatabaseRef};
@@ -32,11 +33,14 @@ async fn on_upgrade<DB: DatabaseRef + DatabaseCommit + Send + Sync + Clone + 'st
     let mut receiver = app_state.bc.new_block_headers_channel().subscribe();
 
     while let Ok(header) = receiver.recv().await {
+        let gas_used = header.inner.header.gas_used();
+        let gas_limit = header.inner.header.gas_limit();
+        let base_fee = header.inner.header.base_fee_per_gas().unwrap_or_default();
         let ws_msg = WebSocketMessage::BlockHeader(BlockHeader {
-            number: header.inner.header.number,
-            timestamp: header.inner.header.timestamp,
-            base_fee_per_gas: header.inner.header.base_fee_per_gas,
-            next_block_base_fee: ChainParameters::ethereum().calc_next_block_base_fee_from_header(&header.inner.header),
+            number: header.inner.header.number(),
+            timestamp: header.inner.header.timestamp(),
+            base_fee_per_gas: header.inner.header.base_fee_per_gas(),
+            next_block_base_fee: ChainParameters::ethereum().calc_next_block_base_fee(gas_used, gas_limit, base_fee),
         });
         match serde_json::to_string(&ws_msg) {
             Ok(json) => {

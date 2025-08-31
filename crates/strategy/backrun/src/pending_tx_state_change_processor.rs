@@ -1,10 +1,11 @@
+use alloy_consensus::Transaction as _;
 use alloy_eips::BlockNumberOrTag;
 use alloy_evm::EvmEnv;
 use alloy_network::Network;
 use alloy_primitives::{Address, BlockNumber, TxHash, U256};
 use alloy_provider::Provider;
 use alloy_rpc_types::state::StateOverride;
-use alloy_rpc_types::BlockOverrides;
+use alloy_rpc_types::{BlockOverrides, TransactionInput, TransactionRequest};
 use alloy_rpc_types_trace::geth::GethDebugTracingCallOptions;
 use eyre::{eyre, Result};
 use kabu_core_components::Component;
@@ -22,10 +23,12 @@ use tracing::{debug, error, warn};
 
 use kabu_core_blockchain::{Blockchain, BlockchainState, Strategy};
 use kabu_node_debug_provider::DebugProviderExt;
-use kabu_types_blockchain::{debug_trace_call_diff, GethStateUpdateVec, KabuDataTypes, KabuTx, Mempool, TRACING_CALL_OPTS};
+use kabu_types_blockchain::{debug_trace_call_diff, GethStateUpdateVec, Mempool, TRACING_CALL_OPTS};
 use kabu_types_events::{MarketEvents, MempoolEvents, StateUpdateEvent};
 use kabu_types_market::{accounts_vec_len, storage_vec_len};
 use kabu_types_market::{Market, MarketState};
+use reth_node_types::NodePrimitives;
+use reth_primitives_traits::{SignedTransaction, SignerRecoverable};
 use reth_tasks::TaskExecutor;
 
 use super::affected_pools_code::{get_affected_pools_from_code, is_pool_code};
@@ -51,10 +54,10 @@ pub async fn pending_tx_state_change_task<P, N, DB, LDT>(
     state_updates_broadcaster: broadcast::Sender<StateUpdateEvent<DB, LDT>>,
 ) -> Result<()>
 where
-    N: Network<TransactionRequest = LDT::TransactionRequest>,
+    N: Network<TransactionRequest = alloy_rpc_types::TransactionRequest>,
     P: Provider<N> + DebugProviderExt<N> + Send + Sync + Clone + 'static,
     DB: DatabaseRef + Database + DatabaseCommit + Clone + Send + Sync + 'static,
-    LDT: KabuDataTypes + 'static,
+    LDT: NodePrimitives + 'static,
 {
     let mut state_update_vec: GethStateUpdateVec = Vec::new();
     let mut state_required_vec: GethStateUpdateVec = Vec::new();
@@ -73,7 +76,18 @@ where
 
     let source = mempool_tx.source.clone();
 
-    let transaction_request: LDT::TransactionRequest = tx.to_transaction_request();
+    // Convert transaction to TransactionRequest
+    // Extract the signer using recover_signer() for the from address
+    let from = tx.recover_signer().map_err(|e| eyre!("Failed to recover signer: {}", e))?;
+    let transaction_request = TransactionRequest::default()
+        .from(from)
+        .to(tx.to().unwrap_or_default())
+        .value(tx.value())
+        .input(TransactionInput::new(tx.input().clone()))
+        .nonce(tx.nonce())
+        .gas_limit(tx.gas_limit())
+        .max_fee_per_gas(tx.max_fee_per_gas())
+        .max_priority_fee_per_gas(tx.max_priority_fee_per_gas().unwrap_or_default());
 
     // let transaction_type = transaction_request.transaction_type.unwrap_or_default();
     // if transaction_type == LEGACY_TX_TYPE_ID || transaction_type == EIP2930_TX_TYPE_ID {
@@ -148,7 +162,7 @@ where
             merged_state_update_vec.push(post);
         }
         Err(error) => {
-            let tx_hash = tx.get_tx_hash();
+            let tx_hash = *tx.tx_hash();
             mempool.write().await.set_failed(tx_hash);
             debug!(block=cur_block_number, %tx_hash, %error, "debug_trace_call error for");
         }
@@ -259,10 +273,10 @@ pub async fn pending_tx_state_change_worker<P, N, DB, LDT>(
     state_updates_broadcaster: broadcast::Sender<StateUpdateEvent<DB, LDT>>,
 ) -> Result<()>
 where
-    N: Network<TransactionRequest = LDT::TransactionRequest>,
+    N: Network<TransactionRequest = alloy_rpc_types::TransactionRequest>,
     P: Provider<N> + DebugProviderExt<N> + Send + Sync + Clone + 'static,
     DB: DatabaseRef + Database + DatabaseCommit + Clone + Send + Sync + 'static,
-    LDT: KabuDataTypes + 'static,
+    LDT: NodePrimitives + 'static,
 {
     let mut mempool_events_receiver = mempool_events_rx.subscribe();
     let mut market_events_receiver = market_events_rx.subscribe();
@@ -328,7 +342,7 @@ where
     }
 }
 
-pub struct PendingTxStateChangeProcessorComponent<P, N, DB: Clone + Send + Sync + 'static, LDT: KabuDataTypes + 'static> {
+pub struct PendingTxStateChangeProcessorComponent<P, N, DB: Clone + Send + Sync + 'static, LDT: NodePrimitives + 'static> {
     client: P,
 
     market: Option<Arc<RwLock<Market>>>,
@@ -350,7 +364,7 @@ where
     N: Network,
     P: Provider<N> + DebugProviderExt<N> + Send + Sync + Clone + 'static,
     DB: DatabaseRef + Send + Sync + Clone + 'static,
-    LDT: KabuDataTypes + 'static,
+    LDT: NodePrimitives + 'static,
 {
     pub fn new(client: P) -> PendingTxStateChangeProcessorComponent<P, N, DB, LDT> {
         PendingTxStateChangeProcessorComponent {
@@ -406,10 +420,10 @@ where
 
 impl<P, N, DB, LDT> Component for PendingTxStateChangeProcessorComponent<P, N, DB, LDT>
 where
-    N: Network<TransactionRequest = LDT::TransactionRequest>,
+    N: Network<TransactionRequest = alloy_rpc_types::TransactionRequest>,
     P: Provider<N> + DebugProviderExt<N> + Send + Sync + Clone + 'static,
     DB: DatabaseRef<Error = KabuDBError> + Database<Error = KabuDBError> + DatabaseCommit + Send + Sync + Clone + Default + 'static,
-    LDT: KabuDataTypes + 'static,
+    LDT: NodePrimitives + 'static,
 {
     fn spawn(self, executor: TaskExecutor) -> Result<()> {
         let name = self.name();

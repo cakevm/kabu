@@ -20,4 +20,6 @@ tracing.workspace = true
 
 
 # reth
+reth-ethereum-primitives.workspace = true
+reth-node-types.workspace = true
 reth-tasks.workspace = true

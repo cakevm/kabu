@@ -106,7 +106,6 @@ mod test {
     use kabu_defi_address_book::UniswapV3PoolAddress;
     use kabu_evm_db::KabuDBType;
     use kabu_node_debug_provider::AnvilDebugProviderFactory;
-    use kabu_types_blockchain::KabuDataTypesEthereum;
     use kabu_types_market::MarketState;
     use kabu_types_market::Pool;
     use kabu_types_market::RequiredStateReader;
@@ -135,8 +134,7 @@ mod test {
 
         let state_required = pool.get_state_required()?;
 
-        let state_required =
-            RequiredStateReader::<KabuDataTypesEthereum>::fetch_calls_and_slots(client.clone(), state_required, None).await?;
+        let state_required = RequiredStateReader::fetch_calls_and_slots(client.clone(), state_required, None).await?;
 
         market_state.state_db.apply_geth_update(state_required);
 

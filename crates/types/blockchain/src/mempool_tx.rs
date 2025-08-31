@@ -1,16 +1,15 @@
+use crate::{FetchState, GethStateUpdate};
 use alloy_primitives::{BlockNumber, TxHash};
 use alloy_rpc_types_eth::Log;
 use chrono::{DateTime, Utc};
-
-use crate::{FetchState, GethStateUpdate};
-use crate::{KabuDataTypes, KabuDataTypesEthereum};
+use reth_node_types::NodePrimitives;
 
 #[derive(Clone, Debug)]
-pub struct MempoolTx<D: KabuDataTypes> {
+pub struct MempoolTx<N: NodePrimitives> {
     pub source: String,
     pub tx_hash: TxHash,
     pub time: DateTime<Utc>,
-    pub tx: Option<D::Transaction>,
+    pub tx: Option<N::SignedTx>,
     pub logs: Option<Vec<Log>>,
     pub mined: Option<BlockNumber>,
     pub failed: Option<bool>,
@@ -18,16 +17,16 @@ pub struct MempoolTx<D: KabuDataTypes> {
     pub pre_state: Option<FetchState<GethStateUpdate>>,
 }
 
-impl MempoolTx<KabuDataTypesEthereum> {
-    pub fn new() -> MempoolTx<KabuDataTypesEthereum> {
+impl<N: NodePrimitives> MempoolTx<N> {
+    pub fn new() -> MempoolTx<N> {
         MempoolTx { ..MempoolTx::default() }
     }
-    pub fn new_with_hash(tx_hash: TxHash) -> MempoolTx<KabuDataTypesEthereum> {
+    pub fn new_with_hash(tx_hash: TxHash) -> MempoolTx<N> {
         MempoolTx { tx_hash, ..MempoolTx::default() }
     }
 }
 
-impl<LDT: KabuDataTypes> Default for MempoolTx<LDT> {
+impl<N: NodePrimitives> Default for MempoolTx<N> {
     fn default() -> Self {
         MempoolTx {
             source: "unknown".to_string(),

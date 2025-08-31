@@ -69,8 +69,6 @@ pub mod node {
     pub use kabu_node_exex as exex;
     #[cfg(feature = "node-json-rpc")]
     pub use kabu_node_json_rpc as json_rpc;
-    #[cfg(feature = "node-player")]
-    pub use kabu_node_player as player;
 }
 
 #[cfg(feature = "rpc")]

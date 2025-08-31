@@ -6,6 +6,7 @@ use tracing::{error, info};
 
 use kabu_core_components::Component;
 use kabu_types_events::MessageMempoolDataUpdate;
+use reth_ethereum_primitives::EthPrimitives;
 use reth_tasks::TaskExecutor;
 
 /// Simplified component that monitors mempool for new transactions
@@ -16,7 +17,7 @@ pub struct MempoolProcessingComponent<P> {
     /// Component name for logging
     name: String,
     /// Channel to send mempool updates
-    mempool_tx: Option<broadcast::Sender<MessageMempoolDataUpdate>>,
+    mempool_tx: Option<broadcast::Sender<MessageMempoolDataUpdate<EthPrimitives>>>,
 }
 
 impl<P> MempoolProcessingComponent<P>
@@ -27,7 +28,7 @@ where
         Self { client, name, mempool_tx: None }
     }
 
-    pub fn with_mempool_channel(mut self, mempool_tx: broadcast::Sender<MessageMempoolDataUpdate>) -> Self {
+    pub fn with_mempool_channel(mut self, mempool_tx: broadcast::Sender<MessageMempoolDataUpdate<EthPrimitives>>) -> Self {
         self.mempool_tx = Some(mempool_tx);
         self
     }

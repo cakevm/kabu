@@ -1,8 +1,9 @@
 use crate::{Message, TxState};
 use alloy_primitives::{Address, BlockNumber, Bytes, TxHash, U256};
-use kabu_types_blockchain::{KabuDataTypes, KabuDataTypesEthereum};
 use kabu_types_entities::LoomTxSigner;
 use kabu_types_swap::Swap;
+use reth_ethereum_primitives::EthPrimitives;
+use reth_node_types::NodePrimitives;
 use std::sync::Arc;
 
 #[derive(Debug, Clone)]
@@ -26,35 +27,35 @@ impl RlpState {
 }
 
 #[derive(Clone, Debug)]
-pub enum TxComposeMessageType<LDT: KabuDataTypes = KabuDataTypesEthereum> {
-    Sign(TxComposeData<LDT>),
-    Broadcast(TxComposeData<LDT>),
+pub enum TxComposeMessageType<N: NodePrimitives = EthPrimitives> {
+    Sign(TxComposeData<N>),
+    Broadcast(TxComposeData<N>),
 }
 
 #[derive(Clone, Debug)]
-pub struct TxComposeData<LDT: KabuDataTypes = KabuDataTypesEthereum> {
+pub struct TxComposeData<N: NodePrimitives = EthPrimitives> {
     /// The EOA address that will be used to sign the transaction.
     /// If this is None, the transaction will be signed by a random signer.
     pub eoa: Option<Address>,
-    pub signer: Option<Arc<dyn LoomTxSigner<LDT>>>,
+    pub signer: Option<Arc<dyn LoomTxSigner<N>>>,
     pub nonce: u64,
     pub eth_balance: U256,
     pub value: U256,
     pub gas: u64,
     pub priority_gas_fee: u64,
     pub stuffing_txs_hashes: Vec<TxHash>,
-    pub stuffing_txs: Vec<LDT::Transaction>,
+    pub stuffing_txs: Vec<N::SignedTx>,
     pub next_block_number: BlockNumber,
     pub next_block_timestamp: u64,
     pub next_block_base_fee: u64,
-    pub tx_bundle: Option<Vec<TxState<LDT>>>,
+    pub tx_bundle: Option<Vec<TxState<N>>>,
     pub rlp_bundle: Option<Vec<RlpState>>,
     pub origin: Option<String>,
     pub swap: Option<Swap>,
     pub tips: Option<U256>,
 }
 
-impl<LDT: KabuDataTypes> Default for TxComposeData<LDT> {
+impl<N: NodePrimitives> Default for TxComposeData<N> {
     fn default() -> Self {
         Self {
             eoa: None,
@@ -78,14 +79,14 @@ impl<LDT: KabuDataTypes> Default for TxComposeData<LDT> {
     }
 }
 
-pub type MessageTxCompose<LDT = KabuDataTypesEthereum> = Message<TxComposeMessageType<LDT>>;
+pub type MessageTxCompose<N = EthPrimitives> = Message<TxComposeMessageType<N>>;
 
-impl<LDT: KabuDataTypes> MessageTxCompose<LDT> {
-    pub fn sign(data: TxComposeData<LDT>) -> Self {
+impl<N: NodePrimitives> MessageTxCompose<N> {
+    pub fn sign(data: TxComposeData<N>) -> Self {
         Message::new(TxComposeMessageType::Sign(data))
     }
 
-    pub fn broadcast(data: TxComposeData<LDT>) -> Self {
+    pub fn broadcast(data: TxComposeData<N>) -> Self {
         Message::new(TxComposeMessageType::Broadcast(data))
     }
 }

@@ -2,7 +2,7 @@ use crate::MempoolComponent;
 use eyre::Result;
 use kabu_core_blockchain::AppState;
 use kabu_core_components::{BuilderContext, PoolBuilder};
-use kabu_types_blockchain::KabuDataTypes;
+use reth_node_types::NodePrimitives;
 use tokio::sync::broadcast;
 
 /// Builder for the mempool component
@@ -15,13 +15,13 @@ impl MempoolBuilder {
     }
 }
 
-impl<LDT> PoolBuilder<AppState<LDT>> for MempoolBuilder
+impl<NP> PoolBuilder<AppState<NP>> for MempoolBuilder
 where
-    LDT: KabuDataTypes + Default + 'static,
+    NP: NodePrimitives + Default + 'static,
 {
-    type Pool = MempoolComponent<LDT>;
+    type Pool = MempoolComponent<NP>;
 
-    async fn build_pool(self, ctx: &BuilderContext<AppState<LDT>>) -> Result<Self::Pool> {
+    async fn build_pool(self, ctx: &BuilderContext<AppState<NP>>) -> Result<Self::Pool> {
         let state = &ctx.state;
 
         // For now, create dummy channels - in real implementation these would come from EventChannels

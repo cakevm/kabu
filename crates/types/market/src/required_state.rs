@@ -9,9 +9,10 @@ use std::fmt::Debug;
 use std::marker::PhantomData;
 use tracing::{error, trace};
 
+use alloy_primitives::TxKind;
+use alloy_rpc_types::TransactionRequest;
 use kabu_node_debug_provider::DebugProviderExt;
 use kabu_types_blockchain::{debug_trace_call_pre_state, GethStateUpdate, GethStateUpdateVec};
-use kabu_types_blockchain::{KabuDataTypes, KabuDataTypesEthereum, KabuTransactionRequest};
 
 #[derive(Clone, Debug, Default)]
 pub struct RequiredState {
@@ -58,16 +59,13 @@ impl RequiredState {
     }
 }
 
-pub struct RequiredStateReader<LDT: KabuDataTypes = KabuDataTypesEthereum> {
-    _ldt: PhantomData<LDT>,
+pub struct RequiredStateReader {
+    _phantom: PhantomData<()>,
 }
 
-impl<LDT> RequiredStateReader<LDT>
-where
-    LDT: KabuDataTypes,
-{
+impl RequiredStateReader {
     pub async fn fetch_calls_and_slots<
-        N: Network<TransactionRequest = LDT::TransactionRequest>,
+        N: Network<TransactionRequest = TransactionRequest>,
         C: DebugProviderExt<N> + Provider<N> + Clone + 'static,
     >(
         client: C,
@@ -83,7 +81,7 @@ where
         let mut ret: GethStateUpdate = GethStateUpdate::new();
         for req in required_state.calls.into_iter() {
             let to: Address = req.0;
-            let req: LDT::TransactionRequest = LDT::TransactionRequest::build_call(to, req.1);
+            let req = TransactionRequest { to: Some(TxKind::Call(to)), input: req.1.into(), ..Default::default() };
 
             let call_result = debug_trace_call_pre_state(client.clone(), req, block_id, None).await;
             trace!("trace_call_result: {:?}", call_result);

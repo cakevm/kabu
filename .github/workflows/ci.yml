@@ -60,32 +60,6 @@ jobs:
 
       - run: make swap-test-all
 
-  replayer:
-    if: false
-    name: make replayer
-    runs-on: ubuntu-latest
-    timeout-minutes: 20
-    env:
-      MAINNET_HTTP: ${{ secrets.MAINNET_HTTP }}
-      MAINNET_WS: ${{ secrets.MAINNET_WS }}
-      RUST_LOG: info
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          ref: ${{ github.event.pull_request.head.sha || github.ref }}
-      - uses: dtolnay/rust-toolchain@stable
-      - uses: Swatinem/rust-cache@v2
-        with:
-          cache-on-failure: true
-      - uses: arduino/setup-protoc@v3
-        with:
-          repo-token: ${{ secrets.GITHUB_TOKEN }}
-      - uses: foundry-rs/foundry-toolchain@v1
-        with:
-          version: nightly
-
-      - run: make replayer
-
   fmt:
     name: make fmt-check
     runs-on: ubuntu-latest

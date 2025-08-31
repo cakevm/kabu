@@ -13,15 +13,16 @@ use tokio::sync::{broadcast, RwLock};
 
 use kabu_evm_db::KabuDBError;
 use kabu_node_debug_provider::DebugProviderExt;
-use kabu_types_blockchain::{KabuDataTypes, Mempool};
+use kabu_types_blockchain::Mempool;
 use kabu_types_entities::BlockHistory;
 use kabu_types_events::{MarketEvents, MempoolEvents, MessageHealthEvent, MessageSwapCompose, StateUpdateEvent};
 use kabu_types_market::{Market, MarketState};
+use reth_node_types::NodePrimitives;
 use revm::{Database, DatabaseCommit, DatabaseRef};
 use std::marker::PhantomData;
 use tracing::info;
 
-pub struct StateChangeArbComponent<P, N, DB: Clone + Send + Sync + 'static, LDT: KabuDataTypes + 'static> {
+pub struct StateChangeArbComponent<P, N, DB: Clone + Send + Sync + 'static, LDT: NodePrimitives + 'static> {
     backrun_config: BackrunConfig,
     client: P,
     use_blocks: bool,
@@ -55,7 +56,7 @@ where
     N: Network,
     P: Provider<N> + DebugProviderExt<N> + Send + Sync + Clone + 'static,
     DB: DatabaseRef + Send + Sync + Clone + 'static,
-    LDT: KabuDataTypes + 'static,
+    LDT: NodePrimitives + 'static,
 {
     pub fn new(client: P, use_blocks: bool, use_mempool: bool, backrun_config: BackrunConfig) -> StateChangeArbComponent<P, N, DB, LDT> {
         StateChangeArbComponent {
@@ -116,10 +117,10 @@ where
 
 impl<P, N, DB, LDT> Component for StateChangeArbComponent<P, N, DB, LDT>
 where
-    N: Network<TransactionRequest = LDT::TransactionRequest>,
+    N: Network<TransactionRequest = alloy_rpc_types::TransactionRequest>,
     P: Provider<N> + DebugProviderExt<N> + Send + Sync + Clone + 'static,
     DB: DatabaseRef<Error = KabuDBError> + Database<Error = KabuDBError> + DatabaseCommit + Send + Sync + Clone + Default + 'static,
-    LDT: KabuDataTypes + 'static,
+    LDT: NodePrimitives + 'static,
 {
     fn spawn(self, executor: TaskExecutor) -> Result<()> {
         // Create state update channel for searcher

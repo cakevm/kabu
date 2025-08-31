@@ -77,7 +77,7 @@ async fn estimator_worker<DB: DatabaseRef + Send + Sync + Clone>(
 
                                     let mut tx_with_state: Vec<TxState> = stuffing_txs_rlp.into_iter().map(TxState::ReadyForBroadcastStuffing).collect();
 
-                                    tx_with_state.push(TxState::SignatureRequired(tx_request));
+                                    tx_with_state.push(TxState::SignatureRequired(Box::new(tx_request)));
 
                                     let sign_request = MessageSwapCompose::ready(
                                         SwapComposeData{

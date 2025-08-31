@@ -23,7 +23,6 @@ use crate::{BackrunConfig, SwapCalculator};
 
 use kabu_core_blockchain::{Blockchain, Strategy};
 use kabu_evm_db::{DatabaseHelpers, KabuDBError};
-use kabu_types_blockchain::KabuDataTypes;
 use kabu_types_entities::strategy_config::StrategyConfig;
 use kabu_types_events::{
     BestTxSwapCompose, HealthEvent, Message, MessageHealthEvent, MessageSwapCompose, StateUpdateEvent, SwapComposeData, SwapComposeMessage,
@@ -31,10 +30,11 @@ use kabu_types_events::{
 };
 use kabu_types_market::{Market, PoolWrapper, SwapDirection, SwapPath};
 use kabu_types_swap::{Swap, SwapError, SwapLine};
+use reth_node_types::NodePrimitives;
 
 async fn state_change_arb_searcher_task<
     DB: DatabaseRef<Error = KabuDBError> + Database<Error = KabuDBError> + DatabaseCommit + Send + Sync + Clone + Default + 'static,
-    LDT: KabuDataTypes,
+    LDT: NodePrimitives,
 >(
     thread_pool: Arc<ThreadPool>,
     backrun_config: BackrunConfig,
@@ -253,7 +253,7 @@ async fn state_change_arb_searcher_task<
 
 pub async fn state_change_arb_searcher_worker<
     DB: DatabaseRef<Error = KabuDBError> + Database<Error = KabuDBError> + DatabaseCommit + Send + Sync + Clone + Default + 'static,
-    LDT: KabuDataTypes + 'static,
+    LDT: NodePrimitives + 'static,
 >(
     backrun_config: BackrunConfig,
     market: Arc<RwLock<Market>>,
@@ -319,7 +319,7 @@ pub async fn state_change_arb_searcher_worker<
     }
 }
 
-pub struct StateChangeArbSearcherComponent<DB: Clone + Send + Sync + 'static, LDT: KabuDataTypes + 'static> {
+pub struct StateChangeArbSearcherComponent<DB: Clone + Send + Sync + 'static, LDT: NodePrimitives + 'static> {
     backrun_config: BackrunConfig,
 
     market: Option<Arc<RwLock<Market>>>,
@@ -335,7 +335,7 @@ pub struct StateChangeArbSearcherComponent<DB: Clone + Send + Sync + 'static, LD
 
 impl<
         DB: DatabaseRef<Error = KabuDBError> + Database<Error = KabuDBError> + DatabaseCommit + Send + Sync + Clone + 'static,
-        LDT: KabuDataTypes + 'static,
+        LDT: NodePrimitives + 'static,
     > StateChangeArbSearcherComponent<DB, LDT>
 {
     pub fn new(backrun_config: BackrunConfig) -> StateChangeArbSearcherComponent<DB, LDT> {
@@ -384,7 +384,7 @@ impl<
 impl<DB, LDT> Component for StateChangeArbSearcherComponent<DB, LDT>
 where
     DB: Database<Error = KabuDBError> + DatabaseRef<Error = KabuDBError> + DatabaseCommit + Send + Sync + Clone + Default + 'static,
-    LDT: KabuDataTypes + 'static,
+    LDT: NodePrimitives + 'static,
 {
     fn spawn(self, executor: TaskExecutor) -> Result<()> {
         let name = self.name();

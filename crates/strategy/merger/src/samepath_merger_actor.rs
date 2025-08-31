@@ -5,12 +5,13 @@ use std::ops::Deref;
 use std::sync::Arc;
 use tokio::sync::{broadcast, RwLock};
 
+use alloy_consensus::Transaction as _;
 use alloy_eips::BlockNumberOrTag;
 use alloy_network::Network;
 use alloy_primitives::{Address, TxHash, U256};
 use alloy_provider::Provider;
 use alloy_rpc_types::state::StateOverride;
-use alloy_rpc_types::{BlockOverrides, Transaction, TransactionRequest};
+use alloy_rpc_types::{BlockOverrides, TransactionInput, TransactionRequest};
 use alloy_rpc_types_trace::geth::GethDebugTracingCallOptions;
 use eyre::{eyre, Result};
 use kabu_core_blockchain::{Blockchain, BlockchainState, Strategy};
@@ -19,12 +20,14 @@ use kabu_evm_db::{DatabaseHelpers, KabuDBError};
 use kabu_evm_utils::evm_env::tx_req_to_env;
 use kabu_evm_utils::evm_transact;
 use kabu_node_debug_provider::DebugProviderExt;
-use kabu_types_blockchain::{debug_trace_call_pre_state, GethStateUpdate, GethStateUpdateVec, KabuDataTypes, KabuTx, TRACING_CALL_OPTS};
+use kabu_types_blockchain::{debug_trace_call_pre_state, GethStateUpdate, GethStateUpdateVec, TRACING_CALL_OPTS};
 use kabu_types_entities::{DataFetcher, FetchState};
 use kabu_types_events::{MarketEvents, MessageSwapCompose, SwapComposeData, SwapComposeMessage, TxComposeData};
 use kabu_types_market::MarketState;
 use kabu_types_swap::Swap;
 use lazy_static::lazy_static;
+use reth_node_types::NodePrimitives;
+use reth_primitives_traits::{SignedTransaction, SignerRecoverable};
 use revm::context::{BlockEnv, ContextTr};
 use revm::context_interface::block::BlobExcessGasAndPrice;
 use revm::{Context, Database, DatabaseCommit, DatabaseRef, MainBuilder, MainContext};
@@ -64,35 +67,47 @@ fn get_merge_list<'a, DB: Clone + 'static>(
     ret
 }
 
-async fn same_path_merger_task<P, N, DB>(
+async fn same_path_merger_task<P, N, DB, NP>(
     client: P,
-    stuffing_txes: Vec<Transaction>,
+    stuffing_txes: Vec<NP::SignedTx>,
     pre_states: Arc<RwLock<DataFetcher<TxHash, GethStateUpdate>>>,
     market_state: Arc<RwLock<MarketState<DB>>>,
     call_opts: GethDebugTracingCallOptions,
-    request: SwapComposeData<DB>,
-    swap_request_tx: broadcast::Sender<MessageSwapCompose<DB>>,
+    request: SwapComposeData<DB, NP>,
+    swap_request_tx: broadcast::Sender<MessageSwapCompose<DB, NP>>,
 ) -> Result<()>
 where
     N: Network<TransactionRequest = TransactionRequest>,
     P: Provider<N> + DebugProviderExt<N> + Send + Sync + Clone + 'static,
     DB: Database<Error = KabuDBError> + DatabaseRef<Error = KabuDBError> + DatabaseCommit + Send + Sync + Clone + 'static,
+    NP: NodePrimitives,
 {
     debug!("same_path_merger_task stuffing_txs len {}", stuffing_txes.len());
 
     let mut prestate_guard = pre_states.write().await;
 
-    let mut stuffing_state_locks: Vec<(Transaction, FetchState<GethStateUpdate>)> = Vec::new();
+    let mut stuffing_state_locks: Vec<(NP::SignedTx, FetchState<GethStateUpdate>)> = Vec::new();
 
     for tx in stuffing_txes.into_iter() {
-        let client_clone = client.clone(); //Pin::new(Box::new(client.clone()));
-        let tx_clone = tx.clone();
-        let tx_hash: TxHash = tx.get_tx_hash();
+        let client_clone = client.clone();
+        let tx_hash: TxHash = *tx.tx_hash();
         let call_opts_clone = call_opts.clone();
+
+        // Manually construct TransactionRequest from signed tx
+        let from = tx.recover_signer().map_err(|e| eyre!("Failed to recover signer: {}", e))?;
+        let tx_request = TransactionRequest::default()
+            .from(from)
+            .to(tx.to().unwrap_or_default())
+            .value(tx.value())
+            .input(TransactionInput::new(tx.input().clone()))
+            .nonce(tx.nonce())
+            .gas_limit(tx.gas_limit())
+            .max_fee_per_gas(tx.max_fee_per_gas())
+            .max_priority_fee_per_gas(tx.max_priority_fee_per_gas().unwrap_or_default());
 
         let lock = prestate_guard
             .fetch(tx_hash, |_tx_hash| async move {
-                debug_trace_call_pre_state(client_clone, tx_clone, BlockNumberOrTag::Latest.into(), Some(call_opts_clone)).await
+                debug_trace_call_pre_state(client_clone, tx_request, BlockNumberOrTag::Latest.into(), Some(call_opts_clone)).await
             })
             .await;
 
@@ -101,7 +116,7 @@ where
 
     drop(prestate_guard);
 
-    let mut stuffing_states: Vec<(Transaction, GethStateUpdate)> = Vec::new();
+    let mut stuffing_states: Vec<(NP::SignedTx, GethStateUpdate)> = Vec::new();
 
     for (tx, lock) in stuffing_state_locks.into_iter() {
         if let FetchState::Fetching(lock) = lock {
@@ -126,7 +141,7 @@ where
 
         let mut ok = true;
 
-        let tx_and_state: Vec<&(Transaction, GethStateUpdate)> = tx_order.iter().map(|i| stuffing_states.get(*i).unwrap()).collect();
+        let tx_and_state: Vec<&(NP::SignedTx, GethStateUpdate)> = tx_order.iter().map(|i| stuffing_states.get(*i).unwrap()).collect();
 
         let states: GethStateUpdateVec = tx_and_state.iter().map(|(_tx, state)| state.clone()).collect();
 
@@ -148,17 +163,34 @@ where
             // set tx context for evm
             let tx = &stuffing_states[*tx_idx].0;
 
-            let tx_req: TransactionRequest = tx.to_transaction_request();
+            // Manually construct TransactionRequest from signed tx
+            let from = match tx.recover_signer() {
+                Ok(addr) => addr,
+                Err(e) => {
+                    error!("Failed to recover signer: {}", e);
+                    ok = false;
+                    break;
+                }
+            };
+            let tx_req = TransactionRequest::default()
+                .from(from)
+                .to(tx.to().unwrap_or_default())
+                .value(tx.value())
+                .input(TransactionInput::new(tx.input().clone()))
+                .nonce(tx.nonce())
+                .gas_limit(tx.gas_limit())
+                .max_fee_per_gas(tx.max_fee_per_gas())
+                .max_priority_fee_per_gas(tx.max_priority_fee_per_gas().unwrap_or_default());
             let tx_env = tx_req_to_env(tx_req);
 
             // TODO: EVM transact functionality is placeholder for now
 
             match evm_transact(&mut evm, tx_env) {
                 Ok(_c) => {
-                    trace!("Transaction {} committed successfully {:?}", idx, tx.get_tx_hash());
+                    trace!("Transaction {} committed successfully", idx);
                 }
                 Err(e) => {
-                    error!("Transaction {} {:?} commit error: {}", idx, tx.get_tx_hash(), e);
+                    error!("Transaction {} commit error: {}", idx, e);
                     match changing {
                         Some(changing_idx) => {
                             if (changing_idx == idx && idx == 0) || (changing_idx == idx - 1) {
@@ -217,9 +249,9 @@ where
             // TODO: Update optimize_with_in_amount to work with KabuEVMWrapper
             match Ok::<(), eyre::Error>(()) {
                 Ok(_r) => {
-                    let encode_request = MessageSwapCompose::prepare(SwapComposeData {
+                    let encode_request = MessageSwapCompose::<DB, NP>::prepare(SwapComposeData {
                         tx_compose: TxComposeData {
-                            stuffing_txs_hashes: tx_order.iter().map(|i| stuffing_states[*i].0.get_tx_hash()).collect(),
+                            stuffing_txs_hashes: tx_order.iter().map(|i| *stuffing_states[*i].0.tx_hash()).collect(),
                             stuffing_txs: tx_order.iter().map(|i| stuffing_states[*i].0.clone()).collect(),
                             ..request.tx_compose
                         },
@@ -315,8 +347,8 @@ async fn same_path_merger_worker<
                                     let requests_vec = get_merge_list(sign_request, &swap_paths);
                                     if !requests_vec.is_empty() {
 
-                                        let mut stuffing_txs : Vec<Transaction> = vec![sign_request.tx_compose.stuffing_txs[0].clone()];
-                                        stuffing_txs.extend( requests_vec.iter().map(|r| r.tx_compose.stuffing_txs[0].clone() ).collect::<Vec<Transaction>>());
+                                        let mut stuffing_txs = vec![sign_request.tx_compose.stuffing_txs[0].clone()];
+                                        stuffing_txs.extend( requests_vec.iter().map(|r| r.tx_compose.stuffing_txs[0].clone() ).collect::<Vec<_>>());
                                         let client_clone = client.clone();
                                         let prestate_clone = prestate.clone();
 
@@ -394,7 +426,7 @@ where
         Self { compose_channel_rx: Some(compose_channel.clone()), compose_channel_tx: Some(compose_channel), ..self }
     }
 
-    pub fn on_bc<LDT: KabuDataTypes>(self, bc: &Blockchain, state: &BlockchainState<DB, LDT>, strategy: &Strategy<DB>) -> Self {
+    pub fn on_bc<LDT: NodePrimitives>(self, bc: &Blockchain, state: &BlockchainState<DB, LDT>, strategy: &Strategy<DB>) -> Self {
         Self {
             market_state: Some(state.market_state_commit()),
             market_events: Some(bc.market_events_channel()),

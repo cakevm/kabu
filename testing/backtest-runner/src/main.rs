@@ -4,7 +4,6 @@ use crate::test_config::TestConfig;
 use alloy_network::Ethereum;
 use alloy_primitives::{address, TxHash, U256};
 use alloy_provider::network::eip2718::Encodable2718;
-use alloy_provider::network::TransactionResponse;
 use alloy_provider::Provider;
 use alloy_rpc_types::{BlockId, BlockNumberOrTag};
 use alloy_rpc_types_eth::TransactionTrait;
@@ -22,8 +21,9 @@ use kabu::evm::utils::NWETH;
 use kabu::execution::multicaller::{MulticallerDeployer, MulticallerSwapEncoder};
 use kabu::node::debug_provider::AnvilDebugProviderFactory;
 use kabu::strategy::backrun::BackrunConfig;
-use kabu::types::blockchain::{debug_trace_block, ChainParameters, KabuDataTypesEthereum};
+use kabu::types::blockchain::{debug_trace_block, ChainParameters};
 use kabu::types::entities::LoomTxSigner;
+use kabu::types::events::{BlockHeaderEventData, MessageBlockHeader};
 use kabu::types::events::{MarketEvents, MempoolEvents, SwapComposeMessage};
 use kabu::types::market::{MarketState, PoolClass, Token};
 use kabu::types::market::{Pool, PoolWrapper, RequiredStateReader};
@@ -50,6 +50,9 @@ use wiremock::MockServer;
 mod flashbots_mock;
 mod test_config;
 
+use reth::primitives::{EthPrimitives, TxTy};
+use reth::rpc::compat::{TryFromBlockResponse, TryFromTransactionResponse};
+use reth_primitives_traits::{Block, BlockTy, SignerRecoverable};
 use std::io::{self, Write};
 
 #[derive(Clone, Default, Debug)]
@@ -158,10 +161,14 @@ async fn main() -> Result<()> {
     let block_number = client.get_block_number().await?;
     info!("Current block_number={}", block_number);
 
-    let block_header = client.get_block(block_number.into()).await?.unwrap().header;
+    let block_response = client.get_block(block_number.into()).await?.unwrap();
+    let block = <BlockTy<EthPrimitives> as TryFromBlockResponse<Ethereum>>::from_block_response(block_response)?;
+    let block_header = block.header().clone();
     info!("Current block_header={:?}", block_header);
 
-    let block_header_with_txes = client.get_block(block_number.into()).await?.unwrap();
+    let block_response = client.get_block(block_number.into()).await?.unwrap();
+
+    let block_header_with_txes = <BlockTy<EthPrimitives> as TryFromBlockResponse<Ethereum>>::from_block_response(block_response)?;
 
     // Create AlloyDB connected to the forked Anvil instance
     let alloy_db =
@@ -177,7 +184,7 @@ async fn main() -> Result<()> {
     let blockchain = Blockchain::new_with_config(1, false); // Chain ID 1 for mainnet, influxdb disabled
 
     // Create blockchain state
-    let blockchain_state = BlockchainState::<KabuDB, KabuDataTypesEthereum>::new_with_market_state(market_state_instance);
+    let blockchain_state = BlockchainState::<KabuDB, EthPrimitives>::new_with_market_state(market_state_instance);
 
     // Get references we need for setup
     let market_instance = blockchain.market();
@@ -340,12 +347,8 @@ async fn main() -> Result<()> {
                             // Load pool state into state DB
                             match pool.get_state_required() {
                                 Ok(state_required) => {
-                                    match RequiredStateReader::<KabuDataTypesEthereum>::fetch_calls_and_slots(
-                                        client.clone(),
-                                        state_required,
-                                        Some(block_number),
-                                    )
-                                    .await
+                                    match RequiredStateReader::fetch_calls_and_slots(client.clone(), state_required, Some(block_number))
+                                        .await
                                     {
                                         Ok(state_update) => {
                                             market_state_db.write().await.state_db.apply_geth_update(state_update);
@@ -380,12 +383,8 @@ async fn main() -> Result<()> {
                             // Load pool state into state DB
                             match pool.get_state_required() {
                                 Ok(state_required) => {
-                                    match RequiredStateReader::<KabuDataTypesEthereum>::fetch_calls_and_slots(
-                                        client.clone(),
-                                        state_required,
-                                        Some(block_number),
-                                    )
-                                    .await
+                                    match RequiredStateReader::fetch_calls_and_slots(client.clone(), state_required, Some(block_number))
+                                        .await
                                     {
                                         Ok(state_update) => {
                                             market_state_db.write().await.state_db.apply_geth_update(state_update);
@@ -449,12 +448,10 @@ async fn main() -> Result<()> {
     );
 
     // Send block header through blockchain channel for block history component
-    use kabu::types::events::{BlockHeaderEventData, MessageBlockHeader};
     let block_header_msg = MessageBlockHeader::new(BlockHeaderEventData {
         header: block_header.clone(),
         next_block_number: block_header.number + 1,
         next_block_timestamp: block_header.timestamp + 12,
-        _phantom: std::marker::PhantomData,
     });
     if let Err(e) = blockchain.new_block_headers_channel().send(block_header_msg) {
         error!("Failed to send block header through blockchain channel: {}", e);
@@ -468,16 +465,12 @@ async fn main() -> Result<()> {
     if let Err(e) = blockchain.new_block_with_tx_channel().send(block_msg) {
         error!("Failed to send block with tx through blockchain channel: {}", e);
     } else {
-        info!("Sent block with {} transactions", block_header_with_txes.transactions.as_transactions().unwrap_or(&[]).len());
+        info!("Sent block with {} transactions", block_header_with_txes.body().transactions.len());
     }
 
     // Also send the block state update with state diffs
     use kabu::types::events::{BlockStateUpdate, MessageBlockStateUpdate};
-    let block_state_msg = MessageBlockStateUpdate::new(BlockStateUpdate {
-        block_header: block_header.clone(),
-        state_update: post.clone(),
-        _phantom: std::marker::PhantomData,
-    });
+    let block_state_msg = MessageBlockStateUpdate::new(BlockStateUpdate { block_header: block_header.clone(), state_update: post.clone() });
     if let Err(e) = blockchain.new_block_state_update_channel().send(block_state_msg) {
         error!("Failed to send block state update through blockchain channel: {}", e);
     } else {
@@ -487,7 +480,7 @@ async fn main() -> Result<()> {
     // Sending block header update message for market events
     if let Err(e) = market_events_channel.send(MarketEvents::BlockHeaderUpdate {
         block_number: block_header.number,
-        block_hash: block_header.hash,
+        block_hash: block_header.hash_slow(),
         timestamp: block_header.timestamp,
         base_fee: block_header.base_fee_per_gas.unwrap_or_default(),
         next_base_fee: next_block_base_fee,
@@ -503,7 +496,7 @@ async fn main() -> Result<()> {
     let mempool_events_channel_clone = mempool_events_channel.clone();
     let mempool_instance_clone = mempool_instance.clone();
     let market_events_channel_clone = market_events_channel.clone();
-    let block_hash = block_header.hash;
+    let block_hash = block_header.hash_slow();
     tokio::spawn(async move {
         info!("Re-broadcaster task started");
 
@@ -517,17 +510,20 @@ async fn main() -> Result<()> {
 
         for (_, tx_config) in test_config.txs.iter() {
             debug!("Fetching original tx {}", tx_config.hash);
-            let Some(tx) = client_clone.get_transaction_by_hash(tx_config.hash).await.unwrap() else {
+            let Some(transaction_response) = client_clone.get_transaction_by_hash(tx_config.hash).await.unwrap() else {
                 panic!("Cannot get tx: {}", tx_config.hash);
             };
 
-            let from = tx.from();
+            let tx =
+                <TxTy<EthPrimitives> as TryFromTransactionResponse<Ethereum>>::from_transaction_response(transaction_response).unwrap();
+
+            let from = tx.recover_signer().unwrap();
             let to = tx.to().unwrap_or_default();
 
             match tx_config.send.to_lowercase().as_str() {
                 "mempool" => {
                     let mut mempool_guard = mempool_instance_clone.write().await;
-                    let tx_hash: TxHash = tx.tx_hash();
+                    let tx_hash: TxHash = *tx.tx_hash();
 
                     mempool_guard.add_tx(tx.clone());
                     drop(mempool_guard); // Release lock before sending event
@@ -538,7 +534,7 @@ async fn main() -> Result<()> {
                         info!("Sent mempool event for tx {}", tx_hash);
                     }
                 }
-                "block" => match client_clone.send_raw_transaction(tx.inner.encoded_2718().as_slice()).await {
+                "block" => match client_clone.send_raw_transaction(tx.encoded_2718().as_slice()).await {
                     Ok(p) => {
                         debug!("Transaction sent {}", p.tx_hash());
                     }

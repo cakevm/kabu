@@ -14,10 +14,13 @@ kabu-types-market.workspace = true
 kabu-types-swap.workspace = true
 
 alloy-consensus.workspace = true
-alloy-eips.workspace = true
 alloy-primitives.workspace = true
 alloy-rpc-types.workspace = true
 revm.workspace = true
+
+# reth
+reth-ethereum-primitives.workspace = true
+reth-node-types.workspace = true
 
 chrono.workspace = true
 eyre.workspace = true

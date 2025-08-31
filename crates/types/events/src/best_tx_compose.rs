@@ -1,17 +1,18 @@
 use crate::SwapComposeData;
 use alloy_primitives::U256;
-use kabu_types_blockchain::KabuDataTypes;
+use reth_ethereum_primitives::EthPrimitives;
+use reth_node_types::NodePrimitives;
 
 #[derive(Default)]
-pub struct BestTxSwapCompose<DB, LDT: KabuDataTypes> {
+pub struct BestTxSwapCompose<DB, N: NodePrimitives = EthPrimitives> {
     validity_pct: Option<U256>,
-    best_profit_swap: Option<SwapComposeData<DB, LDT>>,
-    best_profit_gas_ratio_swap: Option<SwapComposeData<DB, LDT>>,
-    best_tips_swap: Option<SwapComposeData<DB, LDT>>,
-    best_tips_gas_ratio_swap: Option<SwapComposeData<DB, LDT>>,
+    best_profit_swap: Option<SwapComposeData<DB, N>>,
+    best_profit_gas_ratio_swap: Option<SwapComposeData<DB, N>>,
+    best_tips_swap: Option<SwapComposeData<DB, N>>,
+    best_tips_gas_ratio_swap: Option<SwapComposeData<DB, N>>,
 }
 
-impl<DB: Clone + Default + 'static, LDT: KabuDataTypes> BestTxSwapCompose<DB, LDT> {
+impl<DB: Clone + Default + 'static, N: NodePrimitives> BestTxSwapCompose<DB, N> {
     pub fn new_with_pct<T: Into<U256>>(validity_pct: T) -> Self {
         BestTxSwapCompose {
             validity_pct: Some(validity_pct.into()),
@@ -22,7 +23,7 @@ impl<DB: Clone + Default + 'static, LDT: KabuDataTypes> BestTxSwapCompose<DB, LD
         }
     }
 
-    pub fn check(&mut self, request: &SwapComposeData<DB, LDT>) -> bool {
+    pub fn check(&mut self, request: &SwapComposeData<DB, N>) -> bool {
         let mut is_ok = false;
 
         match &self.best_profit_swap {

@@ -642,7 +642,6 @@ mod tests {
     use env_logger::Env as EnvLog;
     use kabu_evm_db::{DatabaseKabuExt, KabuDBType};
     use kabu_node_debug_provider::AnvilDebugProviderFactory;
-    use kabu_types_blockchain::KabuDataTypesEthereum;
     use kabu_types_market::MarketState;
     use kabu_types_market::Pool;
     use kabu_types_market::RequiredStateReader;
@@ -668,10 +667,7 @@ mod tests {
             let pool = CurvePool::fetch_pool_data_with_default_encoder(client.clone(), curve_contract).await.unwrap();
             let state_required = pool.get_state_required().unwrap();
 
-            let state_required =
-                RequiredStateReader::<KabuDataTypesEthereum>::fetch_calls_and_slots(client.clone(), state_required, Some(20045799))
-                    .await
-                    .unwrap();
+            let state_required = RequiredStateReader::fetch_calls_and_slots(client.clone(), state_required, Some(20045799)).await.unwrap();
             debug!("Pool state fetched {} {}", pool.address, state_required.len());
 
             market_state.state_db.apply_geth_update(state_required);

@@ -32,4 +32,5 @@ alloy-rpc-types-trace.workspace = true
 revm.workspace = true
 
 # reth
+reth-node-types.workspace = true
 reth-tasks.workspace = true

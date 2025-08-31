@@ -1,36 +1,37 @@
 use crate::block_history::block_history_state::BlockHistoryState;
-use alloy_json_rpc::RpcRecv;
-use alloy_network::{BlockResponse, Network};
-use alloy_primitives::{BlockHash, BlockNumber};
+use alloy_consensus::BlockHeader;
+use alloy_network::Network;
+use alloy_primitives::{BlockHash, BlockNumber, Sealable};
 use alloy_provider::Provider;
-use alloy_rpc_types::{BlockId, Filter, Header, Log};
+use alloy_rpc_types::{BlockId, Filter, Log};
 use eyre::{eyre, ErrReport, OptionExt, Result};
 use kabu_node_debug_provider::DebugProviderExt;
-use kabu_types_blockchain::{debug_trace_block, GethStateUpdateVec, KabuBlock, KabuDataTypes};
+use kabu_types_blockchain::{debug_trace_block, GethStateUpdateVec};
 use kabu_types_market::MarketStateConfig;
+use reth_ethereum_primitives::EthPrimitives;
+use reth_node_types::NodePrimitives;
+use reth_primitives_traits::Block;
+use reth_rpc_convert::TryFromBlockResponse;
 use std::collections::HashMap;
 use std::fmt::Debug;
 use std::marker::PhantomData;
 use tracing::{debug, error};
 
 #[derive(Clone, Debug)]
-pub struct BlockHistoryEntry<LDT: KabuDataTypes> {
-    pub header: Header,
-    pub block: Option<LDT::Block>,
+pub struct BlockHistoryEntry<N: NodePrimitives = EthPrimitives> {
+    pub header: N::BlockHeader,
+    pub block: Option<N::Block>,
     pub logs: Option<Vec<Log>>,
     pub state_update: Option<GethStateUpdateVec>,
 }
 
-impl<LDT> BlockHistoryEntry<LDT>
-where
-    LDT: KabuDataTypes,
-{
+impl<N: NodePrimitives> BlockHistoryEntry<N> {
     pub fn new(
-        header: Header,
-        block: Option<LDT::Block>,
+        header: N::BlockHeader,
+        block: Option<N::Block>,
         logs: Option<Vec<Log>>,
         state_update: Option<GethStateUpdateVec>,
-    ) -> BlockHistoryEntry<LDT> {
+    ) -> BlockHistoryEntry<N> {
         BlockHistoryEntry { header, block, logs, state_update }
     }
 
@@ -39,38 +40,38 @@ where
     }
 
     pub fn hash(&self) -> BlockHash {
-        self.header.hash
+        self.header.hash_slow()
     }
 
     pub fn parent_hash(&self) -> BlockHash {
-        self.header.parent_hash
+        self.header.parent_hash()
     }
 
     pub fn number(&self) -> BlockNumber {
-        self.header.number
+        self.header.number()
     }
 
     pub fn timestamp(&self) -> u64 {
-        self.header.timestamp
+        self.header.timestamp()
     }
 }
 
 #[derive(Debug, Clone)]
-pub struct BlockHistory<S, LDT: KabuDataTypes> {
+pub struct BlockHistory<S, N: NodePrimitives = EthPrimitives> {
     depth: usize,
     pub latest_block_number: u64,
     block_states: HashMap<BlockHash, S>,
-    block_entries: HashMap<BlockHash, BlockHistoryEntry<LDT>>,
+    block_entries: HashMap<BlockHash, BlockHistoryEntry<N>>,
     block_numbers: HashMap<u64, BlockHash>,
 }
 
-impl<S, LDT> BlockHistory<S, LDT>
+impl<S, N> BlockHistory<S, N>
 where
-    LDT: KabuDataTypes,
-    S: BlockHistoryState<LDT>,
+    N: NodePrimitives,
+    S: BlockHistoryState<N>,
 {
-    pub fn new(depth: usize) -> BlockHistory<S, LDT> {
-        BlockHistory::<S, LDT> {
+    pub fn new(depth: usize) -> BlockHistory<S, N> {
+        BlockHistory::<S, N> {
             depth,
             latest_block_number: 0,
             block_states: Default::default(),
@@ -85,7 +86,7 @@ where
     }
 }
 
-impl<S, LDT: KabuDataTypes> BlockHistory<S, LDT> {
+impl<S, N: NodePrimitives> BlockHistory<S, N> {
     pub fn len(&self) -> usize {
         self.block_entries.len()
     }
@@ -94,9 +95,9 @@ impl<S, LDT: KabuDataTypes> BlockHistory<S, LDT> {
         self.block_entries.is_empty()
     }
 
-    fn get_or_insert_entry_with_header(&mut self, header: Header) -> &mut BlockHistoryEntry<LDT> {
-        let block_number = header.number;
-        let block_hash = header.hash;
+    fn get_or_insert_entry_with_header(&mut self, header: N::BlockHeader) -> &mut BlockHistoryEntry<N> {
+        let block_number = header.number();
+        let block_hash = header.hash_slow();
 
         //todo: process reorg
         if self.latest_block_number <= block_number {
@@ -114,11 +115,11 @@ impl<S, LDT: KabuDataTypes> BlockHistory<S, LDT> {
         self.block_entries.entry(block_hash).or_insert(BlockHistoryEntry::new(header, None, None, None))
     }
 
-    fn get_entry_mut_or_panic(&mut self, block_hash: BlockHash) -> &mut BlockHistoryEntry<LDT> {
+    fn get_entry_mut_or_panic(&mut self, block_hash: BlockHash) -> &mut BlockHistoryEntry<N> {
         self.block_entries.get_mut(&block_hash).expect("Block entry should exist")
     }
 
-    fn set_entry(&mut self, entry: BlockHistoryEntry<LDT>) {
+    fn set_entry(&mut self, entry: BlockHistoryEntry<N>) {
         self.block_numbers.insert(entry.number(), entry.hash());
         self.block_entries.insert(entry.hash(), entry);
     }
@@ -131,14 +132,14 @@ impl<S, LDT: KabuDataTypes> BlockHistory<S, LDT> {
         }
     }
 
-    pub fn add_block_header(&mut self, block_header: Header) -> Result<bool> {
-        let block_hash = block_header.hash;
-        let block_number = block_header.number;
+    pub fn add_block_header(&mut self, block_header: N::BlockHeader) -> Result<bool> {
+        let block_hash = block_header.hash_slow();
+        let block_number = block_header.number();
         let mut is_new = false;
 
         if !self.contains_block(&block_hash) {
             let market_history_entry = self.get_or_insert_entry_with_header(block_header.clone());
-            let parent_block_hash = block_header.parent_hash;
+            let parent_block_hash = block_header.parent_hash();
 
             if block_number >= self.latest_block_number {
                 is_new = true;
@@ -162,11 +163,11 @@ impl<S, LDT: KabuDataTypes> BlockHistory<S, LDT> {
         }
     }
 
-    pub fn add_block(&mut self, block: LDT::Block) -> Result<()> {
-        let block_hash = block.get_header().hash;
-        let block_number = block.get_header().number;
+    pub fn add_block(&mut self, block: N::Block) -> Result<()> {
+        let block_hash = block.header().hash_slow();
+        let block_number = block.header().number();
 
-        let market_history_entry = self.get_or_insert_entry_with_header(block.get_header());
+        let market_history_entry = self.get_or_insert_entry_with_header(block.header().clone());
 
         if market_history_entry.block.is_some() {
             debug!(
@@ -221,7 +222,7 @@ impl<S, LDT: KabuDataTypes> BlockHistory<S, LDT> {
         }
     }
 
-    pub fn get_block_history_entry(&self, block_hash: &BlockHash) -> Option<&BlockHistoryEntry<LDT>> {
+    pub fn get_block_history_entry(&self, block_hash: &BlockHash) -> Option<&BlockHistoryEntry<N>> {
         self.block_entries.get(block_hash)
     }
 
@@ -229,11 +230,11 @@ impl<S, LDT: KabuDataTypes> BlockHistory<S, LDT> {
         self.block_states.get(block_hash)
     }
 
-    pub fn get_entry_mut(&mut self, block_hash: &BlockHash) -> Option<&mut BlockHistoryEntry<LDT>> {
+    pub fn get_entry_mut(&mut self, block_hash: &BlockHash) -> Option<&mut BlockHistoryEntry<N>> {
         self.block_entries.get_mut(block_hash)
     }
 
-    pub fn get_block_by_hash(&self, block_hash: &BlockHash) -> Option<LDT::Block> {
+    pub fn get_block_by_hash(&self, block_hash: &BlockHash) -> Option<N::Block> {
         self.block_entries.get(block_hash).and_then(|entry| entry.block.clone())
     }
 
@@ -242,7 +243,7 @@ impl<S, LDT: KabuDataTypes> BlockHistory<S, LDT> {
     }
 
     pub fn get_first_block_number(&self) -> Option<BlockNumber> {
-        self.block_entries.values().map(|x| x.header.number).min()
+        self.block_entries.values().map(|x| x.header.number()).min()
     }
 
     pub fn contains_block(&self, block_hash: &BlockHash) -> bool {
@@ -250,18 +251,18 @@ impl<S, LDT: KabuDataTypes> BlockHistory<S, LDT> {
     }
 }
 
-pub struct BlockHistoryManager<P, N, DB, LDT> {
+pub struct BlockHistoryManager<P, N, S, NP> {
     client: P,
-    _td: PhantomData<(N, DB, LDT)>,
+    _td: PhantomData<(N, S, NP)>,
 }
 //
-// impl<P, S, LDT> BlockHistoryManager<P, Ethereum, S, LDT>
+// impl<P, S, NP> BlockHistoryManager<P, Ethereum, S, NP>
 // where
 //     P: Provider<Ethereum> + DebugProviderExt<Ethereum> + Send + Sync + Clone + 'static,
-//     S: BlockHistoryState<LDT> + Clone,
-//     LDT: KabuDataTypes,
+//     S: BlockHistoryState<NP> + Clone,
+//     NP: KabuDataTypes,
 // {
-//     pub async fn fetch_entry_data(&self, entry: &mut BlockHistoryEntry<LDT>) -> Result<()> {
+//     pub async fn fetch_entry_data(&self, entry: &mut BlockHistoryEntry<NP>) -> Result<()> {
 //         if entry.logs.is_none() {
 //             let filter = Filter::new().at_block_hash(entry.hash());
 //             let logs = self.client.get_logs(&filter).await?;
@@ -292,24 +293,23 @@ pub struct BlockHistoryManager<P, N, DB, LDT> {
 //     }
 // }
 
-impl<P, N, S, LDT> BlockHistoryManager<P, N, S, LDT>
+impl<P, N, S, NP> BlockHistoryManager<P, N, S, NP>
 where
-    N: Network<BlockResponse = LDT::Block>,
+    N: Network,
     P: Provider<N> + DebugProviderExt<N> + Send + Sync + Clone + 'static,
-    S: BlockHistoryState<LDT> + Clone,
-    LDT: KabuDataTypes,
-    LDT::Block: BlockResponse + RpcRecv,
+    S: BlockHistoryState<NP> + Clone,
+    NP: NodePrimitives,
 {
-    pub fn init(&self, current_state: S, depth: usize, block: LDT::Block) -> BlockHistory<S, LDT>
+    pub fn init(&self, current_state: S, depth: usize, block: NP::Block) -> BlockHistory<S, NP>
     where
         P: Provider<N> + Send + Sync + Clone + 'static,
     {
-        let latest_block_number = block.get_header().number;
-        let block_hash = block.get_header().hash;
+        let latest_block_number = block.header().number();
+        let block_hash = block.header().hash_slow();
 
-        let block_entry = BlockHistoryEntry::new(block.get_header().clone(), Some(block), None, None);
+        let block_entry = BlockHistoryEntry::new(block.header().clone(), Some(block), None, None);
 
-        let mut block_entries: HashMap<BlockHash, BlockHistoryEntry<LDT>> = HashMap::new();
+        let mut block_entries: HashMap<BlockHash, BlockHistoryEntry<NP>> = HashMap::new();
         let mut block_numbers: HashMap<u64, BlockHash> = HashMap::new();
         let mut block_states: HashMap<BlockHash, S> = HashMap::new();
 
@@ -324,7 +324,10 @@ where
         Self { client, _td: PhantomData }
     }
 
-    pub async fn fetch_entry_data(&self, entry: &mut BlockHistoryEntry<LDT>) -> Result<()> {
+    pub async fn fetch_entry_data(&self, entry: &mut BlockHistoryEntry<NP>) -> Result<()>
+    where
+        NP::Block: TryFromBlockResponse<N>,
+    {
         if entry.logs.is_none() {
             let filter = Filter::new().at_block_hash(entry.hash());
             let logs = self.client.get_logs(&filter).await?;
@@ -333,7 +336,10 @@ where
 
         if entry.block.is_none() {
             let block = self.client.get_block_by_hash(entry.hash()).await?;
-            if let Some(block) = block {
+            if let Some(block_response) = block {
+                // Convert the network block response to primitive block
+                let block = <NP::Block as TryFromBlockResponse<N>>::from_block_response(block_response)
+                    .map_err(|e| eyre!("Failed to convert block response: {}", e))?;
                 entry.block = Some(block);
             }
         }
@@ -355,9 +361,12 @@ where
     }
     pub async fn get_or_fetch_entry_cloned(
         &self,
-        block_history: &mut BlockHistory<S, LDT>,
+        block_history: &mut BlockHistory<S, NP>,
         block_hash: BlockHash,
-    ) -> Result<BlockHistoryEntry<LDT>> {
+    ) -> Result<BlockHistoryEntry<NP>>
+    where
+        NP::Block: TryFromBlockResponse<N>,
+    {
         if let Some(entry) = block_history.get_block_history_entry(&block_hash) {
             Ok(entry.clone())
         } else {
@@ -369,7 +378,7 @@ where
 
     pub async fn get_parent_state(
         &self,
-        block_history: &mut BlockHistory<S, LDT>,
+        block_history: &mut BlockHistory<S, NP>,
         market_state_config: &MarketStateConfig,
         parent_hash: BlockHash,
     ) -> Result<S> {
@@ -414,10 +423,13 @@ where
 
     pub async fn apply_state_update_on_parent_db(
         &self,
-        block_history: &mut BlockHistory<S, LDT>,
+        block_history: &mut BlockHistory<S, NP>,
         market_state_config: &MarketStateConfig,
         block_hash: BlockHash,
-    ) -> Result<S> {
+    ) -> Result<S>
+    where
+        NP::Block: TryFromBlockResponse<N>,
+    {
         let mut entry = block_history.get_entry_mut_or_panic(block_hash).clone();
         if !entry.is_fetched() {
             self.fetch_entry_data(&mut entry).await?;
@@ -430,10 +442,13 @@ where
         Ok(db)
     }
 
-    pub async fn set_chain_head(&self, block_history: &mut BlockHistory<S, LDT>, header: Header) -> Result<(bool, usize)> {
+    pub async fn set_chain_head(&self, block_history: &mut BlockHistory<S, NP>, header: NP::BlockHeader) -> Result<(bool, usize)>
+    where
+        NP::Block: TryFromBlockResponse<N>,
+    {
         let mut reorg_depth = 0;
         let mut is_new_block = false;
-        let parent_hash = header.parent_hash;
+        let parent_hash = header.parent_hash();
         let first_block_number = block_history.get_first_block_number();
 
         if let Ok(is_new) = block_history.add_block_header(header) {
@@ -471,10 +486,15 @@ where
         Ok((is_new_block, reorg_depth))
     }
 
-    pub async fn fetch_entry_by_hash(&self, block_hash: BlockHash) -> Result<BlockHistoryEntry<LDT>> {
-        let block = self.client.get_block_by_hash(block_hash).full().await?;
-        if let Some(block) = block {
-            let header = block.get_header().clone();
+    pub async fn fetch_entry_by_hash(&self, block_hash: BlockHash) -> Result<BlockHistoryEntry<NP>>
+    where
+        NP::Block: TryFromBlockResponse<N>,
+    {
+        let block_response = self.client.get_block_by_hash(block_hash).full().await?;
+        if let Some(block_response) = block_response {
+            let block = <NP::Block as TryFromBlockResponse<N>>::from_block_response(block_response)
+                .map_err(|e| eyre!("Failed to convert block response: {}", e))?;
+            let header = block.header().clone();
 
             let filter = Filter::new().at_block_hash(block_hash);
 
@@ -498,39 +518,37 @@ where
 #[cfg(test)]
 mod test {
     use super::*;
+    use alloy_consensus::Header;
     use alloy_node_bindings::Anvil;
     use alloy_primitives::{Address, U256};
     use alloy_provider::ext::AnvilApi;
     use alloy_provider::ProviderBuilder;
     use alloy_rpc_client::ClientBuilder;
-    use alloy_rpc_types::{BlockNumberOrTag, Header};
+    use alloy_rpc_types::BlockNumberOrTag;
     use kabu_evm_db::KabuDBType;
     use kabu_evm_utils::geth_state_update::*;
     use kabu_node_debug_provider::AnvilProviderExt;
-    use kabu_types_blockchain::{GethStateUpdate, KabuDataTypesEthereum};
+    use kabu_types_blockchain::GethStateUpdate;
     use kabu_types_market::MarketState;
+    use reth_ethereum_primitives::EthPrimitives;
     use std::sync::Arc;
     use tokio::sync::RwLock;
 
     fn create_next_header(parent: &Header, child_id: u64) -> Header {
         let number = parent.number + 1;
-        let hash: BlockHash = (U256::try_from(parent.hash).unwrap() * U256::from(256) + U256::from(number + child_id)).try_into().unwrap();
-        let number = parent.number + 1;
+        let parent_hash = parent.hash_slow();
 
-        let consensus_header = alloy_consensus::Header { parent_hash: parent.hash, number, ..Default::default() };
-
-        Header { hash, inner: consensus_header, total_difficulty: None, size: None }
+        // Use nonce to make headers unique for different child_id values
+        Header { parent_hash, number, nonce: child_id.into(), ..Default::default() }
     }
 
-    fn create_header(number: BlockNumber, hash: BlockHash) -> Header {
-        let consensus_header = alloy_consensus::Header { number, ..Default::default() };
-
-        Header { hash, inner: consensus_header, total_difficulty: None, size: None }
+    fn create_header(number: BlockNumber, _hash: BlockHash) -> Header {
+        Header { number, ..Default::default() }
     }
 
     #[test]
     fn test_add_block_header() {
-        let mut block_history = BlockHistory::<KabuDBType, KabuDataTypesEthereum>::new(10);
+        let mut block_history = BlockHistory::<KabuDBType, EthPrimitives>::new(10);
 
         let header_1_0 = create_header(1, U256::from(1).into());
         let header_2_0 = create_next_header(&header_1_0, 0);
@@ -538,16 +556,17 @@ mod test {
 
         block_history.add_block_header(header_1_0).unwrap();
         block_history.add_block_header(header_2_0).unwrap();
-        block_history.add_block_header(header_3_0).unwrap();
+        block_history.add_block_header(header_3_0.clone()).unwrap();
 
         assert_eq!(block_history.block_entries.len(), 3);
         assert_eq!(block_history.latest_block_number, 3);
-        assert_eq!(block_history.block_numbers[&3], BlockHash::from(U256::from(0x010203)));
+        // Check that the block hash for block 3 is stored correctly
+        assert_eq!(block_history.block_numbers[&3], header_3_0.hash_slow());
     }
 
     #[test]
     fn test_add_missed_header() {
-        let mut block_history = BlockHistory::<KabuDBType, KabuDataTypesEthereum>::new(10);
+        let mut block_history = BlockHistory::<KabuDBType, EthPrimitives>::new(10);
 
         let header_1_0 = create_header(1, U256::from(1).into());
         let header_2_0 = create_next_header(&header_1_0, 0);
@@ -556,17 +575,18 @@ mod test {
 
         block_history.add_block_header(header_1_0).unwrap();
         block_history.add_block_header(header_2_0).unwrap();
-        block_history.add_block_header(header_3_0).unwrap();
+        block_history.add_block_header(header_3_0.clone()).unwrap();
         block_history.add_block_header(header_2_1).unwrap();
 
         assert_eq!(block_history.block_entries.len(), 4);
         assert_eq!(block_history.latest_block_number, 3);
-        assert_eq!(block_history.block_numbers[&3], BlockHash::from(U256::from(0x010203)));
+        // Check that the block hash for block 3 is stored correctly
+        assert_eq!(block_history.block_numbers[&3], header_3_0.hash_slow());
     }
 
     #[test]
     fn test_add_reorged_header() {
-        let mut block_history = BlockHistory::<KabuDBType, KabuDataTypesEthereum>::new(10);
+        let mut block_history = BlockHistory::<KabuDBType, EthPrimitives>::new(10);
 
         let header_1_0 = create_header(1, U256::from(1).into());
         let header_2_0 = create_next_header(&header_1_0, 0);
@@ -584,12 +604,15 @@ mod test {
 
         assert_eq!(block_history.block_entries.len(), 6);
         assert_eq!(block_history.latest_block_number, 4);
-        assert_eq!(block_history.block_numbers[&3], header_3_1.hash);
-        assert_eq!(block_history.block_numbers[&4], header_4_1.hash);
+        assert_eq!(block_history.block_numbers[&3], header_3_1.hash_slow());
+        assert_eq!(block_history.block_numbers[&4], header_4_1.hash_slow());
     }
 
     #[tokio::test]
     async fn test_with_anvil() -> Result<()> {
+        use alloy_network::Ethereum;
+        use reth_ethereum_primitives::Block;
+
         let anvil = Anvil::new().try_spawn()?;
         let client_anvil = ClientBuilder::default().http(anvil.endpoint_url());
 
@@ -599,11 +622,12 @@ mod test {
 
         let block_number_0 = provider.get_block_number().await?;
 
-        let block_0 = provider.get_block_by_number(BlockNumberOrTag::Latest).full().await?.unwrap();
+        let block_0_response = provider.get_block_by_number(BlockNumberOrTag::Latest).full().await?.unwrap();
+        let block_0: Block = block_0_response.into();
 
         let market_state = Arc::new(RwLock::new(MarketState::new(KabuDBType::default())));
 
-        let block_history_manager = BlockHistoryManager::new(provider.clone());
+        let block_history_manager: BlockHistoryManager<_, Ethereum, _, EthPrimitives> = BlockHistoryManager::new(provider.clone());
 
         let mut block_history = block_history_manager.init(KabuDBType::default(), 10, block_0.clone());
 
@@ -612,16 +636,17 @@ mod test {
         provider.anvil_mine(Some(1), None).await?;
 
         let block_number_2 = provider.get_block_number().await?;
-        let block_2 = provider.get_block_by_number(BlockNumberOrTag::Latest).full().await?.unwrap();
+        let block_2_response = provider.get_block_by_number(BlockNumberOrTag::Latest).full().await?.unwrap();
+        let block_2: Block = block_2_response.into();
 
         assert_eq!(block_number_2, block_number_0 + 1);
-        assert_eq!(block_2.header.parent_hash, block_0.header.hash);
+        assert_eq!(block_2.header.parent_hash, block_0.header.hash_slow());
 
         block_history.add_block_header(block_2.header.clone())?;
 
-        let mut entry_2: BlockHistoryEntry<KabuDataTypesEthereum> =
-            block_history_manager.get_or_fetch_entry_cloned(&mut block_history, block_2.header.hash).await?;
-        block_history_manager.fetch_entry_data(&mut entry_2).await;
+        let mut entry_2: BlockHistoryEntry<EthPrimitives> =
+            block_history_manager.get_or_fetch_entry_cloned(&mut block_history, block_2.header.hash_slow()).await?;
+        block_history_manager.fetch_entry_data(&mut entry_2).await?;
         entry_2.state_update = Some(vec![geth_state_update_add_account(
             GethStateUpdate::default(),
             Address::repeat_byte(1),
@@ -632,10 +657,11 @@ mod test {
 
         provider.revert(snap.to()).await?;
         let block_number_2 = provider.get_block_number().await?;
-        let block_2 = provider.get_block_by_number(BlockNumberOrTag::Latest).full().await?.unwrap();
+        let block_2_response = provider.get_block_by_number(BlockNumberOrTag::Latest).full().await?.unwrap();
+        let block_2: Block = block_2_response.into();
 
         assert_eq!(block_number_2, block_number_0);
-        assert_eq!(block_2.header.hash, block_0.header.hash);
+        assert_eq!(block_2.header.hash_slow(), block_0.header.hash_slow());
 
         Ok(())
     }

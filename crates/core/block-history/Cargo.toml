@@ -23,12 +23,15 @@ eyre.workspace = true
 tokio.workspace = true
 tracing.workspace = true
 
-alloy-json-rpc.workspace = true
+alloy-consensus.workspace = true
 alloy-network.workspace = true
 alloy-primitives.workspace = true
 alloy-provider.workspace = true
-alloy-rpc-types.workspace = true
 
+reth-ethereum-primitives.workspace = true
+reth-node-types.workspace = true
+reth-primitives-traits.workspace = true
+reth-rpc-convert.workspace = true
 reth-tasks.workspace = true
 revm.workspace = true
 

@@ -22,6 +22,7 @@ hex.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 
+alloy-consensus.workspace = true
 alloy-primitives.workspace = true
 revm.workspace = true
 
@@ -34,6 +35,7 @@ eyre.workspace = true
 tracing.workspace = true
 
 # reth
+reth-ethereum-primitives.workspace = true
 reth-tasks.workspace = true
 
 # web

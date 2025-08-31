@@ -531,7 +531,6 @@ mod test {
     use kabu_evm_db::{AlloyDB, KabuDB};
     use kabu_evm_db::{KabuDBError, KabuDBType};
     use kabu_node_debug_provider::{AnvilDebugProviderFactory, AnvilDebugProviderType};
-    use kabu_types_blockchain::KabuDataTypesEthereum;
     use kabu_types_market::RequiredStateReader;
     use revm::database::EmptyDBTyped;
     use std::env;
@@ -618,9 +617,7 @@ mod test {
         for pool_address in POOL_ADDRESSES {
             let pool = UniswapV3Pool::fetch_pool_data(client.clone(), pool_address).await?;
             let state_required = pool.get_state_required()?;
-            let state_update =
-                RequiredStateReader::<KabuDataTypesEthereum>::fetch_calls_and_slots(client.clone(), state_required, Some(BLOCK_NUMBER))
-                    .await?;
+            let state_update = RequiredStateReader::fetch_calls_and_slots(client.clone(), state_required, Some(BLOCK_NUMBER)).await?;
 
             let mut state_db = KabuDBType::default();
             state_db.apply_geth_update(state_update);
@@ -685,9 +682,7 @@ mod test {
         for pool_address in POOL_ADDRESSES {
             let pool = UniswapV3Pool::fetch_pool_data(client.clone(), pool_address).await?;
             let state_required = pool.get_state_required()?;
-            let state_update =
-                RequiredStateReader::<KabuDataTypesEthereum>::fetch_calls_and_slots(client.clone(), state_required, Some(BLOCK_NUMBER))
-                    .await?;
+            let state_update = RequiredStateReader::fetch_calls_and_slots(client.clone(), state_required, Some(BLOCK_NUMBER)).await?;
 
             let mut state_db = KabuDBType::default().with_ext_db(EmptyDBTyped::<KabuDBError>::new());
             state_db.apply_geth_update(state_update);

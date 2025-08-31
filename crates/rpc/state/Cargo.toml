@@ -11,5 +11,5 @@ version.workspace = true
 [dependencies]
 kabu-core-blockchain.workspace = true
 kabu-storage-db.workspace = true
-kabu-types-blockchain.workspace = true
+reth-ethereum-primitives.workspace = true
 revm.workspace = true

@@ -21,6 +21,7 @@ eyre.workspace = true
 reth-chain-state.workspace = true
 reth-ethereum-primitives.workspace = true
 reth-execution-types.workspace = true
+reth-node-types.workspace = true
 reth-tasks.workspace = true
 
 # futures

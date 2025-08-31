@@ -11,10 +11,10 @@ use alloy_primitives::utils::format_ether;
 use alloy_primitives::Address;
 use futures_util::StreamExt;
 use kabu_core_components::Component;
-use kabu_types_blockchain::{KabuDataTypes, KabuDataTypesEthereum};
 use kabu_types_entities::{AccountNonceAndBalanceState, TxSigners};
 use reth_chain_state::{CanonStateNotification, CanonStateSubscriptions};
 use reth_ethereum_primitives::EthPrimitives;
+use reth_node_types::NodePrimitives;
 use reth_primitives::Block;
 use reth_primitives_traits::{RecoveredBlock, SignerRecoverable};
 use reth_provider::StateProviderFactory;
@@ -28,24 +28,27 @@ use revm::DatabaseRef;
 
 /// Component that monitors account nonces and balances for managed accounts
 #[derive(Clone)]
-pub struct AccountMonitorComponent<R, N, LDT: KabuDataTypes + 'static = KabuDataTypesEthereum> {
+pub struct AccountMonitorComponent<R, N, P = EthPrimitives>
+where
+    P: NodePrimitives,
+{
     /// Reth provider for canonical state subscriptions
     reth_provider: R,
     /// Shared state containing account nonces and balances
     account_state: Arc<RwLock<AccountNonceAndBalanceState>>,
     /// Signers to monitor accounts for
-    signers: Arc<RwLock<TxSigners<LDT>>>,
+    signers: Arc<RwLock<TxSigners<P>>>,
     /// Phantom data for network type
     _network: std::marker::PhantomData<N>,
 }
 
-impl<R, N, LDT> AccountMonitorComponent<R, N, LDT>
+impl<R, N, P> AccountMonitorComponent<R, N, P>
 where
     R: CanonStateSubscriptions<Primitives = EthPrimitives> + StateProviderFactory + Send + Sync + Clone + 'static,
     N: Network + 'static,
-    LDT: KabuDataTypes + 'static,
+    P: reth_node_types::NodePrimitives + 'static,
 {
-    pub fn new(reth_provider: R, account_state: Arc<RwLock<AccountNonceAndBalanceState>>, signers: Arc<RwLock<TxSigners<LDT>>>) -> Self {
+    pub fn new(reth_provider: R, account_state: Arc<RwLock<AccountNonceAndBalanceState>>, signers: Arc<RwLock<TxSigners<P>>>) -> Self {
         Self { reth_provider, account_state, signers, _network: std::marker::PhantomData }
     }
 
@@ -151,11 +154,11 @@ async fn update_nonces_from_block(account_state: &Arc<RwLock<AccountNonceAndBala
     Ok(())
 }
 
-impl<R, N, LDT> Component for AccountMonitorComponent<R, N, LDT>
+impl<R, N, P> Component for AccountMonitorComponent<R, N, P>
 where
     R: CanonStateSubscriptions<Primitives = EthPrimitives> + StateProviderFactory + Send + Sync + Clone + 'static,
     N: Network + 'static,
-    LDT: KabuDataTypes + 'static,
+    P: reth_node_types::NodePrimitives + 'static,
 {
     fn spawn(self, executor: TaskExecutor) -> Result<()> {
         executor.spawn_critical(self.name(), async move {
@@ -179,16 +182,16 @@ impl AccountMonitorComponentBuilder {
         Self {}
     }
 
-    pub fn build<R, N, LDT>(
+    pub fn build<R, N, P>(
         self,
         reth_provider: R,
         account_state: Arc<RwLock<AccountNonceAndBalanceState>>,
-        signers: Arc<RwLock<TxSigners<LDT>>>,
-    ) -> AccountMonitorComponent<R, N, LDT>
+        signers: Arc<RwLock<TxSigners<P>>>,
+    ) -> AccountMonitorComponent<R, N, P>
     where
         R: CanonStateSubscriptions<Primitives = EthPrimitives> + StateProviderFactory + Send + Sync + Clone + 'static,
         N: Network + 'static,
-        LDT: KabuDataTypes + 'static,
+        P: NodePrimitives + 'static,
     {
         AccountMonitorComponent::new(reth_provider, account_state, signers)
     }

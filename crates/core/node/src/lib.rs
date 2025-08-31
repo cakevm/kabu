@@ -43,7 +43,7 @@ use kabu_defi_health_monitor::PoolHealthMonitorComponent;
 // Type imports
 use kabu_core_blockchain::{Blockchain, BlockchainState};
 use kabu_evm_db::{DatabaseKabuExt, KabuDBError};
-use kabu_types_blockchain::{ChainParameters, KabuDataTypesEthereum, Mempool};
+use kabu_types_blockchain::{ChainParameters, Mempool};
 use kabu_types_entities::{BlockHistory, BlockHistoryState};
 use kabu_types_market::{Market, MarketState};
 use reth::revm::{Database, DatabaseCommit, DatabaseRef};
@@ -62,7 +62,7 @@ where
         + Database<Error = KabuDBError>
         + DatabaseCommit
         + DatabaseKabuExt
-        + BlockHistoryState<KabuDataTypesEthereum>
+        + BlockHistoryState<EthPrimitives>
         + Send
         + Sync
         + Clone
@@ -79,7 +79,7 @@ where
     /// Blockchain state
     pub blockchain: Blockchain,
     /// Blockchain state with database
-    pub blockchain_state: BlockchainState<DB, KabuDataTypesEthereum>,
+    pub blockchain_state: BlockchainState<DB, EthPrimitives>,
     /// MEV component channels
     pub channels: MevComponentChannels<DB>,
     /// Topology configuration
@@ -103,9 +103,9 @@ where
     /// Shared market state with DB
     pub market_state: Arc<RwLock<MarketState<DB>>>,
     /// Shared mempool
-    pub mempool: Arc<RwLock<Mempool<KabuDataTypesEthereum>>>,
+    pub mempool: Arc<RwLock<Mempool<EthPrimitives>>>,
     /// Shared block history
-    pub block_history: Arc<RwLock<BlockHistory<DB, KabuDataTypesEthereum>>>,
+    pub block_history: Arc<RwLock<BlockHistory<DB, EthPrimitives>>>,
     _phantom: std::marker::PhantomData<N>,
 }
 
@@ -118,7 +118,7 @@ where
         + Database<Error = KabuDBError>
         + DatabaseCommit
         + DatabaseKabuExt
-        + BlockHistoryState<KabuDataTypesEthereum>
+        + BlockHistoryState<EthPrimitives>
         + Send
         + Sync
         + Clone
@@ -133,7 +133,7 @@ where
         provider: P,
         evm_config: Evm,
         blockchain: Blockchain,
-        blockchain_state: BlockchainState<DB, KabuDataTypesEthereum>,
+        blockchain_state: BlockchainState<DB, EthPrimitives>,
         topology_config: TopologyConfig,
         backrun_config: BackrunConfig,
         multicaller_address: Address,
@@ -184,7 +184,7 @@ where
         provider: P,
         evm_config: Evm,
         blockchain: Blockchain,
-        blockchain_state: BlockchainState<DB, KabuDataTypesEthereum>,
+        blockchain_state: BlockchainState<DB, EthPrimitives>,
         topology_config: TopologyConfig,
         backrun_config: BackrunConfig,
         multicaller_address: Address,
@@ -216,7 +216,7 @@ where
         + Database<Error = KabuDBError>
         + DatabaseCommit
         + DatabaseKabuExt
-        + BlockHistoryState<KabuDataTypesEthereum>
+        + BlockHistoryState<EthPrimitives>
         + Send
         + Sync
         + Clone
@@ -228,7 +228,7 @@ where
     provider: P,
     evm_config: Evm,
     blockchain: Blockchain,
-    blockchain_state: BlockchainState<DB, KabuDataTypesEthereum>,
+    blockchain_state: BlockchainState<DB, EthPrimitives>,
     channels: MevComponentChannels<DB>,
     topology_config: TopologyConfig,
     backrun_config: BackrunConfig,
@@ -240,8 +240,8 @@ where
     enable_web_server: bool,
     market: Arc<RwLock<Market>>,
     market_state: Arc<RwLock<MarketState<DB>>>,
-    mempool: Arc<RwLock<Mempool<KabuDataTypesEthereum>>>,
-    block_history: Arc<RwLock<BlockHistory<DB, KabuDataTypesEthereum>>>,
+    mempool: Arc<RwLock<Mempool<EthPrimitives>>>,
+    block_history: Arc<RwLock<BlockHistory<DB, EthPrimitives>>>,
     _phantom: PhantomData<(N, Evm)>,
 }
 
@@ -254,7 +254,7 @@ where
         + Database<Error = KabuDBError>
         + DatabaseCommit
         + DatabaseKabuExt
-        + BlockHistoryState<KabuDataTypesEthereum>
+        + BlockHistoryState<EthPrimitives>
         + Send
         + Sync
         + Clone
@@ -268,7 +268,7 @@ where
         provider: P,
         evm_config: Evm,
         blockchain: Blockchain,
-        blockchain_state: BlockchainState<DB, KabuDataTypesEthereum>,
+        blockchain_state: BlockchainState<DB, EthPrimitives>,
         topology_config: TopologyConfig,
         backrun_config: BackrunConfig,
         multicaller_address: Address,
@@ -338,12 +338,12 @@ where
         self
     }
 
-    pub fn with_mempool(mut self, mempool: Arc<RwLock<Mempool<KabuDataTypesEthereum>>>) -> Self {
+    pub fn with_mempool(mut self, mempool: Arc<RwLock<Mempool<EthPrimitives>>>) -> Self {
         self.mempool = mempool;
         self
     }
 
-    pub fn with_block_history(mut self, block_history: Arc<RwLock<BlockHistory<DB, KabuDataTypesEthereum>>>) -> Self {
+    pub fn with_block_history(mut self, block_history: Arc<RwLock<BlockHistory<DB, EthPrimitives>>>) -> Self {
         self.block_history = block_history;
         self
     }
@@ -403,7 +403,7 @@ where
         + Database<Error = KabuDBError>
         + DatabaseCommit
         + DatabaseKabuExt
-        + BlockHistoryState<KabuDataTypesEthereum>
+        + BlockHistoryState<EthPrimitives>
         + Send
         + Sync
         + Clone
@@ -424,7 +424,7 @@ where
         + Database<Error = KabuDBError>
         + DatabaseCommit
         + DatabaseKabuExt
-        + BlockHistoryState<KabuDataTypesEthereum>
+        + BlockHistoryState<EthPrimitives>
         + Send
         + Sync
         + Clone
@@ -444,7 +444,7 @@ where
         + Database<Error = KabuDBError>
         + DatabaseCommit
         + DatabaseKabuExt
-        + BlockHistoryState<KabuDataTypesEthereum>
+        + BlockHistoryState<EthPrimitives>
         + Send
         + Sync
         + Clone
@@ -484,7 +484,7 @@ impl KabuNode {
             + Database<Error = KabuDBError>
             + DatabaseCommit
             + DatabaseKabuExt
-            + BlockHistoryState<KabuDataTypesEthereum>
+            + BlockHistoryState<EthPrimitives>
             + Send
             + Sync
             + Clone
@@ -535,7 +535,7 @@ where
         + Database<Error = KabuDBError>
         + DatabaseCommit
         + DatabaseKabuExt
-        + BlockHistoryState<KabuDataTypesEthereum>
+        + BlockHistoryState<EthPrimitives>
         + Send
         + Sync
         + Clone
@@ -581,14 +581,14 @@ where
         + Database<Error = KabuDBError>
         + DatabaseCommit
         + DatabaseKabuExt
-        + BlockHistoryState<KabuDataTypesEthereum>
+        + BlockHistoryState<EthPrimitives>
         + Send
         + Sync
         + Clone
         + Default
         + 'static,
 {
-    block_history: BlockHistoryComponent<P, Ethereum, DB, KabuDataTypesEthereum>,
+    block_history: BlockHistoryComponent<P, Ethereum, DB, EthPrimitives>,
 }
 
 impl<P, DB> Clone for CompositeNetworkComponent<P, DB>
@@ -598,7 +598,7 @@ where
         + Database<Error = KabuDBError>
         + DatabaseCommit
         + DatabaseKabuExt
-        + BlockHistoryState<KabuDataTypesEthereum>
+        + BlockHistoryState<EthPrimitives>
         + Send
         + Sync
         + Clone
@@ -617,14 +617,14 @@ where
         + Database<Error = KabuDBError>
         + DatabaseCommit
         + DatabaseKabuExt
-        + BlockHistoryState<KabuDataTypesEthereum>
+        + BlockHistoryState<EthPrimitives>
         + Send
         + Sync
         + Clone
         + Default
         + 'static,
 {
-    pub fn new(block_history: BlockHistoryComponent<P, Ethereum, DB, KabuDataTypesEthereum>) -> Self {
+    pub fn new(block_history: BlockHistoryComponent<P, Ethereum, DB, EthPrimitives>) -> Self {
         Self { block_history }
     }
 }
@@ -636,7 +636,7 @@ where
         + Database<Error = KabuDBError>
         + DatabaseCommit
         + DatabaseKabuExt
-        + BlockHistoryState<KabuDataTypesEthereum>
+        + BlockHistoryState<EthPrimitives>
         + Send
         + Sync
         + Clone
@@ -662,7 +662,7 @@ where
         + Database<Error = KabuDBError>
         + DatabaseCommit
         + DatabaseKabuExt
-        + BlockHistoryState<KabuDataTypesEthereum>
+        + BlockHistoryState<EthPrimitives>
         + Send
         + Sync
         + Clone
@@ -676,7 +676,7 @@ where
         let kabu_ctx = ctx.as_kabu_context()?;
 
         // Block history component
-        let block_history = BlockHistoryComponent::<P, Ethereum, DB, KabuDataTypesEthereum>::new(kabu_ctx.provider.clone()).with_channels(
+        let block_history = BlockHistoryComponent::<P, Ethereum, DB, EthPrimitives>::new(kabu_ctx.provider.clone()).with_channels(
             ChainParameters::ethereum(),
             kabu_ctx.market_state.clone(),
             kabu_ctx.block_history.clone(),
@@ -720,7 +720,7 @@ where
         + Database<Error = KabuDBError>
         + DatabaseCommit
         + DatabaseKabuExt
-        + BlockHistoryState<KabuDataTypesEthereum>
+        + BlockHistoryState<EthPrimitives>
         + Send
         + Sync
         + Clone
@@ -728,7 +728,7 @@ where
         + 'static,
     Evm: ConfigureEvm + 'static,
 {
-    type Executor = SwapRouterComponent<DB, KabuDataTypesEthereum>;
+    type Executor = SwapRouterComponent<DB, EthPrimitives>;
 
     async fn build_executor(self, ctx: &BuilderContext<KabuBuildContext<N, R, P, DB, Evm>>) -> Result<Self::Executor> {
         let kabu_ctx = ctx.as_kabu_context()?;
@@ -772,7 +772,7 @@ where
         + Database<Error = KabuDBError>
         + DatabaseCommit
         + DatabaseKabuExt
-        + BlockHistoryState<KabuDataTypesEthereum>
+        + BlockHistoryState<EthPrimitives>
         + Send
         + Sync
         + Clone
@@ -780,7 +780,7 @@ where
         + 'static,
     Evm: ConfigureEvm + 'static,
 {
-    type Strategy = StateChangeArbComponent<P, Ethereum, DB, KabuDataTypesEthereum>;
+    type Strategy = StateChangeArbComponent<P, Ethereum, DB, EthPrimitives>;
 
     async fn build_strategy(self, ctx: &BuilderContext<KabuBuildContext<N, R, P, DB, Evm>>) -> Result<Self::Strategy> {
         let kabu_ctx = ctx.as_kabu_context()?;
@@ -838,7 +838,7 @@ where
         + Database<Error = KabuDBError>
         + DatabaseCommit
         + DatabaseKabuExt
-        + BlockHistoryState<KabuDataTypesEthereum>
+        + BlockHistoryState<EthPrimitives>
         + Send
         + Sync
         + Clone
@@ -846,7 +846,7 @@ where
         + 'static,
     Evm: ConfigureEvm + 'static,
 {
-    type Signer = SignersComponent<P, Ethereum, DB, KabuDataTypesEthereum>;
+    type Signer = SignersComponent<P, Ethereum, DB, EthPrimitives>;
 
     async fn build_signer(self, ctx: &BuilderContext<KabuBuildContext<N, R, P, DB, Evm>>) -> Result<Self::Signer> {
         let kabu_ctx = ctx.as_kabu_context()?;
@@ -893,17 +893,17 @@ where
         + Database<Error = KabuDBError>
         + DatabaseCommit
         + DatabaseKabuExt
-        + BlockHistoryState<KabuDataTypesEthereum>
+        + BlockHistoryState<EthPrimitives>
         + Send
         + Sync
         + Clone
         + Default
         + 'static,
 {
-    signer_initializer: Option<InitializeSignersOneShotBlockingComponent<KabuDataTypesEthereum>>,
+    signer_initializer: Option<InitializeSignersOneShotBlockingComponent<EthPrimitives>>,
     market_state_preload: MarketStatePreloadedOneShotComponent<P, Ethereum, DB>,
     price_component: PriceComponent<P, Ethereum>,
-    account_monitor: AccountMonitorComponent<R, Ethereum, KabuDataTypesEthereum>,
+    account_monitor: AccountMonitorComponent<R, Ethereum, EthPrimitives>,
     protocol_loader: ProtocolPoolLoaderComponent<P, P, Ethereum>,
     history_loader: HistoryPoolLoaderComponent<P, P, Ethereum>,
 }
@@ -916,7 +916,7 @@ where
         + Database<Error = KabuDBError>
         + DatabaseCommit
         + DatabaseKabuExt
-        + BlockHistoryState<KabuDataTypesEthereum>
+        + BlockHistoryState<EthPrimitives>
         + Send
         + Sync
         + Clone
@@ -943,7 +943,7 @@ where
         + Database<Error = KabuDBError>
         + DatabaseCommit
         + DatabaseKabuExt
-        + BlockHistoryState<KabuDataTypesEthereum>
+        + BlockHistoryState<EthPrimitives>
         + Send
         + Sync
         + Clone
@@ -977,7 +977,7 @@ where
         + Database<Error = KabuDBError>
         + DatabaseCommit
         + DatabaseKabuExt
-        + BlockHistoryState<KabuDataTypesEthereum>
+        + BlockHistoryState<EthPrimitives>
         + Send
         + Sync
         + Clone
@@ -1003,14 +1003,14 @@ where
         let price_component = PriceComponent::new(kabu_ctx.provider.clone()).only_once().with_market(kabu_ctx.market.clone());
 
         // Account monitor - uses regular provider for queries and reth provider for canonical state
-        let account_monitor = AccountMonitorComponent::<R, Ethereum, KabuDataTypesEthereum>::new(
+        let account_monitor = AccountMonitorComponent::<R, Ethereum, EthPrimitives>::new(
             kabu_ctx.reth_provider.clone(),
             kabu_ctx.channels.account_state.clone(),
             kabu_ctx.channels.signers.clone(),
         );
 
         // Pool loaders
-        let pool_loaders = Arc::new(PoolLoadersBuilder::<_, _, KabuDataTypesEthereum>::default_pool_loaders(
+        let pool_loaders = Arc::new(PoolLoadersBuilder::<_, _, EthPrimitives>::default_pool_loaders(
             kabu_ctx.provider.clone(),
             kabu_ctx.pools_config.clone(),
         ));
@@ -1068,7 +1068,7 @@ where
         + Database<Error = KabuDBError>
         + DatabaseCommit
         + DatabaseKabuExt
-        + BlockHistoryState<KabuDataTypesEthereum>
+        + BlockHistoryState<EthPrimitives>
         + Send
         + Sync
         + Clone
@@ -1130,7 +1130,7 @@ where
         + Database<Error = KabuDBError>
         + DatabaseCommit
         + DatabaseKabuExt
-        + BlockHistoryState<KabuDataTypesEthereum>
+        + BlockHistoryState<EthPrimitives>
         + Send
         + Sync
         + Clone
@@ -1181,7 +1181,7 @@ where
         + Database<Error = KabuDBError>
         + DatabaseCommit
         + DatabaseKabuExt
-        + BlockHistoryState<KabuDataTypesEthereum>
+        + BlockHistoryState<EthPrimitives>
         + Send
         + Sync
         + Clone
@@ -1250,7 +1250,7 @@ where
         + Database<Error = KabuDBError>
         + DatabaseCommit
         + DatabaseKabuExt
-        + BlockHistoryState<KabuDataTypesEthereum>
+        + BlockHistoryState<EthPrimitives>
         + Send
         + Sync
         + Clone
@@ -1271,7 +1271,7 @@ where
         + Database<Error = KabuDBError>
         + DatabaseCommit
         + DatabaseKabuExt
-        + BlockHistoryState<KabuDataTypesEthereum>
+        + BlockHistoryState<EthPrimitives>
         + Send
         + Sync
         + Clone
@@ -1296,7 +1296,7 @@ where
         + Database<Error = KabuDBError>
         + DatabaseCommit
         + DatabaseKabuExt
-        + BlockHistoryState<KabuDataTypesEthereum>
+        + BlockHistoryState<EthPrimitives>
         + Send
         + Sync
         + Clone
@@ -1325,7 +1325,7 @@ where
         + Database<Error = KabuDBError>
         + DatabaseCommit
         + DatabaseKabuExt
-        + BlockHistoryState<KabuDataTypesEthereum>
+        + BlockHistoryState<EthPrimitives>
         + Send
         + Sync
         + Clone
@@ -1391,7 +1391,7 @@ where
         + Database<Error = KabuDBError>
         + DatabaseCommit
         + DatabaseKabuExt
-        + BlockHistoryState<KabuDataTypesEthereum>
+        + BlockHistoryState<EthPrimitives>
         + Send
         + Sync
         + Clone
@@ -1471,7 +1471,7 @@ where
         + Database<Error = KabuDBError>
         + DatabaseCommit
         + DatabaseKabuExt
-        + BlockHistoryState<KabuDataTypesEthereum>
+        + BlockHistoryState<EthPrimitives>
         + Send
         + Sync
         + Clone
@@ -1525,7 +1525,7 @@ where
         + Database<Error = KabuDBError>
         + DatabaseCommit
         + DatabaseKabuExt
-        + BlockHistoryState<KabuDataTypesEthereum>
+        + BlockHistoryState<EthPrimitives>
         + Send
         + Sync
         + Clone
@@ -1582,7 +1582,7 @@ where
         + Database<Error = KabuDBError>
         + DatabaseCommit
         + DatabaseKabuExt
-        + BlockHistoryState<KabuDataTypesEthereum>
+        + BlockHistoryState<EthPrimitives>
         + Send
         + Sync
         + Clone

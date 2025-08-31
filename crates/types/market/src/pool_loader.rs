@@ -5,7 +5,7 @@ use alloy_primitives::{Bytes, Log};
 use alloy_provider::Provider;
 use eyre::{eyre, Result};
 use kabu_evm_db::KabuDBError;
-use kabu_types_blockchain::{KabuDataTypes, KabuDataTypesEthereum};
+use reth_ethereum_primitives::EthPrimitives;
 use revm::DatabaseRef;
 use std::collections::HashMap;
 use std::future::Future;
@@ -14,11 +14,11 @@ use std::sync::Arc;
 use tokio_stream::Stream;
 
 #[allow(clippy::type_complexity)]
-pub trait PoolLoader<P, N, LDT = KabuDataTypesEthereum>: Send + Sync + 'static
+pub trait PoolLoader<P, N, LDT = EthPrimitives>: Send + Sync + 'static
 where
     N: Network,
     P: Provider<N>,
-    LDT: Send + Sync + KabuDataTypes,
+    LDT: Send + Sync,
 {
     fn get_pool_class_by_log(&self, log_entry: &Log) -> Option<(PoolId, PoolClass)>;
     fn fetch_pool_by_id<'a>(&'a self, pool_id: PoolId) -> Pin<Box<dyn Future<Output = Result<PoolWrapper>> + Send + 'a>>;
@@ -32,11 +32,11 @@ where
     fn protocol_loader(&self) -> Result<Pin<Box<dyn Stream<Item = (PoolId, PoolClass)> + Send>>>;
 }
 
-pub struct PoolLoaders<P, N = Ethereum, LDT = KabuDataTypesEthereum>
+pub struct PoolLoaders<P, N = Ethereum, LDT = EthPrimitives>
 where
     N: Network,
     P: Provider<N> + 'static,
-    LDT: KabuDataTypes,
+    LDT: Send + Sync,
 {
     _provider: Option<P>,
     config: Option<PoolsLoadingConfig>,
@@ -47,7 +47,7 @@ impl<P, N, LDT> PoolLoaders<P, N, LDT>
 where
     N: Network,
     P: Provider<N> + 'static,
-    LDT: KabuDataTypes,
+    LDT: Send + Sync,
 {
     pub fn new() -> Self {
         Self::default()
@@ -72,7 +72,7 @@ impl<P, N, LDT> Default for PoolLoaders<P, N, LDT>
 where
     N: Network,
     P: Provider<N> + 'static,
-    LDT: KabuDataTypes,
+    LDT: Send + Sync,
 {
     fn default() -> Self {
         Self { _provider: None, map: Default::default(), config: None }
@@ -83,7 +83,7 @@ impl<P, N, LDT> PoolLoaders<P, N, LDT>
 where
     N: Network,
     P: Provider<N> + 'static,
-    LDT: KabuDataTypes + 'static,
+    LDT: Send + Sync + 'static,
 {
     pub fn determine_pool_class(&self, log_entry: &Log) -> Option<(PoolId, PoolClass)> {
         for (_pool_class, pool_loader) in self.map.iter() {

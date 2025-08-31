@@ -11,18 +11,18 @@ use tokio::sync::{broadcast, RwLock};
 
 // Import MEV-specific types for channel communication
 use kabu_evm_db::KabuDB;
-use kabu_types_blockchain::KabuDataTypesEthereum;
 use kabu_types_entities::{AccountNonceAndBalanceState, TxSigners};
 use kabu_types_events::{MarketEvents, MempoolEvents, MessageHealthEvent, MessageSwapCompose, MessageTxCompose};
+use reth_ethereum_primitives::EthPrimitives;
 
 /// MEV Component Communication Channels
 /// This struct holds all the broadcast channels used for inter-component communication
 #[derive(Clone)]
 pub struct MevComponentChannels<DB = KabuDB> {
     /// Channel for swap composition messages (Strategy -> Router -> Signer)
-    pub swap_compose: broadcast::Sender<MessageSwapCompose<DB, KabuDataTypesEthereum>>,
+    pub swap_compose: broadcast::Sender<MessageSwapCompose<DB, EthPrimitives>>,
     /// Channel for transaction composition messages (Signer -> Broadcaster)
-    pub tx_compose: broadcast::Sender<MessageTxCompose>,
+    pub tx_compose: broadcast::Sender<MessageTxCompose<EthPrimitives>>,
     /// Channel for market events (Market -> Strategy/HealthMonitor)
     pub market_events: broadcast::Sender<MarketEvents>,
     /// Channel for mempool events (Pool -> Strategy)
@@ -30,7 +30,7 @@ pub struct MevComponentChannels<DB = KabuDB> {
     /// Channel for health monitoring events (HealthMonitor -> Market/Strategy)
     pub health_events: broadcast::Sender<MessageHealthEvent>,
     /// Shared signers state (used by Router and Signer)
-    pub signers: Arc<RwLock<TxSigners<KabuDataTypesEthereum>>>,
+    pub signers: Arc<RwLock<TxSigners<EthPrimitives>>>,
     /// Account nonce and balance tracking (used by Signer and Broadcaster)
     pub account_state: Arc<RwLock<AccountNonceAndBalanceState>>,
 }
@@ -49,7 +49,7 @@ impl<DB: Clone> Default for MevComponentChannels<DB> {
             market_events,
             mempool_events,
             health_events,
-            signers: Arc::new(RwLock::new(TxSigners::new())),
+            signers: Arc::new(RwLock::new(TxSigners::<EthPrimitives>::new())),
             account_state: Arc::new(RwLock::new(AccountNonceAndBalanceState::new())),
         }
     }

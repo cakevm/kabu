@@ -9,7 +9,6 @@ repository.workspace = true
 
 [dependencies]
 kabu-evm-db = { workspace = true }
-kabu-types-blockchain = { workspace = true }
 kabu-types-entities = { workspace = true }
 kabu-types-events = { workspace = true }
 
@@ -18,4 +17,5 @@ tokio = { workspace = true }
 tracing = { workspace = true }
 
 # reth
+reth-ethereum-primitives = { workspace = true }
 reth-tasks = { workspace = true }

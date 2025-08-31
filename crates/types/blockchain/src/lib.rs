@@ -1,9 +1,6 @@
 pub use accountnoncetx::AccountNonceAndTransactions;
 pub use chain_parameters::ChainParameters;
 pub use fetchstate::FetchState;
-pub use kabu_data_types::{KabuBlock, KabuDataTypes, KabuTransactionRequest, KabuTx};
-pub use kabu_data_types_ethereum::KabuDataTypesEthereum;
-pub use kabu_data_types_optimism::KabuDataTypesOptimism;
 pub use mempool::Mempool;
 pub use mempool_tx::MempoolTx;
 pub use opcodes::*;
@@ -14,9 +11,6 @@ pub use state_update::{
 mod accountnoncetx;
 mod chain_parameters;
 mod fetchstate;
-mod kabu_data_types;
-mod kabu_data_types_ethereum;
-mod kabu_data_types_optimism;
 mod mempool;
 mod mempool_tx;
 mod new_block;

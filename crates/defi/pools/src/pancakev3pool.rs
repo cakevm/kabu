@@ -502,7 +502,6 @@ mod tests {
     use env_logger::Env as EnvLog;
     use kabu_evm_db::KabuDBType;
     use kabu_node_debug_provider::AnvilDebugProviderFactory;
-    use kabu_types_blockchain::KabuDataTypesEthereum;
     use kabu_types_market::MarketState;
     use kabu_types_market::RequiredStateReader;
     use revm::database::CacheDB;
@@ -533,8 +532,7 @@ mod tests {
         let state_required = pool.get_state_required().unwrap();
         debug!("{:?}", state_required);
 
-        let state_update =
-            RequiredStateReader::<KabuDataTypesEthereum>::fetch_calls_and_slots(client.clone(), state_required, None).await.unwrap();
+        let state_update = RequiredStateReader::fetch_calls_and_slots(client.clone(), state_required, None).await.unwrap();
 
         let mut market_state = MarketState::new(KabuDBType::default());
 

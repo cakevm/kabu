@@ -37,8 +37,8 @@ For everyone that does not like to reinvent the wheel all the time. Have foundat
 - We keep as close as possible to the architecture of reth
 
 ## Roadmap
-- Remove `KabuDataTypes`
-- Remove `Actor` model and use trait based components like in reth
+- ~~Remove `KabuDataTypes`~~
+- ~~Remove `Actor` model and use~~ trait based components like in reth
 - Remove topology and simplify the config / codebase
 - Refactor the extra db pool cache layer to make it optional
 - Have components that can be replaced with custom implementations

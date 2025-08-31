@@ -5,9 +5,9 @@ use async_stream::stream;
 use eyre::eyre;
 use futures::Stream;
 use kabu_evm_db::KabuDBError;
-use kabu_types_blockchain::{KabuDataTypes, KabuDataTypesEthereum};
 use kabu_types_market::PoolClass;
 use kabu_types_market::{PoolId, PoolLoader, PoolWrapper};
+use reth_ethereum_primitives::EthPrimitives;
 use revm::DatabaseRef;
 use std::future::Future;
 use std::pin::Pin;
@@ -20,7 +20,7 @@ impl<P, N, LDT> PoolLoader<P, N, LDT> for CurvePoolLoader<P, N, LDT>
 where
     N: Network,
     P: Provider<N> + Clone + 'static,
-    LDT: KabuDataTypes + 'static,
+    LDT: Send + Sync + 'static,
 {
     fn get_pool_class_by_log(&self, _log_entry: &Log) -> Option<(PoolId, PoolClass)> {
         None

@@ -1,16 +1,20 @@
-use alloy_json_rpc::RpcRecv;
-use alloy_network::{BlockResponse, Network};
+use alloy_consensus::BlockHeader as AlloyBlockHeader;
+use alloy_network::Network;
+use alloy_primitives::Sealable;
 use alloy_primitives::{BlockHash, BlockNumber};
 use alloy_provider::Provider;
-use alloy_rpc_types::Header;
 use eyre::{eyre, Result};
 use kabu_core_components::Component;
 use kabu_evm_db::DatabaseKabuExt;
 use kabu_node_debug_provider::DebugProviderExt;
-use kabu_types_blockchain::{ChainParameters, KabuBlock, KabuDataTypes};
+use kabu_types_blockchain::ChainParameters;
 use kabu_types_entities::{BlockHistory, BlockHistoryManager, BlockHistoryState};
 use kabu_types_events::{MarketEvents, MessageBlock, MessageBlockHeader, MessageBlockStateUpdate};
 use kabu_types_market::MarketState;
+use reth_node_types::NodePrimitives;
+use reth_primitives_traits::Block;
+use reth_primitives_traits::BlockHeader;
+use reth_rpc_convert::TryFromBlockResponse;
 use reth_tasks::TaskExecutor;
 use revm::{Database, DatabaseCommit, DatabaseRef};
 use std::borrow::BorrowMut;
@@ -20,22 +24,23 @@ use std::sync::Arc;
 use tokio::sync::{broadcast, broadcast::error::RecvError, RwLock};
 use tracing::{debug, error, info, trace, warn};
 
-pub async fn set_chain_head<P, N, DB, LDT>(
-    block_history_manager: &BlockHistoryManager<P, N, DB, LDT>,
-    block_history: &mut BlockHistory<DB, LDT>,
+pub async fn set_chain_head<P, N, DB, NP>(
+    block_history_manager: &BlockHistoryManager<P, N, DB, NP>,
+    block_history: &mut BlockHistory<DB, NP>,
     market_events_tx: broadcast::Sender<MarketEvents>,
-    header: Header,
+    header: NP::BlockHeader,
     chain_parameters: &ChainParameters,
 ) -> Result<(bool, usize)>
 where
-    N: Network<BlockResponse = LDT::Block>,
+    N: Network,
     P: Provider<N> + DebugProviderExt<N> + Send + Sync + Clone + 'static,
-    DB: BlockHistoryState<LDT> + Clone,
-    LDT: KabuDataTypes,
-    LDT::Block: RpcRecv + BlockResponse,
+    DB: BlockHistoryState<NP> + Clone,
+    NP: NodePrimitives,
+    NP::Block: TryFromBlockResponse<N> + Block<Header = NP::BlockHeader>,
+    NP::BlockHeader: BlockHeader,
 {
-    let block_number = header.number;
-    let block_hash = header.hash;
+    let block_number = header.number();
+    let block_hash = header.hash_slow();
 
     debug!(%block_number, %block_hash, "set_chain_head block_number");
 
@@ -46,10 +51,12 @@ where
             }
 
             if is_new_block {
-                let base_fee = header.base_fee_per_gas.unwrap_or_default();
-                let next_base_fee = chain_parameters.calc_next_block_base_fee_from_header(&header) as u128;
+                let base_fee = header.base_fee_per_gas().unwrap_or_default();
+                let gas_used = header.gas_used();
+                let gas_limit = header.gas_limit();
+                let next_base_fee = chain_parameters.calc_next_block_base_fee(gas_used, gas_limit, base_fee) as u128;
 
-                let timestamp: u64 = header.timestamp;
+                let timestamp: u64 = header.timestamp();
 
                 // Block history already tracks the latest block
 
@@ -74,38 +81,39 @@ where
 }
 
 #[allow(clippy::too_many_arguments)]
-pub async fn new_block_history_worker<P, N, DB, LDT>(
+pub async fn new_block_history_worker<P, N, DB, NP>(
     client: P,
     chain_parameters: ChainParameters,
     market_state: Arc<RwLock<MarketState<DB>>>,
-    block_history: Arc<RwLock<BlockHistory<DB, LDT>>>,
-    mut block_header_update_rx: broadcast::Receiver<MessageBlockHeader<LDT>>,
-    mut block_update_rx: broadcast::Receiver<MessageBlock<LDT>>,
-    mut state_update_rx: broadcast::Receiver<MessageBlockStateUpdate<LDT>>,
+    block_history: Arc<RwLock<BlockHistory<DB, NP>>>,
+    mut block_header_update_rx: broadcast::Receiver<MessageBlockHeader<NP>>,
+    mut block_update_rx: broadcast::Receiver<MessageBlock<NP>>,
+    mut state_update_rx: broadcast::Receiver<MessageBlockStateUpdate<NP>>,
     market_events_tx: broadcast::Sender<MarketEvents>,
 ) -> Result<()>
 where
-    N: Network<BlockResponse = LDT::Block>,
+    N: Network,
     P: Provider<N> + DebugProviderExt<N> + Send + Sync + Clone + 'static,
-    DB: BlockHistoryState<LDT> + DatabaseRef + DatabaseCommit + DatabaseKabuExt + Send + Sync + Clone + 'static,
-    LDT: KabuDataTypes,
-    LDT::Block: RpcRecv + BlockResponse,
+    DB: BlockHistoryState<NP> + DatabaseRef + DatabaseCommit + DatabaseKabuExt + Send + Sync + Clone + 'static,
+    NP: NodePrimitives,
+    NP::Block: TryFromBlockResponse<N> + Block<Header = NP::BlockHeader>,
+    NP::BlockHeader: BlockHeader,
 {
     debug!("new_block_history_worker started");
 
-    let block_history_manager = BlockHistoryManager::<P, N, DB, LDT>::new(client);
+    let block_history_manager = BlockHistoryManager::<P, N, DB, NP>::new(client);
 
     loop {
         tokio::select! {
             msg = block_header_update_rx.recv() => {
-                let block_update : Result<MessageBlockHeader<LDT>, RecvError>  = msg;
+                let block_update : Result<MessageBlockHeader<NP>, RecvError>  = msg;
                 match block_update {
                     Ok(block_header)=>{
                         let mut block_history_guard = block_history.write().await;
 
                         let header = block_header.inner.header.clone();
 
-                        debug!("Block Header, Update {} {}", header.number, header.hash);
+                        debug!("Block Header, Update {} {}", header.number(), header.hash_slow());
 
 
                         set_chain_head(
@@ -123,13 +131,13 @@ where
             }
 
             msg = block_update_rx.recv() => {
-                let block_update : Result<MessageBlock<LDT>, RecvError>  = msg;
+                let block_update : Result<MessageBlock<NP>, RecvError>  = msg;
                 match block_update {
                     Ok(block)=>{
                         let block = block.inner.block;
-                        let block_header = block.get_header();
-                        let block_hash : BlockHash = block_header.hash;
-                        let block_number : BlockNumber = block_header.number;
+                        let block_header = block.header();
+                        let block_hash : BlockHash = block_header.hash_slow();
+                        let block_number : BlockNumber = block_header.number();
 
                         debug!("Block Update {} {}", block_number, block_hash);
 
@@ -139,7 +147,7 @@ where
                             &block_history_manager,
                             block_history_guard.borrow_mut(),
                             market_events_tx.clone(),
-                            block_header,
+                            block_header.clone(),
                             &chain_parameters
                         ).await
                             {
@@ -169,7 +177,7 @@ where
             }
             msg = state_update_rx.recv() => {
 
-                let state_update_msg : Result<MessageBlockStateUpdate<LDT>, RecvError> = msg;
+                let state_update_msg : Result<MessageBlockStateUpdate<NP>, RecvError> = msg;
 
                 let msg = match state_update_msg {
                     Ok(message_block_state_update) => message_block_state_update,
@@ -181,8 +189,8 @@ where
 
                 let msg = msg.inner;
                 let msg_block_header = msg.block_header;
-                let msg_block_number : BlockNumber = msg_block_header.number;
-                let msg_block_hash : BlockHash = msg_block_header.hash;
+                let msg_block_number : BlockNumber = msg_block_header.number();
+                let msg_block_hash : BlockHash = msg_block_header.hash_slow();
                 debug!("Block State update {} {}", msg_block_number, msg_block_hash);
 
 
@@ -296,25 +304,24 @@ where
 }
 
 #[derive(Clone)]
-pub struct BlockHistoryComponent<P, N, DB, LDT: KabuDataTypes + 'static> {
+pub struct BlockHistoryComponent<P, N, DB, NP: NodePrimitives + 'static> {
     client: P,
     chain_parameters: ChainParameters,
     market_state: Option<Arc<RwLock<MarketState<DB>>>>,
-    block_history: Option<Arc<RwLock<BlockHistory<DB, LDT>>>>,
-    block_header_update_rx: Option<broadcast::Sender<MessageBlockHeader<LDT>>>,
-    block_update_rx: Option<broadcast::Sender<MessageBlock<LDT>>>,
-    state_update_rx: Option<broadcast::Sender<MessageBlockStateUpdate<LDT>>>,
+    block_history: Option<Arc<RwLock<BlockHistory<DB, NP>>>>,
+    block_header_update_rx: Option<broadcast::Sender<MessageBlockHeader<NP>>>,
+    block_update_rx: Option<broadcast::Sender<MessageBlock<NP>>>,
+    state_update_rx: Option<broadcast::Sender<MessageBlockStateUpdate<NP>>>,
     market_events_tx: Option<broadcast::Sender<MarketEvents>>,
     _n: PhantomData<N>,
 }
 
-impl<P, N, DB, LDT> BlockHistoryComponent<P, N, DB, LDT>
+impl<P, N, DB, NP> BlockHistoryComponent<P, N, DB, NP>
 where
     N: Network,
     P: Provider<N> + DebugProviderExt<N> + Sync + Send + Clone + 'static,
-    DB: DatabaseRef + BlockHistoryState<LDT> + DatabaseKabuExt + DatabaseCommit + Database + Send + Sync + Clone + Default + 'static,
-    LDT: KabuDataTypes + 'static,
-    LDT::Block: BlockResponse,
+    DB: DatabaseRef + BlockHistoryState<NP> + DatabaseKabuExt + DatabaseCommit + Database + Send + Sync + Clone + Default + 'static,
+    NP: NodePrimitives + 'static,
 {
     pub fn new(client: P) -> Self {
         Self {
@@ -335,10 +342,10 @@ where
         mut self,
         chain_parameters: ChainParameters,
         market_state: Arc<RwLock<MarketState<DB>>>,
-        block_history: Arc<RwLock<BlockHistory<DB, LDT>>>,
-        block_header_update_rx: broadcast::Sender<MessageBlockHeader<LDT>>,
-        block_update_rx: broadcast::Sender<MessageBlock<LDT>>,
-        state_update_rx: broadcast::Sender<MessageBlockStateUpdate<LDT>>,
+        block_history: Arc<RwLock<BlockHistory<DB, NP>>>,
+        block_header_update_rx: broadcast::Sender<MessageBlockHeader<NP>>,
+        block_update_rx: broadcast::Sender<MessageBlock<NP>>,
+        state_update_rx: broadcast::Sender<MessageBlockStateUpdate<NP>>,
         market_events_tx: broadcast::Sender<MarketEvents>,
     ) -> Self {
         self.chain_parameters = chain_parameters;
@@ -352,13 +359,14 @@ where
     }
 }
 
-impl<P, N, DB, LDT> Component for BlockHistoryComponent<P, N, DB, LDT>
+impl<P, N, DB, NP> Component for BlockHistoryComponent<P, N, DB, NP>
 where
-    N: Network<BlockResponse = LDT::Block>,
+    N: Network,
     P: Provider<N> + DebugProviderExt<N> + Sync + Send + Clone + 'static,
-    DB: BlockHistoryState<LDT> + DatabaseRef + DatabaseCommit + DatabaseKabuExt + Send + Sync + Clone + 'static,
-    LDT: KabuDataTypes,
-    LDT::Block: BlockResponse + RpcRecv,
+    DB: BlockHistoryState<NP> + DatabaseRef + DatabaseCommit + DatabaseKabuExt + Send + Sync + Clone + 'static,
+    NP: NodePrimitives,
+    NP::Block: TryFromBlockResponse<N> + Block<Header = NP::BlockHeader>,
+    NP::BlockHeader: BlockHeader,
 {
     fn spawn(self, executor: TaskExecutor) -> Result<()> {
         let name = self.name();

@@ -6,9 +6,9 @@ use tokio::sync::broadcast;
 use tracing::{debug, error, info};
 
 use kabu_core_components::Component;
-use kabu_types_blockchain::KabuDataTypesEthereum;
 use kabu_types_events::LoomTask;
 use kabu_types_market::{PoolClass, PoolId, PoolLoaders};
+use reth_ethereum_primitives::EthPrimitives;
 use reth_tasks::TaskExecutor;
 
 /// Component that loads historical pool data by scanning past blocks for pool creation events
@@ -23,7 +23,7 @@ where
     client: P,
     /// Pool loaders for different protocols
     #[allow(dead_code)]
-    pool_loaders: Arc<PoolLoaders<PL, N, KabuDataTypesEthereum>>,
+    pool_loaders: Arc<PoolLoaders<PL, N, EthPrimitives>>,
     /// Channel to send discovered tasks
     tasks_tx: Option<broadcast::Sender<LoomTask>>,
     /// Starting block number for historical scan
@@ -42,7 +42,7 @@ where
 {
     pub fn new(
         client: P,
-        pool_loaders: Arc<PoolLoaders<PL, N, KabuDataTypesEthereum>>,
+        pool_loaders: Arc<PoolLoaders<PL, N, EthPrimitives>>,
         start_block: u64,
         block_batch_size: u64,
         max_batches: u64,
@@ -188,11 +188,7 @@ impl HistoryPoolLoaderComponentBuilder {
         self
     }
 
-    pub fn build<P, PL, N>(
-        self,
-        client: P,
-        pool_loaders: Arc<PoolLoaders<PL, N, KabuDataTypesEthereum>>,
-    ) -> HistoryPoolLoaderComponent<P, PL, N>
+    pub fn build<P, PL, N>(self, client: P, pool_loaders: Arc<PoolLoaders<PL, N, EthPrimitives>>) -> HistoryPoolLoaderComponent<P, PL, N>
     where
         N: Network + 'static,
         P: Provider<N> + Send + Sync + Clone + 'static,

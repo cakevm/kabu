@@ -1,5 +1,6 @@
 #[cfg(test)]
 mod test {
+    use alloy_consensus::BlockHeader;
     use alloy_eips::BlockNumberOrTag;
     use alloy_network::Ethereum;
     use alloy_node_bindings::Anvil;
@@ -8,30 +9,35 @@ mod test {
     use alloy_provider::Provider;
     use alloy_provider::ProviderBuilder;
     use alloy_rpc_client::ClientBuilder;
-    use alloy_rpc_types::{Block, Header};
     use eyre::eyre;
     use kabu_core_blockchain::{Blockchain, BlockchainState};
     use kabu_evm_db::{DatabaseKabuExt, KabuDB, KabuDBType};
     use kabu_evm_utils::geth_state_update::{
         account_state_add_storage, account_state_with_nonce_and_balance, geth_state_update_add_account,
     };
-    use kabu_types_blockchain::KabuDataTypesEthereum;
     use kabu_types_blockchain::{GethStateUpdate, GethStateUpdateVec};
     use kabu_types_events::{BlockHeaderEventData, Message};
     use kabu_types_events::{BlockStateUpdate, BlockUpdate, MessageBlockHeader};
     use kabu_types_market::MarketState;
+    use reth_ethereum_primitives::EthPrimitives;
+    use reth_primitives_traits::Block;
+    use reth_primitives_traits::NodePrimitives;
+    use reth_rpc_convert::TryFromBlockResponse;
     use revm::DatabaseRef;
     use std::time::Duration;
     use tracing::error;
     use tracing::info;
 
-    async fn broadcast_to_channels(
-        bc: &Blockchain,
-        header: Header,
-        block: Option<Block>,
+    async fn broadcast_to_channels<N: NodePrimitives>(
+        bc: &Blockchain<N>,
+        header: N::BlockHeader,
+        block: Option<N::Block>,
         state_update: Option<GethStateUpdateVec>,
-    ) -> eyre::Result<()> {
-        let header_msg: MessageBlockHeader = Message::new(BlockHeaderEventData::new(header.clone()));
+    ) -> eyre::Result<()>
+    where
+        N::BlockHeader: BlockHeader,
+    {
+        let header_msg: MessageBlockHeader<N> = Message::new(BlockHeaderEventData::new(header.clone()));
         if let Err(e) = bc.new_block_headers_channel().send(header_msg) {
             error!("bc.new_block_headers_channel().send : {}", e)
         }
@@ -47,7 +53,7 @@ mod test {
         tokio::time::sleep(Duration::from_millis(100)).await;
 
         if let Some(state_update) = state_update {
-            let state_update_msg = BlockStateUpdate { block_header: header.clone(), state_update, _phantom: std::marker::PhantomData };
+            let state_update_msg = BlockStateUpdate { block_header: header.clone(), state_update };
             if let Err(e) = bc.new_block_state_update_channel().send(Message::new(state_update_msg)) {
                 error!("bc.new_block_with_tx_channel().send : {}", e)
             }
@@ -56,21 +62,31 @@ mod test {
         Ok(())
     }
 
-    async fn broadcast_latest_block<P>(provider: P, bc: &Blockchain, state_update: Option<GethStateUpdateVec>) -> eyre::Result<()>
+    async fn broadcast_latest_block<P>(
+        provider: P,
+        bc: &Blockchain<EthPrimitives>,
+        state_update: Option<GethStateUpdateVec>,
+    ) -> eyre::Result<()>
     where
         P: Provider<Ethereum> + Send + Sync + Clone + 'static,
     {
-        let block = provider.get_block_by_number(BlockNumberOrTag::Latest).full().await?.unwrap();
+        let block_response = provider.get_block_by_number(BlockNumberOrTag::Latest).full().await?.unwrap();
+
+        // Convert RPC block to primitive block
+        let block = <reth_ethereum_primitives::Block as TryFromBlockResponse<Ethereum>>::from_block_response(block_response.clone())
+            .map_err(|e| eyre!("Failed to convert block response: {}", e))?;
+
+        let header = block.header().clone();
 
         let state_update = state_update.unwrap_or_default();
 
-        broadcast_to_channels(bc, block.header.clone(), Some(block), Some(state_update)).await
+        broadcast_to_channels(bc, header, Some(block), Some(state_update)).await
     }
 
     async fn test_actor_block_history_actor_chain_head_worker<P>(
         provider: P,
-        bc: Blockchain,
-        state: BlockchainState<KabuDB, KabuDataTypesEthereum>,
+        bc: Blockchain<EthPrimitives>,
+        state: BlockchainState<KabuDB, EthPrimitives>,
     ) -> eyre::Result<()>
     where
         P: Provider<Ethereum> + Send + Sync + Clone + 'static,
@@ -149,7 +165,12 @@ mod test {
             block_2_1.header.hash
         );
 
-        broadcast_to_channels(&bc, block_3_0.header.clone(), Some(block_3_0.clone()), Some(vec![])).await?; // broadcast 3#0, chain_head must change
+        // Convert RPC block to primitive block
+        let block_3_0_primitive =
+            <reth_ethereum_primitives::Block as TryFromBlockResponse<Ethereum>>::from_block_response(block_3_0.clone())
+                .map_err(|e| eyre!("Failed to convert block response: {}", e))?;
+
+        broadcast_to_channels(&bc, block_3_0_primitive.header().clone(), Some(block_3_0_primitive), Some(vec![])).await?; // broadcast 3#0, chain_head must change
 
         assert_eq!(state.block_history().read().await.latest_block_number, block_3_0.header.number);
         assert_eq!(
@@ -183,7 +204,7 @@ mod test {
 
         let market_state = MarketState::new(KabuDB::empty());
 
-        let bc_state = BlockchainState::<KabuDB, KabuDataTypesEthereum>::new_with_market_state(market_state);
+        let bc_state = BlockchainState::<KabuDB, EthPrimitives>::new_with_market_state(market_state);
 
         // Skip starting component in test
 
@@ -251,7 +272,7 @@ mod test {
 
         let market_state = MarketState::new(KabuDB::empty());
 
-        let bc_state = BlockchainState::<KabuDB, KabuDataTypesEthereum>::new_with_market_state(market_state);
+        let bc_state = BlockchainState::<KabuDB, EthPrimitives>::new_with_market_state(market_state);
 
         // Start the BlockHistoryComponent to process block events
         // Since we're in a tokio test, manually start the component worker

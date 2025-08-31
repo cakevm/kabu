@@ -1,10 +1,12 @@
 use super::affected_pools_state::get_affected_pools_from_state_update;
+use alloy_consensus::BlockHeader;
 use eyre::{eyre, Result};
 use kabu_core_components::Component;
-use kabu_types_blockchain::{ChainParameters, KabuDataTypes};
+use kabu_types_blockchain::ChainParameters;
 use kabu_types_entities::BlockHistory;
 use kabu_types_events::{MarketEvents, StateUpdateEvent};
 use kabu_types_market::Market;
+use reth_node_types::NodePrimitives;
 use reth_tasks::TaskExecutor;
 use revm::DatabaseRef;
 use std::sync::Arc;
@@ -12,13 +14,17 @@ use tokio::sync::broadcast::error::RecvError;
 use tokio::sync::{broadcast, RwLock};
 use tracing::error;
 
-pub async fn block_state_change_worker<DB: DatabaseRef + Send + Sync + Clone + 'static, LDT: KabuDataTypes>(
+pub async fn block_state_change_worker<DB, LDT>(
     chain_parameters: ChainParameters,
     market: Arc<RwLock<Market>>,
     block_history: Arc<RwLock<BlockHistory<DB, LDT>>>,
     mut market_events_rx: broadcast::Receiver<MarketEvents>,
     state_updates_broadcaster: broadcast::Sender<StateUpdateEvent<DB, LDT>>,
-) {
+) where
+    DB: DatabaseRef + Send + Sync + Clone + 'static,
+    LDT: NodePrimitives,
+    LDT::BlockHeader: BlockHeader,
+{
     loop {
         let market_event = match market_events_rx.recv().await {
             Ok(market_event) => market_event,
@@ -61,9 +67,12 @@ pub async fn block_state_change_worker<DB: DatabaseRef + Send + Sync + Clone + '
             continue;
         };
 
-        let next_block_number = block_history_entry.number() + 1;
-        let next_block_timestamp = block_history_entry.timestamp() + 12;
-        let next_base_fee = chain_parameters.calc_next_block_base_fee_from_header(&block_history_entry.header);
+        let next_block_number = block_history_entry.header.number() + 1;
+        let next_block_timestamp = block_history_entry.header.timestamp() + 12;
+        let base_fee = block_history_entry.header.base_fee_per_gas().unwrap_or_default();
+        let gas_used = block_history_entry.header.gas_used();
+        let gas_limit = block_history_entry.header.gas_limit();
+        let next_base_fee = chain_parameters.calc_next_block_base_fee(gas_used, gas_limit, base_fee);
 
         let request = StateUpdateEvent::new(
             next_block_number,
@@ -85,7 +94,7 @@ pub async fn block_state_change_worker<DB: DatabaseRef + Send + Sync + Clone + '
     }
 }
 
-pub struct BlockStateChangeProcessorComponent<DB: Clone + Send + Sync + 'static, LDT: KabuDataTypes + 'static> {
+pub struct BlockStateChangeProcessorComponent<DB: Clone + Send + Sync + 'static, LDT: NodePrimitives + 'static> {
     chain_parameters: ChainParameters,
     market: Option<Arc<RwLock<Market>>>,
     block_history: Option<Arc<RwLock<BlockHistory<DB, LDT>>>>,
@@ -93,7 +102,7 @@ pub struct BlockStateChangeProcessorComponent<DB: Clone + Send + Sync + 'static,
     state_updates_tx: Option<broadcast::Sender<StateUpdateEvent<DB, LDT>>>,
 }
 
-impl<DB: DatabaseRef + Send + Sync + Clone + 'static, LDT: KabuDataTypes> BlockStateChangeProcessorComponent<DB, LDT> {
+impl<DB: DatabaseRef + Send + Sync + Clone + 'static, LDT: NodePrimitives> BlockStateChangeProcessorComponent<DB, LDT> {
     pub fn new() -> BlockStateChangeProcessorComponent<DB, LDT> {
         BlockStateChangeProcessorComponent {
             chain_parameters: ChainParameters::ethereum(),
@@ -122,13 +131,13 @@ impl<DB: DatabaseRef + Send + Sync + Clone + 'static, LDT: KabuDataTypes> BlockS
     }
 }
 
-impl<DB: DatabaseRef + Send + Sync + Clone + 'static, LDT: KabuDataTypes> Default for BlockStateChangeProcessorComponent<DB, LDT> {
+impl<DB: DatabaseRef + Send + Sync + Clone + 'static, LDT: NodePrimitives> Default for BlockStateChangeProcessorComponent<DB, LDT> {
     fn default() -> Self {
         Self::new()
     }
 }
 
-impl<DB: DatabaseRef + Send + Sync + Clone + 'static, LDT: KabuDataTypes> Component for BlockStateChangeProcessorComponent<DB, LDT> {
+impl<DB: DatabaseRef + Send + Sync + Clone + 'static, LDT: NodePrimitives> Component for BlockStateChangeProcessorComponent<DB, LDT> {
     fn spawn(self, executor: TaskExecutor) -> Result<()> {
         let name = self.name();
 

@@ -1,26 +1,31 @@
 use crate::tx_compose::TxComposeData;
 use crate::Message;
-use alloy_eips::eip2718::Encodable2718;
 use alloy_primitives::{Bytes, TxHash, U256};
+use alloy_rpc_types::TransactionRequest;
 use eyre::{eyre, Result};
-use kabu_types_blockchain::{GethStateUpdateVec, KabuDataTypes, KabuDataTypesEthereum};
+use kabu_types_blockchain::GethStateUpdateVec;
 use kabu_types_market::PoolId;
 use kabu_types_swap::Swap;
+use reth_ethereum_primitives::EthPrimitives;
+use reth_node_types::NodePrimitives;
 use revm::DatabaseRef;
 use std::ops::Deref;
 
 #[derive(Clone, Debug)]
-pub enum TxState<LDT: KabuDataTypes = KabuDataTypesEthereum> {
-    Stuffing(LDT::Transaction),
-    SignatureRequired(LDT::TransactionRequest),
+pub enum TxState<N: NodePrimitives = EthPrimitives> {
+    Stuffing(N::SignedTx),
+    SignatureRequired(Box<TransactionRequest>),
     ReadyForBroadcast(Bytes),
     ReadyForBroadcastStuffing(Bytes),
 }
 
-impl TxState {
+impl<N: NodePrimitives> TxState<N> {
     pub fn rlp(&self) -> Result<Bytes> {
         match self {
-            TxState::Stuffing(t) => Ok(Bytes::from(t.clone().inner.encoded_2718())),
+            TxState::Stuffing(_t) => {
+                // TODO: Need to implement encoding for NodePrimitives::SignedTx
+                Err(eyre!("Encoding not yet implemented for NodePrimitives"))
+            }
             TxState::ReadyForBroadcast(t) | TxState::ReadyForBroadcastStuffing(t) => Ok(t.clone()),
             _ => Err(eyre!("NOT_READY_FOR_BROADCAST")),
         }
@@ -28,22 +33,22 @@ impl TxState {
 }
 
 #[derive(Clone, Debug)]
-pub enum SwapComposeMessage<DB, LDT: KabuDataTypes = KabuDataTypesEthereum> {
-    Prepare(SwapComposeData<DB, LDT>),
-    Estimate(SwapComposeData<DB, LDT>),
-    Ready(SwapComposeData<DB, LDT>),
+pub enum SwapComposeMessage<DB, N: NodePrimitives = EthPrimitives> {
+    Prepare(SwapComposeData<DB, N>),
+    Estimate(SwapComposeData<DB, N>),
+    Ready(SwapComposeData<DB, N>),
 }
 
-impl<DB, LDT: KabuDataTypes> Deref for SwapComposeMessage<DB, LDT> {
-    type Target = SwapComposeData<DB, LDT>;
+impl<DB, N: NodePrimitives> Deref for SwapComposeMessage<DB, N> {
+    type Target = SwapComposeData<DB, N>;
 
     fn deref(&self) -> &Self::Target {
         self.data()
     }
 }
 
-impl<DB, LDT: KabuDataTypes> SwapComposeMessage<DB, LDT> {
-    pub fn data(&self) -> &SwapComposeData<DB, LDT> {
+impl<DB, N: NodePrimitives> SwapComposeMessage<DB, N> {
+    pub fn data(&self) -> &SwapComposeData<DB, N> {
         match self {
             SwapComposeMessage::Prepare(x) | SwapComposeMessage::Estimate(x) | SwapComposeMessage::Ready(x) => x,
         }
@@ -51,8 +56,8 @@ impl<DB, LDT: KabuDataTypes> SwapComposeMessage<DB, LDT> {
 }
 
 #[derive(Clone, Debug)]
-pub struct SwapComposeData<DB, LDT: KabuDataTypes = KabuDataTypesEthereum> {
-    pub tx_compose: TxComposeData<LDT>,
+pub struct SwapComposeData<DB, N: NodePrimitives = EthPrimitives> {
+    pub tx_compose: TxComposeData<N>,
     pub swap: Swap,
     pub prestate: Option<DB>,
     pub poststate: Option<DB>,
@@ -62,7 +67,7 @@ pub struct SwapComposeData<DB, LDT: KabuDataTypes = KabuDataTypesEthereum> {
     pub tips: Option<U256>,
 }
 
-impl<DB: Clone + 'static, LDT: KabuDataTypes> SwapComposeData<DB, LDT> {
+impl<DB: Clone + 'static, N: NodePrimitives> SwapComposeData<DB, N> {
     pub fn same_stuffing(&self, others_stuffing_txs_hashes: &[TxHash]) -> bool {
         let tx_len = self.tx_compose.stuffing_txs_hashes.len();
 
@@ -108,7 +113,7 @@ impl<DB: Clone + 'static, LDT: KabuDataTypes> SwapComposeData<DB, LDT> {
     }
 }
 
-impl<DB: DatabaseRef + Send + Sync + Clone + 'static, LDT: KabuDataTypes> Default for SwapComposeData<DB, LDT> {
+impl<DB: DatabaseRef + Send + Sync + Clone + 'static, N: NodePrimitives> Default for SwapComposeData<DB, N> {
     fn default() -> Self {
         Self {
             tx_compose: Default::default(),
@@ -123,18 +128,18 @@ impl<DB: DatabaseRef + Send + Sync + Clone + 'static, LDT: KabuDataTypes> Defaul
     }
 }
 
-pub type MessageSwapCompose<DB, LDT = KabuDataTypesEthereum> = Message<SwapComposeMessage<DB, LDT>>;
+pub type MessageSwapCompose<DB, N = EthPrimitives> = Message<SwapComposeMessage<DB, N>>;
 
-impl<DB, LDT: KabuDataTypes> MessageSwapCompose<DB, LDT> {
-    pub fn prepare(data: SwapComposeData<DB, LDT>) -> Self {
+impl<DB, N: NodePrimitives> MessageSwapCompose<DB, N> {
+    pub fn prepare(data: SwapComposeData<DB, N>) -> Self {
         Message::new(SwapComposeMessage::Prepare(data))
     }
 
-    pub fn estimate(data: SwapComposeData<DB, LDT>) -> Self {
+    pub fn estimate(data: SwapComposeData<DB, N>) -> Self {
         Message::new(SwapComposeMessage::Estimate(data))
     }
 
-    pub fn ready(data: SwapComposeData<DB, LDT>) -> Self {
+    pub fn ready(data: SwapComposeData<DB, N>) -> Self {
         Message::new(SwapComposeMessage::Ready(data))
     }
 }

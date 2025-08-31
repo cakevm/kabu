@@ -20,7 +20,8 @@ use kabu_types_market::MarketState;
 use kabu_types_market::SwapDirection;
 use kabu_types_market::{Market, PoolClass, PoolId, PoolLoaders, PoolWrapper, PoolsLoadingConfig};
 
-use kabu_types_blockchain::{get_touched_addresses, KabuDataTypes};
+use kabu_types_blockchain::get_touched_addresses;
+use reth_node_types::NodePrimitives;
 use revm::{Database, DatabaseCommit, DatabaseRef};
 use tokio::sync::Semaphore;
 
@@ -109,11 +110,11 @@ pub async fn fetch_and_add_pool_by_pool_id<P, PL, N, DB, LDT>(
     pool_class: PoolClass,
 ) -> Result<(PoolId, Vec<usize>)>
 where
-    N: Network<TransactionRequest = LDT::TransactionRequest>,
+    N: Network<TransactionRequest = alloy_rpc_types::TransactionRequest>,
     P: Provider<N> + DebugProviderExt<N> + Send + Sync + Clone + 'static,
     PL: Provider<N> + Send + Sync + Clone + 'static,
     DB: DatabaseRef + Database + DatabaseCommit + Send + Sync + Clone + 'static,
-    LDT: KabuDataTypes + 'static,
+    LDT: NodePrimitives + 'static,
 {
     debug!(%pool_id, %pool_class, "Fetching pool");
 
@@ -128,13 +129,13 @@ pub async fn fetch_state_and_add_pool<P, N, DB, LDT>(
     pool_wrapped: PoolWrapper,
 ) -> Result<(PoolId, Vec<usize>)>
 where
-    N: Network<TransactionRequest = LDT::TransactionRequest>,
+    N: Network<TransactionRequest = alloy_rpc_types::TransactionRequest>,
     P: Provider<N> + DebugProviderExt<N> + Send + Sync + Clone + 'static,
     DB: Database + DatabaseRef + DatabaseCommit + Send + Sync + Clone + 'static,
-    LDT: KabuDataTypes,
+    LDT: NodePrimitives,
 {
     match pool_wrapped.get_state_required() {
-        Ok(required_state) => match RequiredStateReader::<LDT>::fetch_calls_and_slots::<N, P>(client, required_state, None).await {
+        Ok(required_state) => match RequiredStateReader::fetch_calls_and_slots::<N, P>(client, required_state, None).await {
             Ok(state) => {
                 let pool_address = pool_wrapped.get_address();
                 {
@@ -242,7 +243,7 @@ where
         }
     }
 
-    pub fn on_bc<LDT: KabuDataTypes>(self, bc: &Blockchain, state: &BlockchainState<DB, LDT>) -> Self {
+    pub fn on_bc<LDT: NodePrimitives>(self, bc: &Blockchain, state: &BlockchainState<DB, LDT>) -> Self {
         Self {
             market: Some(bc.market()),
             market_state: Some(state.market_state_commit()),

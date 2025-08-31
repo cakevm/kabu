@@ -15,11 +15,17 @@ kabu-types-entities.workspace = true
 kabu-types-events.workspace = true
 kabu-types-market.workspace = true
 
-alloy-chains.workspace = true
 
-alloy.workspace = true
 eyre.workspace = true
 influxdb.workspace = true
 revm.workspace = true
 tokio.workspace = true
 tracing.workspace = true
+
+# alloy
+alloy.workspace = true
+alloy-chains.workspace = true
+
+# reth
+reth-ethereum-primitives.workspace = true
+reth-node-types.workspace = true

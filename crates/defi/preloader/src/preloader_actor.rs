@@ -16,9 +16,10 @@ use eyre::{eyre, Result};
 use kabu_core_blockchain::{Blockchain, BlockchainState};
 use kabu_defi_address_book::TokenAddressEth;
 use kabu_evm_utils::{BalanceCheater, NWETH};
-use kabu_types_blockchain::{GethStateUpdate, KabuDataTypes};
+use kabu_types_blockchain::GethStateUpdate;
 use kabu_types_entities::{AccountNonceAndBalanceState, TxSigners};
 use kabu_types_market::MarketState;
+use reth_node_types::NodePrimitives;
 use revm::{Database, DatabaseCommit, DatabaseRef};
 use tracing::{debug, error, trace};
 
@@ -168,7 +169,7 @@ where
         Self { name, ..self }
     }
 
-    pub fn on_bc<LDT: KabuDataTypes>(self, bc: &Blockchain<LDT>, state: &BlockchainState<DB, LDT>) -> Self {
+    pub fn on_bc<NP: NodePrimitives>(self, bc: &Blockchain<NP>, state: &BlockchainState<DB, NP>) -> Self {
         Self { account_nonce_balance_state: Some(bc.nonce_and_balance()), market_state: Some(state.market_state_commit()), ..self }
     }
 

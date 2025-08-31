@@ -51,7 +51,6 @@ kabu-node-config = { workspace = true, optional = true }
 kabu-node-debug-provider = { workspace = true, optional = true }
 kabu-node-exex = { workspace = true, optional = true }
 kabu-node-json-rpc = { workspace = true, optional = true }
-kabu-node-player = { workspace = true, optional = true }
 # rpc
 kabu-rpc-handler = { workspace = true, optional = true }
 kabu-rpc-state = { workspace = true, optional = true }
@@ -128,7 +127,6 @@ node-config = ["dep:kabu-node-config", "node"]
 node-debug-provider = ["dep:kabu-node-debug-provider", "node"]
 node-exex = ["dep:kabu-node-exex", "node"]
 node-json-rpc = ["dep:kabu-node-json-rpc", "node"]
-node-player = ["dep:kabu-node-player", "node"]
 
 rpc-handler = ["dep:kabu-rpc-handler", "rpc"]
 rpc-state = ["dep:kabu-rpc-state", "rpc"]
@@ -199,7 +197,7 @@ defi-full = [
 evm-full = ["evm-db", "evm-utils"]
 execution-full = ["execution-estimator", "execution-multicaller"]
 metrics-full = ["metrics"]
-node-full = ["node-config", "node-debug-provider", "node-exex", "node-json-rpc", "node-player"]
+node-full = ["node-config", "node-debug-provider", "node-exex", "node-json-rpc"]
 rpc-full = ["rpc-handler", "rpc-state"]
 storage-full = ["storage-db"]
 strategy-full = ["strategy-merger"]

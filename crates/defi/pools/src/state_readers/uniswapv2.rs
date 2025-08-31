@@ -67,7 +67,6 @@ mod tests {
     use alloy_evm::EvmEnv;
     use kabu_evm_db::{DatabaseHelpers, KabuDBType};
     use kabu_node_debug_provider::AnvilDebugProviderFactory;
-    use kabu_types_blockchain::KabuDataTypesEthereum;
     use kabu_types_market::Pool;
     use kabu_types_market::RequiredStateReader;
     use std::env;
@@ -82,8 +81,7 @@ mod tests {
         let pool_address = address!("10ef7f8833ea986109abc6ef2ac379bf4baf2801");
         let pool = UniswapV2Pool::fetch_pool_data(client.clone(), pool_address).await?;
         let state_required = pool.get_state_required()?;
-        let state_update =
-            RequiredStateReader::<KabuDataTypesEthereum>::fetch_calls_and_slots(client.clone(), state_required, None).await?;
+        let state_update = RequiredStateReader::fetch_calls_and_slots(client.clone(), state_required, None).await?;
 
         let mut state_db = KabuDBType::default();
         //state_db.apply_geth_update(state_update);

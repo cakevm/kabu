@@ -1,18 +1,18 @@
 use crate::BlockHistoryEntry;
 use kabu_evm_db::{DatabaseKabuExt, KabuDB};
-use kabu_types_blockchain::KabuDataTypes;
 use kabu_types_market::MarketStateConfig;
+use reth_node_types::NodePrimitives;
 use tracing::{error, trace};
 
-pub trait BlockHistoryState<LDT>
+pub trait BlockHistoryState<N>
 where
-    LDT: KabuDataTypes,
+    N: NodePrimitives,
 {
-    fn apply_update(self, block_history_entry: &BlockHistoryEntry<LDT>, market_state_config: &MarketStateConfig) -> Self;
+    fn apply_update(self, block_history_entry: &BlockHistoryEntry<N>, market_state_config: &MarketStateConfig) -> Self;
 }
 
-impl<LDT: KabuDataTypes> BlockHistoryState<LDT> for KabuDB {
-    fn apply_update(self, block_history_entry: &BlockHistoryEntry<LDT>, market_state_config: &MarketStateConfig) -> Self {
+impl<N: NodePrimitives> BlockHistoryState<N> for KabuDB {
+    fn apply_update(self, block_history_entry: &BlockHistoryEntry<N>, market_state_config: &MarketStateConfig) -> Self {
         let mut db = self;
         if let Some(state_update) = &block_history_entry.state_update {
             for state_diff in state_update.iter() {

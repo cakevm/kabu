@@ -384,7 +384,6 @@ mod test {
     use kabu_defi_address_book::PeripheryAddress;
     use kabu_evm_db::KabuDBType;
     use kabu_node_debug_provider::{AnvilDebugProviderFactory, AnvilDebugProviderType};
-    use kabu_types_blockchain::KabuDataTypesEthereum;
     use kabu_types_market::RequiredStateReader;
     use rand::Rng;
     use std::env;
@@ -416,9 +415,7 @@ mod test {
 
             let pool = UniswapV2Pool::fetch_pool_data(client.clone(), pool_address).await?;
             let state_required = pool.get_state_required()?;
-            let state_update =
-                RequiredStateReader::<KabuDataTypesEthereum>::fetch_calls_and_slots(client.clone(), state_required, Some(block_number))
-                    .await?;
+            let state_update = RequiredStateReader::fetch_calls_and_slots(client.clone(), state_required, Some(block_number)).await?;
 
             let mut state_db = KabuDBType::default();
             state_db.apply_geth_update(state_update);
@@ -477,9 +474,7 @@ mod test {
         for pool_address in POOL_ADDRESSES {
             let pool = UniswapV2Pool::fetch_pool_data(client.clone(), pool_address).await?;
             let state_required = pool.get_state_required()?;
-            let state_update =
-                RequiredStateReader::<KabuDataTypesEthereum>::fetch_calls_and_slots(client.clone(), state_required, Some(block_number))
-                    .await?;
+            let state_update = RequiredStateReader::fetch_calls_and_slots(client.clone(), state_required, Some(block_number)).await?;
 
             let mut state_db = KabuDBType::default();
             state_db.apply_geth_update(state_update);
@@ -508,9 +503,7 @@ mod test {
         for pool_address in POOL_ADDRESSES {
             let pool = UniswapV2Pool::fetch_pool_data(client.clone(), pool_address).await?;
             let state_required = pool.get_state_required()?;
-            let state_update =
-                RequiredStateReader::<KabuDataTypesEthereum>::fetch_calls_and_slots(client.clone(), state_required, Some(block_number))
-                    .await?;
+            let state_update = RequiredStateReader::fetch_calls_and_slots(client.clone(), state_required, Some(block_number)).await?;
 
             let mut state_db = KabuDBType::default();
             state_db.apply_geth_update(state_update);

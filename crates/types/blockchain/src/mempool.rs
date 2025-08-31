@@ -1,22 +1,24 @@
-use crate::kabu_data_types::KabuTx;
 use crate::{AccountNonceAndTransactions, FetchState, GethStateUpdate, MempoolTx};
-use crate::{KabuDataTypes, KabuDataTypesEthereum};
+use alloy_consensus::transaction::SignerRecoverable;
+use alloy_consensus::Transaction;
 use alloy_primitives::map::HashMap;
 use alloy_primitives::BlockNumber;
 use alloy_primitives::{Address, TxHash};
 use alloy_rpc_types_eth::Log;
 use chrono::{DateTime, Utc};
 use eyre::{eyre, Result};
+use reth_node_types::NodePrimitives;
+use reth_primitives_traits::SignedTransaction;
 use std::collections::hash_map::Entry;
 
-#[derive(Clone, Debug, Default)]
-pub struct Mempool<LDT: KabuDataTypes = KabuDataTypesEthereum> {
-    pub txs: HashMap<TxHash, MempoolTx<LDT>>,
+#[derive(Debug, Default)]
+pub struct Mempool<N: NodePrimitives> {
+    pub txs: HashMap<TxHash, MempoolTx<N>>,
     accounts: HashMap<Address, AccountNonceAndTransactions>,
 }
 
-impl<LDT: KabuDataTypes> Mempool<LDT> {
-    pub fn new() -> Mempool<KabuDataTypesEthereum> {
+impl<N: NodePrimitives> Mempool<N> {
+    pub fn new() -> Mempool<N> {
         Mempool { txs: HashMap::default(), accounts: HashMap::default() }
     }
 
@@ -32,9 +34,8 @@ impl<LDT: KabuDataTypes> Mempool<LDT> {
         self.txs.contains_key(tx_hash)
     }
 
-    pub fn add_tx(&mut self, tx: LDT::Transaction) -> &mut Self {
-        let tx_hash: TxHash = tx.get_tx_hash();
-        let entry = self.txs.entry(tx_hash).or_default();
+    pub fn add_tx(&mut self, tx: N::SignedTx) -> &mut Self {
+        let entry = self.txs.entry(*tx.tx_hash()).or_default();
         entry.tx = Some(tx);
         self
     }
@@ -51,25 +52,31 @@ impl<LDT: KabuDataTypes> Mempool<LDT> {
         self
     }
 
-    pub fn filter_by_gas_price(&self, gas_price: u128) -> Vec<&MempoolTx<LDT>> {
+    pub fn filter_by_gas_price(&self, gas_price: u128) -> Vec<&MempoolTx<N>>
+    where
+        N::SignedTx: SignedTransaction,
+    {
         self.txs
             .values()
-            .filter(|&item| item.mined.is_none() && item.tx.clone().map_or_else(|| false, |tx| tx.get_gas_price() >= gas_price))
+            .filter(|&item| item.mined.is_none() && item.tx.as_ref().is_some_and(|tx| tx.max_fee_per_gas() >= gas_price))
             .collect()
     }
 
-    pub fn filter_ok_by_gas_price(&self, gas_price: u128) -> Vec<&MempoolTx<LDT>> {
+    pub fn filter_ok_by_gas_price(&self, gas_price: u128) -> Vec<&MempoolTx<N>>
+    where
+        N::SignedTx: SignedTransaction,
+    {
         self.txs
             .values()
             .filter(|&item| {
                 item.mined.is_none()
                     && !item.failed.unwrap_or(false)
-                    && item.tx.clone().map_or_else(|| false, |tx| tx.get_gas_price() >= gas_price)
+                    && item.tx.as_ref().is_some_and(|tx| tx.max_fee_per_gas() >= gas_price)
             })
             .collect()
     }
 
-    pub fn filter_on_block(&self, block_number: BlockNumber) -> Vec<&MempoolTx<LDT>> {
+    pub fn filter_on_block(&self, block_number: BlockNumber) -> Vec<&MempoolTx<N>> {
         self.txs.values().filter(|&item| item.mined == Some(block_number)).collect()
     }
 
@@ -120,11 +127,18 @@ impl<LDT: KabuDataTypes> Mempool<LDT> {
         self
     }
 
-    pub fn is_valid_tx(&self, tx: &LDT::Transaction) -> bool {
-        self.accounts.get(&tx.get_from()).map_or_else(|| true, |acc| acc.nonce.map_or_else(|| true, |nonce| tx.get_nonce() == nonce + 1))
+    pub fn is_valid_tx(&self, tx: &N::SignedTx) -> bool
+    where
+        N::SignedTx: SignedTransaction,
+    {
+        let from = match tx.recover_signer() {
+            Ok(addr) => addr,
+            Err(_) => return false,
+        };
+        self.accounts.get(&from).is_none_or(|acc| acc.nonce.is_none_or(|nonce| tx.nonce() == nonce + 1))
     }
 
-    pub fn get_tx_by_hash(&self, tx_hash: &TxHash) -> Option<&MempoolTx<LDT>> {
+    pub fn get_tx_by_hash(&self, tx_hash: &TxHash) -> Option<&MempoolTx<N>> {
         self.txs.get(tx_hash)
     }
 
@@ -132,7 +146,7 @@ impl<LDT: KabuDataTypes> Mempool<LDT> {
         Err(eyre!("NOT_IMPLEMENTED"))
     }
 
-    pub fn remove_tx(&mut self, tx_hash: &TxHash) -> Option<MempoolTx<LDT>> {
+    pub fn remove_tx(&mut self, tx_hash: &TxHash) -> Option<MempoolTx<N>> {
         self.txs.remove(tx_hash)
     }
 }
