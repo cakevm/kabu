@@ -18,6 +18,10 @@
 
 </div>
 
+> ⚠️ **WARNING: This codebase is under heavy development and far from ready for production use.** 
+> 
+> The code is currently being actively refactored and modernized. Many features are incomplete, broken, or subject to breaking changes without notice. It is a long road from custom types to reth node types and using all providers from reth. With limited time, it will take a while. In the meantime, feel free to join the [Telegram group](https://t.me/joinkabu) for discussion.
+
 ## What is Kabu?
 
 Kabu is a backrunning bot, currently under heavy development. It continues the journey of [loom](https://github.com/dexloom/loom). Since then many breaking changes have been made to revm, reth and alloy. The goal here is to make everything work again and modernize the codebase. Currently, Kabu is a work in progress and not yet ready for production use.
