@@ -29,9 +29,7 @@ kabu-defi-price = { workspace = true }
 kabu-execution-estimator = { workspace = true }
 kabu-execution-multicaller = { workspace = true }
 kabu-metrics = { workspace = true }
-kabu-node-config = { workspace = true }
 kabu-node-debug-provider = { workspace = true }
-kabu-node-json-rpc = { workspace = true }
 kabu-storage-db = { workspace = true }
 kabu-strategy-backrun = { workspace = true }
 kabu-strategy-merger = { workspace = true }

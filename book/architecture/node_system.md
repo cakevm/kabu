@@ -167,7 +167,6 @@ KabuEthereumNode builds components based on configuration:
 
 ### Network Components  
 - **WaitForNodeSyncComponent** - Ensures node is synced
-- **BlockProcessingComponent** - Processes new blocks
 - **MempoolProcessingComponent** - Monitors mempool
 
 ### Strategy Components

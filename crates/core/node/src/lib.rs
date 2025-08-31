@@ -32,9 +32,7 @@ use kabu_defi_price::PriceComponent;
 use kabu_execution_estimator::EvmEstimatorComponent;
 use kabu_execution_multicaller::MulticallerSwapEncoder;
 use kabu_metrics::InfluxDbWriterComponent;
-use kabu_node_config::NodeBlockComponentConfig;
 use kabu_node_debug_provider::DebugProviderExt;
-use kabu_node_json_rpc::BlockProcessingComponent;
 use kabu_storage_db::DbPool;
 use kabu_strategy_backrun::{BackrunConfig, StateChangeArbComponent};
 use kabu_strategy_merger::{ArbSwapPathMergerComponent, DiffPathMergerComponent, SamePathMergerComponent};
@@ -51,6 +49,7 @@ use kabu_types_market::{Market, MarketState};
 use reth::revm::{Database, DatabaseCommit, DatabaseRef};
 use reth_evm::ConfigureEvm;
 use reth_node_types::NodeTypesWithDB;
+use reth_provider::StateProviderFactory;
 
 /// Extended build context for Kabu components with all necessary resources
 #[derive(Clone)]
@@ -589,7 +588,6 @@ where
         + Default
         + 'static,
 {
-    block_processing: BlockProcessingComponent<P, Ethereum, KabuDataTypesEthereum>,
     block_history: BlockHistoryComponent<P, Ethereum, DB, KabuDataTypesEthereum>,
 }
 
@@ -608,7 +606,7 @@ where
         + 'static,
 {
     fn clone(&self) -> Self {
-        Self { block_processing: self.block_processing.clone(), block_history: self.block_history.clone() }
+        Self { block_history: self.block_history.clone() }
     }
 }
 
@@ -626,11 +624,8 @@ where
         + Default
         + 'static,
 {
-    pub fn new(
-        block_processing: BlockProcessingComponent<P, Ethereum, KabuDataTypesEthereum>,
-        block_history: BlockHistoryComponent<P, Ethereum, DB, KabuDataTypesEthereum>,
-    ) -> Self {
-        Self { block_processing, block_history }
+    pub fn new(block_history: BlockHistoryComponent<P, Ethereum, DB, KabuDataTypesEthereum>) -> Self {
+        Self { block_history }
     }
 }
 
@@ -649,8 +644,6 @@ where
         + 'static,
 {
     fn spawn(self, executor: reth_tasks::TaskExecutor) -> Result<()> {
-        // Spawn each component directly
-        self.block_processing.spawn(executor.clone())?;
         self.block_history.spawn(executor)?;
         Ok(())
     }
@@ -682,17 +675,6 @@ where
     async fn build_network(self, ctx: &BuilderContext<KabuBuildContext<N, R, P, DB, Evm>>) -> Result<Self::Network> {
         let kabu_ctx = ctx.as_kabu_context()?;
 
-        // Block processing component
-        let block_processing = BlockProcessingComponent::<P, Ethereum, KabuDataTypesEthereum>::new(
-            kabu_ctx.provider.clone(),
-            NodeBlockComponentConfig::all_enabled(),
-        )
-        .with_channels(
-            Some(kabu_ctx.blockchain.new_block_headers_channel()),
-            Some(kabu_ctx.blockchain.new_block_with_tx_channel()),
-            Some(kabu_ctx.blockchain.new_block_state_update_channel()),
-        );
-
         // Block history component
         let block_history = BlockHistoryComponent::<P, Ethereum, DB, KabuDataTypesEthereum>::new(kabu_ctx.provider.clone()).with_channels(
             ChainParameters::ethereum(),
@@ -704,7 +686,7 @@ where
             kabu_ctx.channels.market_events.clone(),
         );
 
-        Ok(CompositeNetworkComponent::new(block_processing, block_history))
+        Ok(CompositeNetworkComponent::new(block_history))
     }
 }
 
@@ -921,7 +903,7 @@ where
     signer_initializer: Option<InitializeSignersOneShotBlockingComponent<KabuDataTypesEthereum>>,
     market_state_preload: MarketStatePreloadedOneShotComponent<P, Ethereum, DB>,
     price_component: PriceComponent<P, Ethereum>,
-    account_monitor: AccountMonitorComponent<P, R, Ethereum, KabuDataTypesEthereum>,
+    account_monitor: AccountMonitorComponent<R, Ethereum, KabuDataTypesEthereum>,
     protocol_loader: ProtocolPoolLoaderComponent<P, P, Ethereum>,
     history_loader: HistoryPoolLoaderComponent<P, P, Ethereum>,
 }
@@ -956,7 +938,7 @@ where
 impl<P, R, DB> Component for CompositeMarketComponent<P, R, DB>
 where
     P: Provider<Ethereum> + DebugProviderExt<Ethereum> + Send + Sync + Clone + 'static,
-    R: CanonStateSubscriptions<Primitives = EthPrimitives> + Send + Sync + Clone + 'static,
+    R: CanonStateSubscriptions<Primitives = EthPrimitives> + StateProviderFactory + Send + Sync + Clone + 'static,
     DB: DatabaseRef<Error = KabuDBError>
         + Database<Error = KabuDBError>
         + DatabaseCommit
@@ -989,7 +971,7 @@ where
 impl<N, R, P, DB, Evm> MarketBuilder<KabuBuildContext<N, R, P, DB, Evm>> for KabuMarketBuilder<R, P, DB>
 where
     N: NodeTypesWithDB,
-    R: CanonStateSubscriptions<Primitives = EthPrimitives> + Send + Sync + Clone + 'static,
+    R: CanonStateSubscriptions<Primitives = EthPrimitives> + StateProviderFactory + Send + Sync + Clone + 'static,
     P: Provider<Ethereum> + DebugProviderExt<Ethereum> + Send + Sync + Clone + 'static,
     DB: DatabaseRef<Error = KabuDBError>
         + Database<Error = KabuDBError>
@@ -1021,13 +1003,11 @@ where
         let price_component = PriceComponent::new(kabu_ctx.provider.clone()).only_once().with_market(kabu_ctx.market.clone());
 
         // Account monitor - uses regular provider for queries and reth provider for canonical state
-        let account_monitor = AccountMonitorComponent::<P, R, Ethereum, KabuDataTypesEthereum>::new(
-            kabu_ctx.provider.clone(),
+        let account_monitor = AccountMonitorComponent::<R, Ethereum, KabuDataTypesEthereum>::new(
+            kabu_ctx.reth_provider.clone(),
             kabu_ctx.channels.account_state.clone(),
             kabu_ctx.channels.signers.clone(),
-            std::time::Duration::from_secs(1),
-        )
-        .with_reth_provider(kabu_ctx.reth_provider.clone());
+        );
 
         // Pool loaders
         let pool_loaders = Arc::new(PoolLoadersBuilder::<_, _, KabuDataTypesEthereum>::default_pool_loaders(
@@ -1535,6 +1515,7 @@ where
     R: reth_provider::BlockNumReader
         + reth_provider::HeaderProvider<Header = reth_node_types::HeaderTy<N>>
         + CanonStateSubscriptions<Primitives = EthPrimitives>
+        + StateProviderFactory
         + Send
         + Sync
         + Clone
@@ -1591,6 +1572,7 @@ where
     R: reth_provider::BlockNumReader
         + reth_provider::HeaderProvider<Header = reth_node_types::HeaderTy<N>>
         + CanonStateSubscriptions<Primitives = EthPrimitives>
+        + StateProviderFactory
         + Send
         + Sync
         + Clone

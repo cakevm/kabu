@@ -1,7 +1,5 @@
-pub use block_processing_component::{BlockProcessingComponent, BlockProcessingComponentBuilder};
 pub use mempool_processing_component::{MempoolProcessingComponent, MempoolProcessingComponentBuilder};
 pub use wait_for_node_sync_actor::WaitForNodeSyncOneShotBlockingActor;
 
-mod block_processing_component;
 mod mempool_processing_component;
 mod wait_for_node_sync_actor;

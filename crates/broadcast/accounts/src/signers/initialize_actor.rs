@@ -13,9 +13,7 @@ use kabu_types_entities::{AccountNonceAndBalanceState, KeyStore, LoomTxSigner, T
 #[derive(Clone)]
 pub struct InitializeSignersOneShotBlockingComponent<LDT: KabuDataTypes> {
     key: Option<Vec<u8>>,
-
     signers: Option<Arc<RwLock<TxSigners<LDT>>>>,
-
     monitor: Option<Arc<RwLock<AccountNonceAndBalanceState>>>,
 }
 
