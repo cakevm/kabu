@@ -3,7 +3,7 @@ use std::collections::HashMap;
 use std::marker::PhantomData;
 use std::ops::Deref;
 use std::sync::Arc;
-use tokio::sync::{broadcast, RwLock};
+use tokio::sync::{RwLock, broadcast};
 
 use alloy_consensus::Transaction as _;
 use alloy_eips::BlockNumberOrTag;
@@ -13,14 +13,14 @@ use alloy_provider::Provider;
 use alloy_rpc_types::state::StateOverride;
 use alloy_rpc_types::{BlockOverrides, TransactionInput, TransactionRequest};
 use alloy_rpc_types_trace::geth::GethDebugTracingCallOptions;
-use eyre::{eyre, Result};
+use eyre::{Result, eyre};
 use kabu_core_blockchain::{Blockchain, BlockchainState, Strategy};
 use kabu_core_components::Component;
 use kabu_evm_db::{DatabaseHelpers, KabuDBError};
 use kabu_evm_utils::evm_env::tx_req_to_env;
 use kabu_evm_utils::evm_transact;
 use kabu_node_debug_provider::DebugProviderExt;
-use kabu_types_blockchain::{debug_trace_call_pre_state, GethStateUpdate, GethStateUpdateVec, TRACING_CALL_OPTS};
+use kabu_types_blockchain::{GethStateUpdate, GethStateUpdateVec, TRACING_CALL_OPTS, debug_trace_call_pre_state};
 use kabu_types_entities::{DataFetcher, FetchState};
 use kabu_types_events::{MarketEvents, MessageSwapCompose, SwapComposeData, SwapComposeMessage, TxComposeData};
 use kabu_types_market::MarketState;
@@ -119,10 +119,10 @@ where
     let mut stuffing_states: Vec<(NP::SignedTx, GethStateUpdate)> = Vec::new();
 
     for (tx, lock) in stuffing_state_locks.into_iter() {
-        if let FetchState::Fetching(lock) = lock {
-            if let Some(t) = lock.read().await.deref() {
-                stuffing_states.push((tx, t.clone()));
-            }
+        if let FetchState::Fetching(lock) = lock
+            && let Some(t) = lock.read().await.deref()
+        {
+            stuffing_states.push((tx, t.clone()));
         }
     }
 
@@ -319,14 +319,13 @@ async fn same_path_merger_worker<
                         let new_block_hash = block_hash;
 
                         for _counter in 0..5  {
-                            if let Ok(MarketEvents::BlockStateUpdate{block_hash}) = market_events_rx.recv().await {
-                                if new_block_hash == block_hash {
+                            if let Ok(MarketEvents::BlockStateUpdate{block_hash}) = market_events_rx.recv().await
+                                && new_block_hash == block_hash {
                                     // State override now comes from the market state update itself
                                     // TODO: Get state override from provider if needed
                                     cur_state_override = StateOverride::default();
                                     debug!("Block state update received {} {}", block_number, block_hash);
                                     break;
-                                }
                             }
                         }
                     }
@@ -338,10 +337,9 @@ async fn same_path_merger_worker<
                 let msg : Result<MessageSwapCompose<DB>, RecvError> = msg;
                 match msg {
                     Ok(compose_request)=>{
-                        if let SwapComposeMessage::Ready(sign_request) = compose_request.inner() {
-
-                            if sign_request.tx_compose.stuffing_txs_hashes.len() == 1 {
-                                if let Swap::BackrunSwapLine( _swap_line ) = &sign_request.swap {
+                        if let SwapComposeMessage::Ready(sign_request) = compose_request.inner()
+                            && sign_request.tx_compose.stuffing_txs_hashes.len() == 1
+                            && let Swap::BackrunSwapLine( _swap_line ) = &sign_request.swap {
                                     let stuffing_tx_hash = sign_request.first_stuffing_hash();
 
                                     let requests_vec = get_merge_list(sign_request, &swap_paths);
@@ -376,13 +374,9 @@ async fn same_path_merger_worker<
                                             )
                                         );
                                     }
-
                                     let e = swap_paths.entry(stuffing_tx_hash).or_default();
                                     e.push( sign_request.clone() );
-
-                                }
                             }
-                        }
                     },
                     Err(e)=>{
                         error!("{e}")

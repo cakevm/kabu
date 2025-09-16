@@ -1,7 +1,7 @@
-use eyre::{eyre, Result};
+use eyre::{Result, eyre};
 use reth_tasks::TaskExecutor;
 use std::sync::Arc;
-use tokio::sync::{broadcast, RwLock};
+use tokio::sync::{RwLock, broadcast};
 use tracing::{debug, error, info};
 
 use kabu_core_components::Component;

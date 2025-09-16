@@ -5,8 +5,8 @@ use alloy::rpc::types::BlockNumberOrTag;
 use alloy::sol_types::SolInterface;
 use alloy_evm::EvmEnv;
 use eyre::Result;
-use kabu_defi_abi::uniswap2::IUniswapV2Pair;
 use kabu_defi_abi::IERC20;
+use kabu_defi_abi::uniswap2::IUniswapV2Pair;
 use kabu_defi_address_book::FactoryAddress;
 use kabu_evm_db::KabuDBError;
 use kabu_types_market::{
@@ -358,19 +358,11 @@ impl PoolAbiEncoder for UniswapV2PoolAbiEncoder {
     }
 
     fn swap_out_amount_offset(&self, token_from_address: Address, token_to_address: Address) -> Option<u32> {
-        if token_from_address < token_to_address {
-            Some(0x24)
-        } else {
-            Some(0x04)
-        }
+        if token_from_address < token_to_address { Some(0x24) } else { Some(0x04) }
     }
 
     fn swap_out_amount_return_offset(&self, token_from_address: Address, token_to_address: Address) -> Option<u32> {
-        if token_from_address < token_to_address {
-            Some(0x20)
-        } else {
-            Some(0x00)
-        }
+        if token_from_address < token_to_address { Some(0x20) } else { Some(0x00) }
     }
 }
 
@@ -378,7 +370,7 @@ impl PoolAbiEncoder for UniswapV2PoolAbiEncoder {
 #[cfg(test)]
 mod test {
     use super::*;
-    use alloy::primitives::{address, BlockNumber};
+    use alloy::primitives::{BlockNumber, address};
     use alloy::rpc::types::BlockId;
     use kabu_defi_abi::uniswap2::IUniswapV2Router;
     use kabu_defi_address_book::PeripheryAddress;

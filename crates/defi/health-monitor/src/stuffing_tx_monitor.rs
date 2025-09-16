@@ -4,15 +4,15 @@ use alloy_network::{BlockResponse, Ethereum, TransactionResponse};
 use alloy_primitives::{Address, TxHash, U256};
 use alloy_provider::Provider;
 use alloy_rpc_types::BlockTransactions;
-use eyre::{eyre, Result};
+use eyre::{Result, eyre};
 use influxdb::{Timestamp, WriteQuery};
 use kabu_core_components::Component;
 use reth_tasks::TaskExecutor;
 use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::sync::broadcast;
-use tokio::sync::broadcast::error::RecvError;
 use tokio::sync::broadcast::Receiver;
+use tokio::sync::broadcast::error::RecvError;
 use tracing::{error, info};
 
 use kabu_core_blockchain::Blockchain;
@@ -111,10 +111,9 @@ pub async fn stuffing_tx_monitor_worker<P: Provider<Ethereum> + Clone + 'static>
                                                         .add_tag("block_idx", idx as u64)
                                                         .add_tag("stuffing_tx", tx_hash.to_string())
                                                         .add_tag("other_tx", others_tx_hash.to_string());
-                                                    if let Some(tx) = influx_channel_clone {
-                                                        if let Err(e) = tx.send(write_query) {
+                                                    if let Some(tx) = influx_channel_clone
+                                                        && let Err(e) = tx.send(write_query) {
                                                             error!("Failed to send block latency to influxdb: {:?}", e);
-                                                        }
                                                     }
                                                 };
                                             });
@@ -128,10 +127,9 @@ pub async fn stuffing_tx_monitor_worker<P: Provider<Ethereum> + Clone + 'static>
                             let start_time_utc =   chrono::Utc::now();
 
                             let write_query = WriteQuery::new(Timestamp::from(start_time_utc), "stuffing_waiting").add_field("value", txs_to_check.len() as u64).add_tag("block", block_number);
-                            if let Some(tx) = &influxdb_write_channel_tx {
-                                if let Err(e) = tx.send(write_query) {
+                            if let Some(tx) = &influxdb_write_channel_tx
+                                && let Err(e) = tx.send(write_query) {
                                     error!("Failed to send block latency to influxdb: {:?}", e);
-                                }
                             }
                         }
                     }

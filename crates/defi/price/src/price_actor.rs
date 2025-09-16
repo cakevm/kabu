@@ -8,13 +8,13 @@ use std::time::Duration;
 use tokio::sync::RwLock;
 
 use alloy_network::Network;
-use alloy_primitives::{address, Address, U256};
+use alloy_primitives::{Address, U256, address};
 use alloy_provider::Provider;
 
 use kabu_core_blockchain::Blockchain;
 use kabu_defi_address_book::TokenAddressEth;
-use kabu_defi_pools::protocols::CurveProtocol;
 use kabu_defi_pools::CurvePool;
+use kabu_defi_pools::protocols::CurveProtocol;
 use kabu_types_market::{Market, Pool};
 use tracing::{debug, error, info};
 
@@ -76,10 +76,10 @@ async fn price_worker<N: Network, P: Provider<N> + Clone + 'static>(
         let usdc_price = market.read().await.get_token_or_default(&TokenAddressEth::USDC).get_eth_price();
 
         let mut usd_price: Option<U256> = None;
-        if let Some(usdc_price) = usdc_price {
-            if let Some(usdt_price) = usdt_price {
-                usd_price = Some((usdc_price + usdt_price) >> 1);
-            }
+        if let Some(usdc_price) = usdc_price
+            && let Some(usdt_price) = usdt_price
+        {
+            usd_price = Some((usdc_price + usdt_price) >> 1);
         }
 
         if let Some(usd_price) = usd_price {

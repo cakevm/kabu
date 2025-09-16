@@ -1,6 +1,6 @@
 use alloy::primitives::ChainId;
 use alloy_chains::{Chain, NamedChain};
-use eyre::{eyre, OptionExt, Result};
+use eyre::{OptionExt, Result, eyre};
 use kabu_defi_address_book::{TokenAddressArbitrum, TokenAddressBase, TokenAddressEth};
 use kabu_types_market::{Market, Token};
 

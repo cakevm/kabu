@@ -1,5 +1,5 @@
 #![allow(dead_code)]
-pub use deploy::{MulticallerDeployer, DEFAULT_VIRTUAL_ADDRESS};
+pub use deploy::{DEFAULT_VIRTUAL_ADDRESS, MulticallerDeployer};
 pub use multicaller_encoder::MulticallerEncoder;
 pub use multicaller_encoder::MulticallerSwapEncoder;
 pub use opcodes_encoder::{OpcodesEncoder, OpcodesEncoderV2};

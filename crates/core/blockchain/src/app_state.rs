@@ -6,7 +6,7 @@ use kabu_types_market::Market;
 use reth_ethereum_primitives::EthPrimitives;
 use reth_node_types::NodePrimitives;
 use std::sync::Arc;
-use tokio::sync::{broadcast, RwLock};
+use tokio::sync::{RwLock, broadcast};
 
 #[derive(Clone)]
 pub struct AppState<N: NodePrimitives = EthPrimitives> {

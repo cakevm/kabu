@@ -1,8 +1,8 @@
-use crate::tx_compose::TxComposeData;
 use crate::Message;
+use crate::tx_compose::TxComposeData;
 use alloy_primitives::{Bytes, TxHash, U256};
 use alloy_rpc_types::TransactionRequest;
-use eyre::{eyre, Result};
+use eyre::{Result, eyre};
 use kabu_types_blockchain::GethStateUpdateVec;
 use kabu_types_market::PoolId;
 use kabu_types_swap::Swap;
@@ -89,19 +89,11 @@ impl<DB: Clone + 'static, N: NodePrimitives> SwapComposeData<DB, N> {
     }
 
     pub fn tips_gas_ratio(&self) -> U256 {
-        if self.tx_compose.gas == 0 {
-            U256::ZERO
-        } else {
-            self.tips.unwrap_or_default() / U256::from(self.tx_compose.gas)
-        }
+        if self.tx_compose.gas == 0 { U256::ZERO } else { self.tips.unwrap_or_default() / U256::from(self.tx_compose.gas) }
     }
 
     pub fn profit_eth_gas_ratio(&self) -> U256 {
-        if self.tx_compose.gas == 0 {
-            U256::ZERO
-        } else {
-            self.swap.arb_profit_eth() / U256::from(self.tx_compose.gas)
-        }
+        if self.tx_compose.gas == 0 { U256::ZERO } else { self.swap.arb_profit_eth() / U256::from(self.tx_compose.gas) }
     }
 
     pub fn gas_price(&self) -> u128 {

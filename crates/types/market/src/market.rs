@@ -2,13 +2,13 @@
 
 use alloy_primitives::map::HashMap;
 use alloy_primitives::{Address, U256};
-use eyre::{eyre, OptionExt, Result};
+use eyre::{OptionExt, Result, eyre};
 use std::collections::BTreeMap;
 use std::fmt::Display;
 use std::sync::Arc;
 use tracing::debug;
 
-use crate::{build_swap_path_vec, PoolClass, PoolId, PoolWrapper, SwapDirection, SwapPath, SwapPaths, Token};
+use crate::{PoolClass, PoolId, PoolWrapper, SwapDirection, SwapPath, SwapPaths, Token, build_swap_path_vec};
 
 /// The market struct contains all the pools and tokens.
 /// It keeps track if a pool is disabled or not and the swap paths.
@@ -155,8 +155,7 @@ impl Market {
     pub fn pool_swap_paths_vec(&self, pool_id: &PoolId) -> Vec<(usize, SwapPath)> {
         let pool_paths = self.swap_paths.pool_paths.get(pool_id).cloned().unwrap_or_default();
 
-        let paths = pool_paths.into_iter().filter_map(|idx| self.swap_paths.paths.get(idx).cloned().map(|a| (idx, a))).collect::<Vec<_>>();
-        paths
+        pool_paths.into_iter().filter_map(|idx| self.swap_paths.paths.get(idx).cloned().map(|a| (idx, a))).collect::<Vec<_>>()
     }
 
     /// Get a pool reference by the pool address. If the pool exists but the class is unknown it returns None.

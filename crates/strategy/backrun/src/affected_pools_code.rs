@@ -12,7 +12,7 @@ use kabu_evm_db::{AlloyDB, KabuDB};
 use kabu_types_blockchain::GethStateUpdateVec;
 use kabu_types_market::MarketState;
 use kabu_types_market::SwapDirection;
-use kabu_types_market::{get_protocol_by_factory, Market, Pool, PoolId, PoolProtocol, PoolWrapper};
+use kabu_types_market::{Market, Pool, PoolId, PoolProtocol, PoolWrapper, get_protocol_by_factory};
 use std::collections::BTreeMap;
 use std::sync::Arc;
 use tracing::{debug, error};
@@ -154,11 +154,7 @@ where
             }
         }
     }
-    if !ret.is_empty() {
-        Ok(ret)
-    } else {
-        Err(eyre!("NO_POOLS_LOADED"))
-    }
+    if !ret.is_empty() { Ok(ret) } else { Err(eyre!("NO_POOLS_LOADED")) }
 }
 
 /// Check if the state update code contains code for a UniswapV2 pair or UniswapV3 pool by looking for method signatures.

@@ -17,13 +17,13 @@ impl AccountNonceAndTransactions {
     }
 
     pub fn set_nonce(&mut self, nonce: Option<u64>) -> &mut Self {
-        if let Some(cur_nonce) = self.nonce {
-            if let Some(some_nonce) = nonce {
-                if cur_nonce < some_nonce {
-                    self.nonce = Some(some_nonce);
-                }
-                return self;
+        if let Some(cur_nonce) = self.nonce
+            && let Some(some_nonce) = nonce
+        {
+            if cur_nonce < some_nonce {
+                self.nonce = Some(some_nonce);
             }
+            return self;
         }
         self.nonce = nonce;
         self

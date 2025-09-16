@@ -45,12 +45,12 @@ members = [
 resolver = "2"
 
 [workspace.package]
-edition = "2021"
+edition = "2024"
 exclude = [".github/"]
 homepage = "https://github.com/cakevm/kabu"
 license = "MIT OR Apache-2.0"
 repository = "https://github.com/cakevm/kabu"
-rust-version = "1.88"
+rust-version = "1.89"
 version = "0.6.0"
 
 [workspace.dependencies]

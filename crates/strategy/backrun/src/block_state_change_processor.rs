@@ -1,6 +1,6 @@
 use super::affected_pools_state::get_affected_pools_from_state_update;
 use alloy_consensus::BlockHeader;
-use eyre::{eyre, Result};
+use eyre::{Result, eyre};
 use kabu_core_components::Component;
 use kabu_types_blockchain::ChainParameters;
 use kabu_types_entities::BlockHistory;
@@ -11,7 +11,7 @@ use reth_tasks::TaskExecutor;
 use revm::DatabaseRef;
 use std::sync::Arc;
 use tokio::sync::broadcast::error::RecvError;
-use tokio::sync::{broadcast, RwLock};
+use tokio::sync::{RwLock, broadcast};
 use tracing::error;
 
 pub async fn block_state_change_worker<DB, LDT>(

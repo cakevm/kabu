@@ -1,6 +1,6 @@
 use std::ops::{Shl, Shr};
 
-use alloy::primitives::{Address, Signed, Uint, B256, I256};
+use alloy::primitives::{Address, B256, I256, Signed, Uint};
 use alloy::primitives::{U160, U256};
 use eyre::Result;
 use lazy_static::lazy_static;
@@ -110,9 +110,9 @@ mod test {
     use kabu_types_market::Pool;
     use kabu_types_market::RequiredStateReader;
 
+    use crate::UniswapV3Pool;
     use crate::db_reader::UniswapV3DbReader;
     use crate::state_readers::UniswapV3EvmStateReader;
-    use crate::UniswapV3Pool;
 
     #[ignore]
     #[tokio::test]

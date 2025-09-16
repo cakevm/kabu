@@ -5,9 +5,9 @@ mod test {
     use alloy_network::Ethereum;
     use alloy_node_bindings::Anvil;
     use alloy_primitives::{Address, B256, U256};
-    use alloy_provider::ext::AnvilApi;
     use alloy_provider::Provider;
     use alloy_provider::ProviderBuilder;
+    use alloy_provider::ext::AnvilApi;
     use alloy_rpc_client::ClientBuilder;
     use eyre::eyre;
     use kabu_core_blockchain::{Blockchain, BlockchainState};

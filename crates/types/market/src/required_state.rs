@@ -3,7 +3,7 @@ use alloy_primitives::{Address, BlockNumber, Bytes, U256};
 use alloy_provider::Provider;
 use alloy_rpc_types::{BlockId, BlockNumberOrTag};
 use alloy_rpc_types_trace::geth::AccountState;
-use eyre::{eyre, Result};
+use eyre::{Result, eyre};
 use std::collections::BTreeMap;
 use std::fmt::Debug;
 use std::marker::PhantomData;
@@ -12,7 +12,7 @@ use tracing::{error, trace};
 use alloy_primitives::TxKind;
 use alloy_rpc_types::TransactionRequest;
 use kabu_node_debug_provider::DebugProviderExt;
-use kabu_types_blockchain::{debug_trace_call_pre_state, GethStateUpdate, GethStateUpdateVec};
+use kabu_types_blockchain::{GethStateUpdate, GethStateUpdateVec, debug_trace_call_pre_state};
 
 #[derive(Clone, Debug, Default)]
 pub struct RequiredState {

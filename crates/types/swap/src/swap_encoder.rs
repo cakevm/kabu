@@ -1,5 +1,5 @@
-use crate::tips::Tips;
 use crate::Swap;
+use crate::tips::Tips;
 use alloy_primitives::{Address, BlockNumber, Bytes, U256};
 use eyre::Result;
 use std::ops::Deref;

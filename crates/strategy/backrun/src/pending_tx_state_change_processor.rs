@@ -7,26 +7,26 @@ use alloy_provider::Provider;
 use alloy_rpc_types::state::StateOverride;
 use alloy_rpc_types::{BlockOverrides, TransactionInput, TransactionRequest};
 use alloy_rpc_types_trace::geth::GethDebugTracingCallOptions;
-use eyre::{eyre, Result};
+use eyre::{Result, eyre};
 use kabu_core_components::Component;
 use kabu_evm_db::KabuDBError;
 use lazy_static::lazy_static;
 use revm::context::{BlockEnv, CfgEnv};
 use revm::context_interface::block::BlobExcessGasAndPrice;
 use revm::{Database, DatabaseCommit, DatabaseRef};
-use std::collections::hash_map::Entry;
 use std::collections::HashMap;
+use std::collections::hash_map::Entry;
 use std::marker::PhantomData;
 use std::sync::Arc;
-use tokio::sync::{broadcast, RwLock};
+use tokio::sync::{RwLock, broadcast};
 use tracing::{debug, error, warn};
 
 use kabu_core_blockchain::{Blockchain, BlockchainState, Strategy};
 use kabu_node_debug_provider::DebugProviderExt;
-use kabu_types_blockchain::{debug_trace_call_diff, GethStateUpdateVec, Mempool, TRACING_CALL_OPTS};
+use kabu_types_blockchain::{GethStateUpdateVec, Mempool, TRACING_CALL_OPTS, debug_trace_call_diff};
 use kabu_types_events::{MarketEvents, MempoolEvents, StateUpdateEvent};
-use kabu_types_market::{accounts_vec_len, storage_vec_len};
 use kabu_types_market::{Market, MarketState};
+use kabu_types_market::{accounts_vec_len, storage_vec_len};
 use reth_node_types::NodePrimitives;
 use reth_primitives_traits::{SignedTransaction, SignerRecoverable};
 use reth_tasks::TaskExecutor;
@@ -299,13 +299,12 @@ where
                         cur_next_base_fee = next_base_fee;
 
                         for _counter in 0..5  {
-                            if let Ok(msg) = market_events_receiver.recv().await {
-                                if matches!(msg, MarketEvents::BlockStateUpdate{..} ) {
+                            if let Ok(msg) = market_events_receiver.recv().await
+                                && matches!(msg, MarketEvents::BlockStateUpdate{..} ) {
                                     // TODO: Get state override from elsewhere if needed
                                     cur_state_override = StateOverride::default();
                                     debug!("Block state update received {} {}", block_number, block_hash);
                                     break;
-                                }
                             }
                         }
                     }

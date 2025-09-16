@@ -1,6 +1,6 @@
 use alloy::{
-    primitives::{Address, Bytes, B256, U256, U64},
-    providers::{network::Ethereum, Network, Provider, RootProvider},
+    primitives::{Address, B256, Bytes, U64, U256},
+    providers::{Network, Provider, RootProvider, network::Ethereum},
     transports::TransportResult,
 };
 

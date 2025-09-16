@@ -1,5 +1,5 @@
 use crate::protocols::CurveProtocol;
-use crate::{pool_loader, CurvePool};
+use crate::{CurvePool, pool_loader};
 use alloy::primitives::{Bytes, Log};
 use async_stream::stream;
 use eyre::eyre;
@@ -79,14 +79,13 @@ where
                 }
 
                 for factory_idx in 0..10 {
-                    if let Ok(factory_address) = CurveProtocol::get_factory_address(client.clone(), factory_idx).await {
-                        if let Ok(pool_count) = CurveProtocol::get_pool_count(client.clone(), factory_address).await {
+                    if let Ok(factory_address) = CurveProtocol::get_factory_address(client.clone(), factory_idx).await
+                        && let Ok(pool_count) = CurveProtocol::get_pool_count(client.clone(), factory_address).await {
                             for pool_id in 0..pool_count {
                                 if let Ok(addr) = CurveProtocol::get_pool_address(client.clone(), factory_address, pool_id).await {
                                     yield (PoolId::Address(addr), PoolClass::Curve)
                                 }
                             }
-                        }
                     }
                 }
             }))

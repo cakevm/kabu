@@ -1,8 +1,8 @@
 use crate::error::KabuDBError;
-use alloy::primitives::{Address, BlockNumber, B256, U256};
+use alloy::primitives::{Address, B256, BlockNumber, U256};
 use eyre::eyre;
-use revm::state::{AccountInfo, Bytecode};
 use revm::DatabaseRef;
+use revm::state::{AccountInfo, Bytecode};
 use tracing::trace;
 
 pub struct KabuDBHelper {}
@@ -66,11 +66,7 @@ impl KabuDBHelper {
         address: Address,
     ) -> Result<Option<AccountInfo>, KabuDBError> {
         trace!(%address, "fetch_basic");
-        if let Some(ext_db) = ext_db {
-            ext_db.basic_ref(address)
-        } else {
-            Err(KabuDBError::NoDB)
-        }
+        if let Some(ext_db) = ext_db { ext_db.basic_ref(address) } else { Err(KabuDBError::NoDB) }
     }
 
     #[inline]
@@ -105,11 +101,7 @@ impl KabuDBHelper {
         ext_db: &Option<ExtDB>,
         number: BlockNumber,
     ) -> Result<B256, KabuDBError> {
-        if let Some(ext_db) = ext_db {
-            ext_db.block_hash_ref(number)
-        } else {
-            Err(KabuDBError::NoDB)
-        }
+        if let Some(ext_db) = ext_db { ext_db.block_hash_ref(number) } else { Err(KabuDBError::NoDB) }
     }
 
     #[inline]

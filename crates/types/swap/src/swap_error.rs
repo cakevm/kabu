@@ -1,5 +1,5 @@
-use alloy_primitives::{hex, Address, U256};
-use eyre::{eyre, Report};
+use alloy_primitives::{Address, U256, hex};
+use eyre::{Report, eyre};
 use kabu_types_market::SwapPath;
 use kabu_types_market::{PoolError, PoolId};
 use std::fmt;

@@ -1,10 +1,10 @@
+use crate::PoolId;
 use crate::pool_error::PoolError;
 use crate::required_state::RequiredState;
 use crate::swap_direction::SwapDirection;
-use crate::PoolId;
 use alloy_evm::EvmEnv;
 use alloy_primitives::{Address, Bytes, U256};
-use eyre::{eyre, Result};
+use eyre::{Result, eyre};
 use kabu_defi_address_book::FactoryAddress;
 use kabu_evm_db::KabuDBError;
 use revm::DatabaseRef;

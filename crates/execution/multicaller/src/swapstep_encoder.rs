@@ -3,8 +3,8 @@ use eyre::Result;
 use lazy_static::lazy_static;
 use tracing::trace;
 
-use crate::opcodes_encoder::{OpcodesEncoder, OpcodesEncoderV2};
 use crate::SwapLineEncoder;
+use crate::opcodes_encoder::{OpcodesEncoder, OpcodesEncoderV2};
 use kabu_defi_abi::AbiEncoderHelper;
 use kabu_types_blockchain::{MulticallerCall, MulticallerCalls};
 use kabu_types_swap::{SwapAmountType, SwapStep};

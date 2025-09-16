@@ -1,6 +1,6 @@
 use std::collections::HashMap;
-use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
+use std::sync::atomic::{AtomicU64, Ordering};
 
 use crate::anvilprovider::convert_u64;
 use alloy::eips::BlockId;
@@ -8,7 +8,7 @@ use alloy::primitives::{Address, StorageValue};
 use alloy::rpc::json_rpc::RpcRecv;
 use alloy::{
     network::Ethereum,
-    primitives::{BlockNumber, Bytes, U256, U64},
+    primitives::{BlockNumber, Bytes, U64, U256},
     providers::{EthCall, EthGetBlock, Network, Provider, ProviderCall, RootProvider, RpcWithBlock},
     rpc::{
         client::{NoParams, RpcCall},
@@ -70,11 +70,10 @@ where
 
     #[allow(clippy::type_complexity)]
     fn get_block_number(&self) -> ProviderCall<NoParams, U64, BlockNumber> {
-        let provider_call = ProviderCall::RpcCall(
+        ProviderCall::RpcCall(
             RpcCall::new(Request::new("get_block_number", Id::None, [(); 0]), self.provider.client().transport().clone())
                 .map_resp(convert_u64 as fn(U64) -> u64),
-        );
-        provider_call
+        )
     }
 
     fn call(&self, tx: <Ethereum as Network>::TransactionRequest) -> EthCall<Ethereum, Bytes> {

@@ -1,5 +1,5 @@
 use crate::{PoolId, PoolWrapper, SwapDirection, Token};
-use alloy_primitives::{map::HashMap, Address};
+use alloy_primitives::{Address, map::HashMap};
 use eyre::Result;
 use std::fmt;
 use std::fmt::Display;
@@ -195,12 +195,12 @@ impl SwapPaths {
     }
 
     pub fn disable_path(&mut self, swap_path: &SwapPath, disable: bool) -> bool {
-        if let Some(swap_path_idx) = self.path_hash_map.get(&swap_path.get_hash()) {
-            if let Some(swap_path) = self.paths.get_mut(*swap_path_idx) {
-                debug!("Path disabled hash={}, path={}", swap_path.get_hash(), swap_path);
-                swap_path.disabled = disable;
-                return true;
-            }
+        if let Some(swap_path_idx) = self.path_hash_map.get(&swap_path.get_hash())
+            && let Some(swap_path) = self.paths.get_mut(*swap_path_idx)
+        {
+            debug!("Path disabled hash={}, path={}", swap_path.get_hash(), swap_path);
+            swap_path.disabled = disable;
+            return true;
         }
         debug!("Path not disabled hash={}, path={}", swap_path.get_hash(), swap_path);
         false
@@ -212,15 +212,16 @@ impl SwapPaths {
         for path_idx in pool_paths.iter() {
             if let Some(entry) = self.paths.get_mut(*path_idx) {
                 if let Some(idx) = entry.pools.iter().position(|item| item.get_pool_id().eq(pool_id)) {
-                    if let (Some(token_from), Some(token_to)) = (entry.tokens.get(idx), entry.tokens.get(idx + 1)) {
-                        if token_from.get_address().eq(token_from_address) && token_to.get_address().eq(token_to_address) {
-                            entry.disabled = disabled;
-                            if !entry.disabled_pool.contains(pool_id) {
-                                entry.disabled_pool.push(*pool_id);
-                            }
-                            self.disabled_directions
-                                .insert(SwapDirection::new(*token_from_address, *token_to_address).get_hash_with_pool(pool_id), disabled);
+                    if let (Some(token_from), Some(token_to)) = (entry.tokens.get(idx), entry.tokens.get(idx + 1))
+                        && token_from.get_address().eq(token_from_address)
+                        && token_to.get_address().eq(token_to_address)
+                    {
+                        entry.disabled = disabled;
+                        if !entry.disabled_pool.contains(pool_id) {
+                            entry.disabled_pool.push(*pool_id);
                         }
+                        self.disabled_directions
+                            .insert(SwapDirection::new(*token_from_address, *token_to_address).get_hash_with_pool(pool_id), disabled);
                     }
                 } else {
                     //debug!("All path disabled by pool hash={}, path={}", entry.get_hash(), entry);
@@ -266,9 +267,9 @@ impl SwapPaths {
 #[cfg(test)]
 mod test {
     use super::*;
+    use crate::SwapDirection;
     use crate::pool::DefaultAbiSwapEncoder;
     use crate::required_state::RequiredState;
-    use crate::SwapDirection;
     use crate::{Pool, PoolAbiEncoder, PoolClass, PoolError, PoolProtocol, PreswapRequirement};
     use alloy_evm::EvmEnv;
     use alloy_primitives::{Address, U256};

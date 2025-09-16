@@ -3,7 +3,7 @@ use alloy_network::Network;
 use alloy_primitives::Sealable;
 use alloy_primitives::{BlockHash, BlockNumber};
 use alloy_provider::Provider;
-use eyre::{eyre, Result};
+use eyre::{Result, eyre};
 use kabu_core_components::Component;
 use kabu_evm_db::DatabaseKabuExt;
 use kabu_node_debug_provider::DebugProviderExt;
@@ -21,7 +21,7 @@ use std::borrow::BorrowMut;
 use std::marker::PhantomData;
 use std::ops::DerefMut;
 use std::sync::Arc;
-use tokio::sync::{broadcast, broadcast::error::RecvError, RwLock};
+use tokio::sync::{RwLock, broadcast, broadcast::error::RecvError};
 use tracing::{debug, error, info, trace, warn};
 
 pub async fn set_chain_head<P, N, DB, NP>(

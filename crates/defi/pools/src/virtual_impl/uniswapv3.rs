@@ -1,6 +1,6 @@
+use crate::UniswapV3Pool;
 use crate::db_reader::UniswapV3DbReader;
 use crate::virtual_impl::tick_provider::TickProviderEVMDB;
-use crate::UniswapV3Pool;
 use alloy::primitives::{Address, I256, U256};
 use eyre::eyre;
 use kabu_defi_uniswap_v3_math::tick_math::{MAX_SQRT_RATIO, MAX_TICK, MIN_SQRT_RATIO, MIN_TICK};
@@ -142,11 +142,7 @@ impl UniswapV3PoolVirtual {
 
             // Target spot price
             let swap_target_sqrt_ratio = if zero_for_one {
-                if step.sqrt_price_next_x96 < sqrt_price_limit_x_96 {
-                    sqrt_price_limit_x_96
-                } else {
-                    step.sqrt_price_next_x96
-                }
+                if step.sqrt_price_next_x96 < sqrt_price_limit_x_96 { sqrt_price_limit_x_96 } else { step.sqrt_price_next_x96 }
             } else if step.sqrt_price_next_x96 > sqrt_price_limit_x_96 {
                 sqrt_price_limit_x_96
             } else {
@@ -271,11 +267,7 @@ impl UniswapV3PoolVirtual {
 
             // Target spot price
             let swap_target_sqrt_ratio = if zero_for_one {
-                if step.sqrt_price_next_x96 < sqrt_price_limit_x_96 {
-                    sqrt_price_limit_x_96
-                } else {
-                    step.sqrt_price_next_x96
-                }
+                if step.sqrt_price_next_x96 < sqrt_price_limit_x_96 { sqrt_price_limit_x_96 } else { step.sqrt_price_next_x96 }
             } else if step.sqrt_price_next_x96 > sqrt_price_limit_x_96 {
                 sqrt_price_limit_x_96
             } else {

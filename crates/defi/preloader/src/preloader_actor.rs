@@ -1,7 +1,7 @@
 use kabu_core_components::Component;
 use reth_tasks::TaskExecutor;
-use std::collections::btree_map::Entry;
 use std::collections::BTreeMap;
+use std::collections::btree_map::Entry;
 use std::marker::PhantomData;
 use std::sync::Arc;
 use tokio::sync::RwLock;
@@ -11,7 +11,7 @@ use alloy_network::Network;
 use alloy_primitives::{Address, Bytes, U256};
 use alloy_provider::Provider;
 use alloy_rpc_types_trace::geth::AccountState;
-use eyre::{eyre, Result};
+use eyre::{Result, eyre};
 
 use kabu_core_blockchain::{Blockchain, BlockchainState};
 use kabu_defi_address_book::TokenAddressEth;

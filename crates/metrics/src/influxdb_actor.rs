@@ -1,4 +1,4 @@
-use eyre::{eyre, Result};
+use eyre::{Result, eyre};
 use influxdb::{Client, ReadQuery, WriteQuery};
 use kabu_core_components::Component;
 use reth_tasks::TaskExecutor;

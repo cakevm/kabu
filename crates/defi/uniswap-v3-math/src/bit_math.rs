@@ -18,7 +18,7 @@ pub fn least_significant_bit(x: U256) -> Result<u8, UniswapV3MathError> {
 #[cfg(test)]
 mod test {
     use super::most_significant_bit;
-    use crate::{bit_math::least_significant_bit, U256_1};
+    use crate::{U256_1, bit_math::least_significant_bit};
     use alloy::primitives::U256;
     use std::str::FromStr;
 

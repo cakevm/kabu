@@ -1,19 +1,19 @@
 use alloy_consensus::TxEnvelope;
-use alloy_eips::eip2718::Encodable2718;
 use alloy_eips::BlockNumberOrTag;
+use alloy_eips::eip2718::Encodable2718;
 use alloy_evm::EvmEnv;
 use alloy_network::{Ethereum, Network};
 use alloy_primitives::{Bytes, TxKind, U256};
 use alloy_provider::Provider;
 use alloy_rpc_types::{TransactionInput, TransactionRequest};
-use eyre::{eyre, Result};
+use eyre::{Result, eyre};
 use influxdb::{Timestamp, WriteQuery};
 use std::marker::PhantomData;
 use tokio::sync::{broadcast, broadcast::error::RecvError};
 use tracing::{debug, error, info, trace};
 
 use kabu_core_blockchain::{Blockchain, Strategy};
-use kabu_evm_utils::{evm_access_list, NWETH};
+use kabu_evm_utils::{NWETH, evm_access_list};
 use kabu_types_swap::{EstimationError, Swap, SwapEncoder};
 
 use kabu_core_components::Component;
@@ -113,10 +113,10 @@ where
                         .add_field("success", 1i64)
                         .add_tag("pool", pool_id_string);
 
-                    if let Some(influxdb_write_channel_tx) = &influxdb_write_channel_tx {
-                        if let Err(e) = influxdb_write_channel_tx.send(write_query) {
-                            error!("Failed to send successful estimation latency to influxdb: {:?}", e);
-                        }
+                    if let Some(influxdb_write_channel_tx) = &influxdb_write_channel_tx
+                        && let Err(e) = influxdb_write_channel_tx.send(write_query)
+                    {
+                        error!("Failed to send successful estimation latency to influxdb: {:?}", e);
                     }
                 }
             });
@@ -126,24 +126,20 @@ where
         Err(e) => {
             trace!(
                 "evm_access_list error for block_number={}, block_timestamp={}, swap={}, err={e}",
-                estimate_request.tx_compose.next_block_number,
-                estimate_request.tx_compose.next_block_timestamp,
-                estimate_request.swap
+                estimate_request.tx_compose.next_block_number, estimate_request.tx_compose.next_block_timestamp, estimate_request.swap
             );
             // simulation has failed but this could be caused by a token / pool with unsupported fee issue
             trace!("evm_access_list error calldata : {} {}", to, call_data);
 
-            if let Some(health_monitor_channel_tx) = &health_monitor_channel_tx {
-                if let Swap::BackrunSwapLine(swap_line) = estimate_request.swap {
-                    if let Err(e) =
-                        health_monitor_channel_tx.send(MessageHealthEvent::new(HealthEvent::SwapLineEstimationError(EstimationError {
-                            swap_path: swap_line.path,
-                            msg: e.to_string(),
-                        })))
-                    {
-                        error!("Failed to send message to health monitor channel: {:?}", e);
-                    }
-                }
+            if let Some(health_monitor_channel_tx) = &health_monitor_channel_tx
+                && let Swap::BackrunSwapLine(swap_line) = estimate_request.swap
+                && let Err(e) =
+                    health_monitor_channel_tx.send(MessageHealthEvent::new(HealthEvent::SwapLineEstimationError(EstimationError {
+                        swap_path: swap_line.path,
+                        msg: e.to_string(),
+                    })))
+            {
+                error!("Failed to send message to health monitor channel: {:?}", e);
             }
 
             return Ok(());

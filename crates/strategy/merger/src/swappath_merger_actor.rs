@@ -1,6 +1,6 @@
 use alloy_consensus::BlockHeader;
 use alloy_primitives::{Address, U256};
-use eyre::{eyre, Result};
+use eyre::{Result, eyre};
 use kabu_core_components::Component;
 use reth_node_types::{HeaderTy, NodeTypesWithDB};
 use reth_provider::{BlockNumReader, HeaderProvider};

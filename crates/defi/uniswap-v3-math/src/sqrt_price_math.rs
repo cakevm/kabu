@@ -102,11 +102,7 @@ pub fn get_next_sqrt_price_from_amount_1_rounding_down(
 
         let next_sqrt_price = sqrt_price_x_96 + quotient;
 
-        if next_sqrt_price > MAX_U160 {
-            Err(UniswapV3MathError::SafeCastToU160Overflow)
-        } else {
-            Ok(next_sqrt_price)
-        }
+        if next_sqrt_price > MAX_U160 { Err(UniswapV3MathError::SafeCastToU160Overflow) } else { Ok(next_sqrt_price) }
     } else {
         let quotient = if amount <= MAX_U160 {
             div_rounding_up(amount << FIXED_POINT_96_RESOLUTION, liquidity)
@@ -195,8 +191,8 @@ mod test {
     use alloy::primitives::U256;
 
     use crate::{
-        sqrt_price_math::{_get_amount_1_delta, get_next_sqrt_price_from_output, MAX_U160},
         U256_1, U256_2,
+        sqrt_price_math::{_get_amount_1_delta, MAX_U160, get_next_sqrt_price_from_output},
     };
 
     use super::{_get_amount_0_delta, get_next_sqrt_price_from_input};

@@ -1,12 +1,12 @@
 use std::sync::Arc;
 
 use alloy_primitives::{Address, U256};
-use eyre::{eyre, Result};
+use eyre::{Result, eyre};
 use tracing::trace;
 
+use crate::ProtocolABIEncoderV2;
 use crate::pool_abi_encoder::ProtocolAbiSwapEncoderTrait;
 use crate::pool_opcodes_encoder::{MulticallerOpcodesPayload, ProtocolSwapOpcodesEncoderV2, SwapOpcodesEncoderTrait};
-use crate::ProtocolABIEncoderV2;
 use kabu_defi_abi::AbiEncoderHelper;
 use kabu_defi_address_book::TokenAddressEth;
 use kabu_types_blockchain::{MulticallerCall, MulticallerCalls};

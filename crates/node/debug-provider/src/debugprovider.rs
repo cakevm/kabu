@@ -6,7 +6,7 @@ use alloy::{
     network::Ethereum,
     node_bindings::{Anvil, AnvilInstance},
     primitives::{BlockHash, BlockNumber, U64},
-    providers::{ext::DebugApi, Network, Provider, ProviderBuilder, ProviderCall, RootProvider},
+    providers::{Network, Provider, ProviderBuilder, ProviderCall, RootProvider, ext::DebugApi},
     rpc::{
         client::{NoParams, WsConnect},
         types::trace::geth::{GethDebugTracingCallOptions, GethDebugTracingOptions, GethTrace, TraceResult},
@@ -15,7 +15,7 @@ use alloy::{
     transports::TransportResult,
 };
 use async_trait::async_trait;
-use eyre::{eyre, Result};
+use eyre::{Result, eyre};
 use k256::SecretKey;
 
 //use crate::HttpCachedTransport;

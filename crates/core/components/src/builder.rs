@@ -1,13 +1,13 @@
+use crate::Component;
 use crate::traits::{
     BroadcasterBuilder, EstimatorBuilder, ExecutorBuilder, HealthMonitorBuilder, MarketBuilder, NetworkBuilder, PoolBuilder, SignerBuilder,
     StrategyBuilder,
 };
-use crate::Component;
 use eyre::Result;
 use reth_tasks::TaskExecutor;
 use std::marker::PhantomData;
 use std::sync::Arc;
-use tokio::sync::{broadcast, RwLock};
+use tokio::sync::{RwLock, broadcast};
 
 // Import MEV-specific types for channel communication
 use kabu_evm_db::KabuDB;

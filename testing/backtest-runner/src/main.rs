@@ -1,10 +1,10 @@
-use crate::flashbots_mock::mount_flashbots_mock;
 use crate::flashbots_mock::BundleRequest;
+use crate::flashbots_mock::mount_flashbots_mock;
 use crate::test_config::TestConfig;
 use alloy_network::Ethereum;
-use alloy_primitives::{address, TxHash, U256};
-use alloy_provider::network::eip2718::Encodable2718;
+use alloy_primitives::{TxHash, U256, address};
 use alloy_provider::Provider;
+use alloy_provider::network::eip2718::Encodable2718;
 use alloy_rpc_types::{BlockId, BlockNumberOrTag};
 use alloy_rpc_types_eth::TransactionTrait;
 use chrono::Local;
@@ -21,7 +21,7 @@ use kabu::evm::utils::NWETH;
 use kabu::execution::multicaller::{MulticallerDeployer, MulticallerSwapEncoder};
 use kabu::node::debug_provider::AnvilDebugProviderFactory;
 use kabu::strategy::backrun::BackrunConfig;
-use kabu::types::blockchain::{debug_trace_block, ChainParameters};
+use kabu::types::blockchain::{ChainParameters, debug_trace_block};
 use kabu::types::entities::LoomTxSigner;
 use kabu::types::events::{BlockHeaderEventData, MessageBlockHeader};
 use kabu::types::events::{MarketEvents, MempoolEvents, SwapComposeMessage};
@@ -44,7 +44,7 @@ use std::time::{Duration, Instant};
 use tracing::{debug, error, info, warn};
 use tracing_subscriber::layer::SubscriberExt;
 use tracing_subscriber::util::SubscriberInitExt;
-use tracing_subscriber::{fmt, EnvFilter, Layer};
+use tracing_subscriber::{EnvFilter, Layer, fmt};
 use wiremock::MockServer;
 
 mod flashbots_mock;
@@ -589,11 +589,10 @@ async fn main() -> Result<()> {
                                 stat.best_swap = Some(ready_message.swap.clone());
                             }
 
-                            if let Some(swaps_ok) = test_config.assertions.swaps_ok {
-                                if stat.sign_counter >= swaps_ok  {
+                            if let Some(swaps_ok) = test_config.assertions.swaps_ok
+                                && stat.sign_counter >= swaps_ok  {
                                     break;
                                 }
-                            }
                         }
                         SwapComposeMessage::Prepare(encode_message) => {
                             debug!(swap=%encode_message.swap, "Prepare message");

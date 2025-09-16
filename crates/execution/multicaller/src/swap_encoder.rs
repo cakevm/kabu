@@ -1,8 +1,8 @@
 use crate::MulticallerSwapEncoder;
 use alloy_primitives::{Address, BlockNumber, Bytes, U256};
-use eyre::{eyre, OptionExt, Result};
+use eyre::{OptionExt, Result, eyre};
 use kabu_types_blockchain::MulticallerCalls;
-use kabu_types_swap::tips::{tips_and_value_for_swap_type, Tips};
+use kabu_types_swap::tips::{Tips, tips_and_value_for_swap_type};
 use kabu_types_swap::{Swap, SwapEncoder, SwapStep};
 use tracing::{debug, error, trace};
 

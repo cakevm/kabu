@@ -1,4 +1,4 @@
-use alloy::primitives::{keccak256, Address, Bytes, B256};
+use alloy::primitives::{Address, B256, Bytes, keccak256};
 use alloy::providers::{Network, Provider};
 use eyre::Result;
 
@@ -6,11 +6,7 @@ use kabu_defi_abi::uniswap2::IUniswapV2Pair;
 use kabu_defi_abi::uniswap3::IUniswapV3Pool;
 
 fn sort_tokens(token0: Address, token1: Address) -> (Address, Address) {
-    if token0 < token1 {
-        (token0, token1)
-    } else {
-        (token1, token0)
-    }
+    if token0 < token1 { (token0, token1) } else { (token1, token0) }
 }
 
 pub fn get_uniswap2pool_address(token0: Address, token1: Address, factory: Address, init_code: B256) -> Address {

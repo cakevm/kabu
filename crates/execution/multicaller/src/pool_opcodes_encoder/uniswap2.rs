@@ -1,7 +1,7 @@
 use crate::opcodes_helpers::OpcodesHelpers;
 use crate::pool_abi_encoder::ProtocolAbiSwapEncoderTrait;
-use crate::pool_opcodes_encoder::swap_opcodes_encoders::MulticallerOpcodesPayload;
 use crate::pool_opcodes_encoder::SwapOpcodesEncoderTrait;
+use crate::pool_opcodes_encoder::swap_opcodes_encoders::MulticallerOpcodesPayload;
 use alloy_primitives::{Address, Bytes, U256};
 use eyre::eyre;
 use kabu_defi_abi::AbiEncoderHelper;
@@ -130,14 +130,14 @@ impl SwapOpcodesEncoderTrait for UniswapV2SwapOpcodesEncoder {
             }
 
             // if there is a prev_pool transfer funds in case it is uniswap2.
-            if let Some(prev_pool) = prev_pool {
-                if let PreswapRequirement::Transfer(swap_to) = prev_pool.preswap_requirement() {
-                    trace!("uniswap v2 transfer token_to_address={:?}, funds_to={:?} amount=stack_norel_0", token_to_address, swap_to);
-                    let mut transfer_opcode =
-                        MulticallerCall::new_call(token_to_address, &AbiEncoderHelper::encode_erc20_transfer(swap_to, U256::ZERO));
-                    transfer_opcode.set_call_stack(false, 0, 0x24, 0x20);
-                    inside_opcodes.insert(transfer_opcode);
-                }
+            if let Some(prev_pool) = prev_pool
+                && let PreswapRequirement::Transfer(swap_to) = prev_pool.preswap_requirement()
+            {
+                trace!("uniswap v2 transfer token_to_address={:?}, funds_to={:?} amount=stack_norel_0", token_to_address, swap_to);
+                let mut transfer_opcode =
+                    MulticallerCall::new_call(token_to_address, &AbiEncoderHelper::encode_erc20_transfer(swap_to, U256::ZERO));
+                transfer_opcode.set_call_stack(false, 0, 0x24, 0x20);
+                inside_opcodes.insert(transfer_opcode);
             }
             MulticallerOpcodesPayload::Opcodes(inside_opcodes)
         } else {

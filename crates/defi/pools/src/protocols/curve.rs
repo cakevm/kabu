@@ -1,11 +1,11 @@
 use std::fmt::{Display, Formatter};
 use std::marker::PhantomData;
 
-use alloy::primitives::{address, Address, Bytes, U256};
+use alloy::primitives::{Address, Bytes, U256, address};
 use alloy::providers::{Network, Provider};
 use alloy::rpc::types::{BlockId, BlockNumberOrTag};
 use alloy::sol_types::SolInterface;
-use eyre::{eyre, Report, Result};
+use eyre::{Report, Result, eyre};
 use tracing::{debug, error, trace};
 
 use kabu_defi_abi::curve::ICurveAddressProvider::ICurveAddressProviderInstance;
@@ -152,11 +152,7 @@ where
             }
             Err(e) => {
                 trace!("balances256 call error {} : {}", coin_id, e);
-                if coin_id == 0 {
-                    Self::balance128(client, address, coin_id).await
-                } else {
-                    Err(eyre!("CANNOT_GET_COIN_BALANCE"))
-                }
+                if coin_id == 0 { Self::balance128(client, address, coin_id).await } else { Err(eyre!("CANNOT_GET_COIN_BALANCE")) }
             }
         }
     }

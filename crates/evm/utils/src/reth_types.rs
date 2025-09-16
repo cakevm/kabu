@@ -1,5 +1,5 @@
-use alloy::consensus::transaction::{Recovered, SignerRecoverable};
 use alloy::consensus::TxEnvelope;
+use alloy::consensus::transaction::{Recovered, SignerRecoverable};
 use alloy::eips::eip2718::Decodable2718;
 use alloy::primitives::Bytes;
 use alloy::rpc::types::Transaction;

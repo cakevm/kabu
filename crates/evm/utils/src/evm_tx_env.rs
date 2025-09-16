@@ -1,5 +1,5 @@
-use alloy::primitives::private::alloy_rlp;
 use alloy::primitives::SignatureError;
+use alloy::primitives::private::alloy_rlp;
 use thiserror::Error;
 
 #[derive(Debug, Error)]

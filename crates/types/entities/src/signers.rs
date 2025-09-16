@@ -1,9 +1,9 @@
 use alloy_consensus::SignableTransaction;
 use alloy_network::{TransactionBuilder, TxSigner as AlloyTxSigner, TxSignerSync};
-use alloy_primitives::{hex, Address, Bytes, B256};
+use alloy_primitives::{Address, B256, Bytes, hex};
 use alloy_rpc_types::TransactionRequest;
 use alloy_signer_local::PrivateKeySigner;
-use eyre::{eyre, OptionExt, Result};
+use eyre::{OptionExt, Result, eyre};
 use indexmap::IndexMap;
 use rand::prelude::IteratorRandom;
 use reth_ethereum_primitives::{EthPrimitives, TransactionSigned};
@@ -141,7 +141,7 @@ impl<N: NodePrimitives> TxSigners<N> {
 mod tests {
     use super::*;
     use alloy_network::eip2718::Encodable2718;
-    use alloy_primitives::{address, TxHash};
+    use alloy_primitives::{TxHash, address};
     use alloy_rpc_types::TransactionRequest;
     use eyre::Result;
 

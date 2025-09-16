@@ -5,7 +5,7 @@ use alloy::primitives::hex;
 use alloy::providers::{IpcConnect, ProviderBuilder, WsConnect};
 use alloy::rpc::client::ClientBuilder;
 use clap::{CommandFactory, FromArgMatches, Parser};
-use diesel_migrations::{embed_migrations, EmbeddedMigrations};
+use diesel_migrations::{EmbeddedMigrations, embed_migrations};
 use eyre::OptionExt;
 use kabu::broadcast::accounts::InitializeSignersOneShotBlockingComponent;
 use kabu::core::blockchain::{Blockchain, BlockchainState};
@@ -20,15 +20,15 @@ use kabu::storage::db::init_db_pool_with_migrations;
 use kabu::strategy::backrun::{BackrunConfig, BackrunConfigSection};
 use kabu::types::entities::strategy_config::load_from_file;
 use kabu_core_node::{KabuBuildContext, KabuEthereumNode};
-use kabu_node_reth_api::{chain_notifications_forwarder, KabuRethFullProvider};
+use kabu_node_reth_api::{KabuRethFullProvider, chain_notifications_forwarder};
 use kabu_types_market::{MarketState, PoolClass};
 use reth::api::{NodeTypes, NodeTypesWithDBAdapter};
 use reth::builder::NodeHandle;
 use reth::chainspec::{Chain, EthereumChainSpecParser, MAINNET};
 use reth::cli::Cli;
 use reth::tasks::TaskManager;
-use reth_db_api::database_metrics::DatabaseMetrics;
 use reth_db_api::Database as RethDatabase;
+use reth_db_api::database_metrics::DatabaseMetrics;
 use reth_ethereum_primitives::EthPrimitives;
 use reth_node_ethereum::node::EthereumAddOns;
 use reth_node_ethereum::{EthEvmConfig, EthereumNode};
@@ -37,7 +37,7 @@ use reth_storage_rpc_provider::{RpcBlockchainProvider, RpcBlockchainProviderConf
 use tracing::{error, info};
 use tracing_subscriber::layer::SubscriberExt;
 use tracing_subscriber::util::SubscriberInitExt;
-use tracing_subscriber::{fmt, EnvFilter, Layer};
+use tracing_subscriber::{EnvFilter, Layer, fmt};
 
 mod arguments;
 

@@ -1,12 +1,12 @@
 use crate::{AccountNonceAndTransactions, FetchState, GethStateUpdate, MempoolTx};
-use alloy_consensus::transaction::SignerRecoverable;
 use alloy_consensus::Transaction;
-use alloy_primitives::map::HashMap;
+use alloy_consensus::transaction::SignerRecoverable;
 use alloy_primitives::BlockNumber;
+use alloy_primitives::map::HashMap;
 use alloy_primitives::{Address, TxHash};
 use alloy_rpc_types_eth::Log;
 use chrono::{DateTime, Utc};
-use eyre::{eyre, Result};
+use eyre::{Result, eyre};
 use reth_node_types::NodePrimitives;
 use reth_primitives_traits::SignedTransaction;
 use std::collections::hash_map::Entry;

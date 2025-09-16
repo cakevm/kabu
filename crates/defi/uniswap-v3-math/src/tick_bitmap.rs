@@ -1,5 +1,5 @@
-use crate::tick_provider::TickProvider;
 use crate::U256_1;
+use crate::tick_provider::TickProvider;
 use crate::{bit_math, error::UniswapV3MathError};
 use alloy::primitives::{Address, BlockNumber, U256};
 use alloy::providers::Provider;
@@ -185,11 +185,7 @@ mod test {
 
     pub fn initialized<T: TickProvider>(tick: i32, tick_provider: &T) -> eyre::Result<bool> {
         let (next, initialized) = next_initialized_tick_within_one_word(tick_provider, tick, 1, true)?;
-        if next == tick {
-            Ok(initialized)
-        } else {
-            Ok(false)
-        }
+        if next == tick { Ok(initialized) } else { Ok(false) }
     }
 
     #[test]

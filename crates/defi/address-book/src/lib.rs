@@ -1,4 +1,4 @@
-use alloy_primitives::{address, Address};
+use alloy_primitives::{Address, address};
 
 #[non_exhaustive]
 pub struct TokenAddressEth;

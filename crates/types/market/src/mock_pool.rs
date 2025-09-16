@@ -1,5 +1,5 @@
-use crate::required_state::RequiredState;
 use crate::SwapDirection;
+use crate::required_state::RequiredState;
 use crate::{Pool, PoolAbiEncoder, PoolClass, PoolError, PoolId, PoolProtocol, PreswapRequirement};
 use alloy_evm::EvmEnv;
 use alloy_primitives::{Address, U256};

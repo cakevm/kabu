@@ -18,11 +18,7 @@ impl PancakeV3ProtocolAbiEncoder {
     }
 
     pub fn get_price_limit(token_address_from: &Address, token_address_to: &Address) -> U160 {
-        if token_address_from < token_address_to {
-            *LOWER_LIMIT
-        } else {
-            *UPPER_LIMIT
-        }
+        if token_address_from < token_address_to { *LOWER_LIMIT } else { *UPPER_LIMIT }
     }
 }
 
@@ -80,19 +76,11 @@ impl ProtocolAbiSwapEncoderTrait for PancakeV3ProtocolAbiEncoder {
     }
 
     fn swap_out_amount_return_offset(&self, _pool: &dyn Pool, token_from_address: Address, token_to_address: Address) -> Option<u32> {
-        if PancakeV3ProtocolAbiEncoder::get_zero_for_one(&token_from_address, &token_to_address) {
-            Some(0x20)
-        } else {
-            Some(0x0)
-        }
+        if PancakeV3ProtocolAbiEncoder::get_zero_for_one(&token_from_address, &token_to_address) { Some(0x20) } else { Some(0x0) }
     }
 
     fn swap_in_amount_return_offset(&self, _pool: &dyn Pool, token_from_address: Address, token_to_address: Address) -> Option<u32> {
-        if PancakeV3ProtocolAbiEncoder::get_zero_for_one(&token_from_address, &token_to_address) {
-            Some(0x20)
-        } else {
-            Some(0x0)
-        }
+        if PancakeV3ProtocolAbiEncoder::get_zero_for_one(&token_from_address, &token_to_address) { Some(0x20) } else { Some(0x0) }
     }
 
     fn swap_out_amount_return_script(&self, _pool: &dyn Pool, _token_from_address: Address, _token_to_address: Address) -> Option<Bytes> {

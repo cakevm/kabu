@@ -1,11 +1,11 @@
 use alloy_primitives::{Address, Bytes};
-use eyre::{eyre, OptionExt, Result};
+use eyre::{OptionExt, Result, eyre};
 use std::sync::Arc;
 use tracing::error;
 
 use crate::pool_abi_encoder::ProtocolABIEncoderV2;
 use crate::pool_opcodes_encoder::ProtocolSwapOpcodesEncoderV2;
-use crate::{SwapLineEncoder, SwapStepEncoder, DEFAULT_VIRTUAL_ADDRESS};
+use crate::{DEFAULT_VIRTUAL_ADDRESS, SwapLineEncoder, SwapStepEncoder};
 use kabu_types_blockchain::MulticallerCalls;
 use kabu_types_swap::Swap;
 

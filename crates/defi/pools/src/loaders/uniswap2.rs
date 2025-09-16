@@ -1,5 +1,5 @@
-use crate::protocols::{fetch_uni2_factory, UniswapV2Protocol};
-use crate::{pool_loader, UniswapV2Pool};
+use crate::protocols::{UniswapV2Protocol, fetch_uni2_factory};
+use crate::{UniswapV2Pool, pool_loader};
 use alloy::primitives::{Bytes, Log};
 use alloy::sol_types::SolEventInterface;
 use alloy_evm::EvmEnv;
@@ -8,7 +8,7 @@ use futures::Stream;
 use kabu_defi_abi::uniswap2::IUniswapV2Pair::IUniswapV2PairEvents;
 use kabu_evm_db::KabuDBError;
 use kabu_types_market::PoolClass;
-use kabu_types_market::{get_protocol_by_factory, PoolId, PoolLoader, PoolProtocol, PoolWrapper};
+use kabu_types_market::{PoolId, PoolLoader, PoolProtocol, PoolWrapper, get_protocol_by_factory};
 use reth_ethereum_primitives::EthPrimitives;
 use revm::DatabaseRef;
 use std::future::Future;

@@ -2,7 +2,7 @@ use crate::swap_error::SwapErrorKind;
 use crate::{CalculationResult, SwapError, SwapStep};
 use alloy_evm::EvmEnv;
 use alloy_primitives::{Address, I256, U256};
-use eyre::{eyre, Result};
+use eyre::{Result, eyre};
 use kabu_evm_db::KabuDBError;
 use kabu_types_market::SwapPath;
 use kabu_types_market::{PoolId, PoolWrapper, Token};
@@ -283,19 +283,19 @@ impl SwapLine {
         if self.tokens().len() < 3 {
             return Err(eyre!("NOT_ARB_PATH"));
         }
-        if let Some(token_in) = self.tokens().first() {
-            if let Some(token_out) = self.tokens().last() {
-                return if token_in == token_out {
-                    if let SwapAmountType::Set(amount_in) = self.amount_in {
-                        if let SwapAmountType::Set(amount_out) = self.amount_out {
-                            return Ok(I256::from_raw(amount_out) - I256::from_raw(amount_in));
-                        }
-                    }
-                    Err(eyre!("AMOUNTS_NOT_SET"))
-                } else {
-                    Err(eyre!("TOKENS_DONT_MATCH"))
-                };
-            }
+        if let Some(token_in) = self.tokens().first()
+            && let Some(token_out) = self.tokens().last()
+        {
+            return if token_in == token_out {
+                if let SwapAmountType::Set(amount_in) = self.amount_in
+                    && let SwapAmountType::Set(amount_out) = self.amount_out
+                {
+                    return Ok(I256::from_raw(amount_out) - I256::from_raw(amount_in));
+                }
+                Err(eyre!("AMOUNTS_NOT_SET"))
+            } else {
+                Err(eyre!("TOKENS_DONT_MATCH"))
+            };
         }
         Err(eyre!("CANNOT_CALCULATE"))
     }
@@ -535,8 +535,8 @@ mod tests {
     use super::*;
     use alloy_primitives::utils::parse_units;
     use kabu_defi_address_book::{TokenAddressEth, UniswapV2PoolAddress, UniswapV3PoolAddress};
-    use kabu_types_market::mock_pool::MockPool;
     use kabu_types_market::Pool;
+    use kabu_types_market::mock_pool::MockPool;
     use std::sync::Arc;
 
     fn default_swap_line() -> (MockPool, MockPool, SwapLine) {

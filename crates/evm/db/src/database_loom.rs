@@ -2,8 +2,8 @@ use crate::error::KabuDBError;
 use crate::fast_cache_db::FastDbAccount;
 use alloy::primitives::map::HashMap;
 use alloy::primitives::{Address, U256};
-use revm::state::AccountInfo;
 use revm::DatabaseRef;
+use revm::state::AccountInfo;
 
 pub trait DatabaseKabuExt {
     fn with_ext_db(&mut self, db: impl DatabaseRef<Error = KabuDBError> + Send + Sync + 'static);

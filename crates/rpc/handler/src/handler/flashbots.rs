@@ -1,7 +1,7 @@
 use crate::dto::flashbots::{BundleRequest, BundleResponse, SendBundleResponse};
+use axum::Json;
 use axum::extract::State;
 use axum::http::StatusCode;
-use axum::Json;
 use kabu_rpc_state::AppState;
 use kabu_types_blockchain::ChainParameters;
 use revm::{DatabaseCommit, DatabaseRef};

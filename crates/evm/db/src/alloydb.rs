@@ -1,11 +1,11 @@
 use crate::error::KabuDBError;
 use alloy::eips::BlockId;
 use alloy::network::primitives::HeaderResponse;
-use alloy::providers::{network::BlockResponse, Network, Provider};
+use alloy::providers::{Network, Provider, network::BlockResponse};
 use revm::state::{AccountInfo, Bytecode};
 use revm::{
-    primitives::{Address, B256, U256},
     Database, DatabaseRef,
+    primitives::{Address, B256, U256},
 };
 use std::future::IntoFuture;
 use tokio::runtime::{Handle, Runtime};

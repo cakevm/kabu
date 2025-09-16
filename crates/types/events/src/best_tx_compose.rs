@@ -35,10 +35,10 @@ impl<DB: Clone + Default + 'static, N: NodePrimitives> BestTxSwapCompose<DB, N> 
                 if best_swap.swap.arb_profit_eth() < request.swap.arb_profit_eth() {
                     self.best_profit_swap = Some(request.clone());
                     is_ok = true;
-                } else if let Some(pct) = self.validity_pct {
-                    if (best_swap.swap.arb_profit_eth() * pct) / U256::from(10000) < request.swap.arb_profit_eth() {
-                        is_ok = true
-                    }
+                } else if let Some(pct) = self.validity_pct
+                    && (best_swap.swap.arb_profit_eth() * pct) / U256::from(10000) < request.swap.arb_profit_eth()
+                {
+                    is_ok = true
                 }
             }
         }
@@ -49,10 +49,10 @@ impl<DB: Clone + Default + 'static, N: NodePrimitives> BestTxSwapCompose<DB, N> 
                     if best_swap.tips.unwrap_or_default() < request.tips.unwrap_or_default() {
                         self.best_tips_swap = Some(request.clone());
                         is_ok = true;
-                    } else if let Some(pct) = self.validity_pct {
-                        if (best_swap.tips.unwrap_or_default() * pct) / U256::from(10000) < request.tips.unwrap_or_default() {
-                            is_ok = true
-                        }
+                    } else if let Some(pct) = self.validity_pct
+                        && (best_swap.tips.unwrap_or_default() * pct) / U256::from(10000) < request.tips.unwrap_or_default()
+                    {
+                        is_ok = true
                     }
                 }
                 None => {
@@ -68,10 +68,10 @@ impl<DB: Clone + Default + 'static, N: NodePrimitives> BestTxSwapCompose<DB, N> 
                     if best_swap.tips_gas_ratio() < request.tips_gas_ratio() {
                         self.best_tips_gas_ratio_swap = Some(request.clone());
                         is_ok = true;
-                    } else if let Some(pct) = self.validity_pct {
-                        if (best_swap.tips_gas_ratio() * pct) / U256::from(10000) < request.tips_gas_ratio() {
-                            is_ok = true
-                        }
+                    } else if let Some(pct) = self.validity_pct
+                        && (best_swap.tips_gas_ratio() * pct) / U256::from(10000) < request.tips_gas_ratio()
+                    {
+                        is_ok = true
                     }
                 }
                 None => {
@@ -85,10 +85,10 @@ impl<DB: Clone + Default + 'static, N: NodePrimitives> BestTxSwapCompose<DB, N> 
                     if best_swap.profit_eth_gas_ratio() < request.profit_eth_gas_ratio() {
                         self.best_profit_gas_ratio_swap = Some(request.clone());
                         is_ok = true;
-                    } else if let Some(pct) = self.validity_pct {
-                        if (best_swap.profit_eth_gas_ratio() * pct) / U256::from(10000) < request.profit_eth_gas_ratio() {
-                            is_ok = true
-                        }
+                    } else if let Some(pct) = self.validity_pct
+                        && (best_swap.profit_eth_gas_ratio() * pct) / U256::from(10000) < request.profit_eth_gas_ratio()
+                    {
+                        is_ok = true
                     }
                 }
                 None => {

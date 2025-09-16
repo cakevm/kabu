@@ -16,8 +16,8 @@ use crate::pool_loader_actor::fetch_and_add_pool_by_pool_id;
 use kabu_core_blockchain::{Blockchain, BlockchainState};
 use kabu_evm_db::KabuDBError;
 use kabu_node_debug_provider::DebugProviderExt;
-use kabu_types_market::required_state::{RequiredState, RequiredStateReader};
 use kabu_types_market::MarketState;
+use kabu_types_market::required_state::{RequiredState, RequiredStateReader};
 use kabu_types_market::{Market, PoolClass, PoolId, PoolLoaders};
 use reth_node_types::NodePrimitives;
 

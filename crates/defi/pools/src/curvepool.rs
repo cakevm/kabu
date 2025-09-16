@@ -1,5 +1,5 @@
 use crate::protocols::{CurveCommonContract, CurveContract, CurveProtocol};
-use alloy::primitives::{address, Address, Bytes, U256};
+use alloy::primitives::{Address, Bytes, U256, address};
 use alloy::providers::{Network, Provider};
 use alloy::sol_types::SolCall;
 use alloy_evm::EvmEnv;
@@ -633,8 +633,8 @@ where
 mod tests {
     use eyre::Result;
 
-    use crate::protocols::CurveProtocol;
     use crate::CurvePool;
+    use crate::protocols::CurveProtocol;
     use alloy::primitives::U256;
     use alloy::providers::Provider;
     use alloy::rpc::types::BlockNumberOrTag;

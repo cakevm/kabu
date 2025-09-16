@@ -1,4 +1,4 @@
-use alloy_primitives::{hex, Bytes, B256};
+use alloy_primitives::{B256, Bytes, hex};
 use eyre::eyre;
 use kabu_core_components::Component;
 use std::sync::Arc;

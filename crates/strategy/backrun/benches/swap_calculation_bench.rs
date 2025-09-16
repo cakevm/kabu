@@ -1,6 +1,6 @@
 use alloy_evm::EvmEnv;
-use alloy_primitives::{address, BlockNumber};
-use criterion::{black_box, criterion_group, criterion_main, Criterion};
+use alloy_primitives::{BlockNumber, address};
+use criterion::{Criterion, black_box, criterion_group, criterion_main};
 use kabu_defi_address_book::TokenAddressEth;
 use kabu_defi_pools::{UniswapV2Pool, UniswapV3Pool};
 use kabu_evm_db::KabuDBType;

@@ -4,8 +4,8 @@ use crate::handler::pools::{market_stats, pool, pool_quote, pools};
 use crate::handler::ws::ws_handler;
 //use crate::openapi::ApiDoc;
 use crate::openapi::ApiDoc;
-use axum::routing::{get, post};
 use axum::Router;
+use axum::routing::{get, post};
 use kabu_rpc_state::AppState;
 use revm::{DatabaseCommit, DatabaseRef};
 use utoipa::OpenApi;
@@ -33,8 +33,8 @@ pub fn router_block<DB: DatabaseRef + DatabaseCommit + Sync + Send + Clone + 'st
     Router::new().route("/latest_block", get(latest_block))
 }
 
-pub fn router_market<DB: DatabaseRef<Error = kabu_evm_db::KabuDBError> + DatabaseCommit + Sync + Send + Clone + 'static>(
-) -> Router<AppState<DB>> {
+pub fn router_market<DB: DatabaseRef<Error = kabu_evm_db::KabuDBError> + DatabaseCommit + Sync + Send + Clone + 'static>()
+-> Router<AppState<DB>> {
     Router::new()
         .route("/pools/:address", get(pool))
         .route("/pools/:address/quote", post(pool_quote))

@@ -3,7 +3,7 @@ use alloy::sol_types::{SolCall, SolInterface};
 
 use crate::balancer::IVault;
 use crate::lido::{IStEth, IWStEth};
-use crate::{IMultiCaller, IERC20, IWETH};
+use crate::{IERC20, IMultiCaller, IWETH};
 
 pub struct AbiEncoderHelper;
 

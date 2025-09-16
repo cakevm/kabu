@@ -3,7 +3,7 @@ use alloy_eips::eip2718::Encodable2718;
 use alloy_primitives::{Bytes, TxKind, U256};
 use alloy_provider::Provider;
 use alloy_rpc_types::{TransactionInput, TransactionRequest};
-use eyre::{eyre, Result};
+use eyre::{Result, eyre};
 use kabu_core_components::Component;
 use revm::DatabaseRef;
 use tokio::sync::{broadcast, broadcast::error::RecvError};

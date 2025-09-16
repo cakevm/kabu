@@ -2,10 +2,10 @@ use alloy_evm::EvmEnv;
 use alloy_primitives::{Address, BlockNumber, U256};
 use chrono::Local;
 #[allow(unused_imports)]
-use criterion::{black_box, criterion_group, criterion_main, Criterion};
+use criterion::{Criterion, black_box, criterion_group, criterion_main};
 use eyre::Result;
-use rand::prelude::{Rng, StdRng};
 use rand::SeedableRng;
+use rand::prelude::{Rng, StdRng};
 use rayon::prelude::*;
 use rayon::{ThreadPool, ThreadPoolBuilder};
 use std::collections::HashMap;

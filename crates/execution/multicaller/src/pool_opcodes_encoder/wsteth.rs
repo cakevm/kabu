@@ -1,9 +1,9 @@
 use crate::opcodes_helpers::OpcodesHelpers;
 use crate::pool_abi_encoder::ProtocolAbiSwapEncoderTrait;
-use crate::pool_opcodes_encoder::swap_opcodes_encoders::MulticallerOpcodesPayload;
 use crate::pool_opcodes_encoder::SwapOpcodesEncoderTrait;
+use crate::pool_opcodes_encoder::swap_opcodes_encoders::MulticallerOpcodesPayload;
 use alloy_primitives::{Address, Bytes};
-use eyre::{eyre, Result};
+use eyre::{Result, eyre};
 use kabu_defi_abi::AbiEncoderHelper;
 use kabu_defi_address_book::TokenAddressEth;
 use kabu_types_blockchain::{MulticallerCall, MulticallerCalls};

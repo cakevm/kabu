@@ -1,13 +1,13 @@
+use crate::DatabaseKabuExt;
 use crate::alloydb::AlloyDB;
 use crate::error::KabuDBError;
 use crate::fast_cache_db::FastDbAccount;
 use crate::fast_hasher::SimpleBuildHasher;
 use crate::kabu_db_helper::KabuDBHelper;
-use crate::DatabaseKabuExt;
 use alloy::consensus::constants::KECCAK_EMPTY;
 use alloy::eips::BlockNumberOrTag;
 use alloy::primitives::map::HashMap;
-use alloy::primitives::{Address, BlockNumber, Log, B256, U256};
+use alloy::primitives::{Address, B256, BlockNumber, Log, U256};
 use alloy::providers::{Network, Provider, ProviderBuilder};
 use alloy::rpc::client::ClientBuilder;
 use alloy::rpc::types::trace::geth::AccountState as GethAccountState;
@@ -17,8 +17,8 @@ use revm::database::AccountState as DBAccountState;
 use revm::database::EmptyDBTyped;
 use revm::state::{Account, AccountInfo, Bytecode};
 use revm::{Database, DatabaseCommit, DatabaseRef};
-use std::collections::hash_map::Entry;
 use std::collections::BTreeMap;
+use std::collections::hash_map::Entry;
 use std::fmt::{Debug, Formatter};
 use std::sync::Arc;
 use tracing::{error, trace};
@@ -78,11 +78,7 @@ impl KabuDB {
         if is_rw_slot {
             true
         } else if let Some(read_only_db) = &self.read_only_db {
-            if let Some(account) = read_only_db.accounts.get(address) {
-                account.storage.contains_key(slot)
-            } else {
-                false
-            }
+            if let Some(account) = read_only_db.accounts.get(address) { account.storage.contains_key(slot) } else { false }
         } else {
             false
         }
@@ -191,13 +187,13 @@ impl KabuDB {
     }
 
     pub fn insert_contract(&mut self, account: &mut AccountInfo) {
-        if let Some(code) = &account.code {
-            if !code.is_empty() {
-                if account.code_hash == KECCAK_EMPTY {
-                    account.code_hash = code.hash_slow();
-                }
-                self.contracts.entry(account.code_hash).or_insert_with(|| code.clone());
+        if let Some(code) = &account.code
+            && !code.is_empty()
+        {
+            if account.code_hash == KECCAK_EMPTY {
+                account.code_hash = code.hash_slow();
             }
+            self.contracts.entry(account.code_hash).or_insert_with(|| code.clone());
         }
         if account.code_hash == B256::ZERO {
             account.code_hash = KECCAK_EMPTY;
@@ -418,11 +414,7 @@ impl KabuDB {
                 .iter()
                 .filter_map(|(slot, value)| {
                     let is_slot = self.is_slot(address, &(*slot).into());
-                    if is_slot || only_new {
-                        Some(((*slot).into(), (*value).into()))
-                    } else {
-                        None
-                    }
+                    if is_slot || only_new { Some(((*slot).into(), (*value).into())) } else { None }
                 })
                 .collect();
 
@@ -514,7 +506,7 @@ impl DatabaseRef for KabuDB {
     type Error = KabuDBError;
     fn basic_ref(&self, address: Address) -> Result<Option<AccountInfo>, Self::Error> {
         trace!(%address, "basic_ref");
-        let result = match address {
+        match address {
             Address::ZERO => Ok(Some(AccountInfo::default())),
             _ => match self.accounts.get(&address) {
                 Some(acc) => {
@@ -523,9 +515,7 @@ impl DatabaseRef for KabuDB {
                 }
                 None => Ok(KabuDBHelper::get_or_fetch_basic(&self.read_only_db, &self.ext_db, address).unwrap_or_default()),
             },
-        };
-
-        result
+        }
     }
 
     fn code_by_hash_ref(&self, code_hash: B256) -> Result<Bytecode, Self::Error> {
@@ -684,7 +674,7 @@ mod test {
     use crate::kabu_db::KabuDB;
     use alloy::eips::BlockNumberOrTag;
     use alloy::primitives::map::HashMap;
-    use alloy::primitives::{Address, Bytes, B256, I256, U256};
+    use alloy::primitives::{Address, B256, Bytes, I256, U256};
     use alloy::providers::{Provider, ProviderBuilder};
     use eyre::ErrReport;
     use revm::database::EmptyDBTyped;

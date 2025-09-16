@@ -1,6 +1,6 @@
 use super::{PendingTxStateChangeProcessorComponent, StateChangeArbSearcherComponent};
-use crate::block_state_change_processor::BlockStateChangeProcessorComponent;
 use crate::BackrunConfig;
+use crate::block_state_change_processor::BlockStateChangeProcessorComponent;
 use alloy_network::Network;
 use alloy_provider::Provider;
 use eyre::Result;
@@ -9,7 +9,7 @@ use kabu_core_components::Component;
 use kabu_types_blockchain::ChainParameters;
 use reth_tasks::TaskExecutor;
 use std::sync::Arc;
-use tokio::sync::{broadcast, RwLock};
+use tokio::sync::{RwLock, broadcast};
 
 use kabu_evm_db::KabuDBError;
 use kabu_node_debug_provider::DebugProviderExt;

@@ -3,7 +3,7 @@ use crate::{PoolClass, PoolId, PoolWrapper};
 use alloy_network::{Ethereum, Network};
 use alloy_primitives::{Bytes, Log};
 use alloy_provider::Provider;
-use eyre::{eyre, Result};
+use eyre::{Result, eyre};
 use kabu_evm_db::KabuDBError;
 use reth_ethereum_primitives::EthPrimitives;
 use revm::DatabaseRef;

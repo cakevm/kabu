@@ -4,9 +4,9 @@ use alloy_network::Network;
 use alloy_primitives::{BlockHash, BlockNumber, Sealable};
 use alloy_provider::Provider;
 use alloy_rpc_types::{BlockId, Filter, Log};
-use eyre::{eyre, ErrReport, OptionExt, Result};
+use eyre::{ErrReport, OptionExt, Result, eyre};
 use kabu_node_debug_provider::DebugProviderExt;
-use kabu_types_blockchain::{debug_trace_block, GethStateUpdateVec};
+use kabu_types_blockchain::{GethStateUpdateVec, debug_trace_block};
 use kabu_types_market::MarketStateConfig;
 use reth_ethereum_primitives::EthPrimitives;
 use reth_node_types::NodePrimitives;
@@ -125,11 +125,7 @@ impl<S, N: NodePrimitives> BlockHistory<S, N> {
     }
 
     fn check_reorg_at_block(&mut self, block_number: BlockNumber) -> Option<BlockHash> {
-        if let Some(block_hash) = self.get_block_hash_for_block_number(block_number) {
-            None
-        } else {
-            None
-        }
+        if let Some(block_hash) = self.get_block_hash_for_block_number(block_number) { None } else { None }
     }
 
     pub fn add_block_header(&mut self, block_header: N::BlockHeader) -> Result<bool> {
@@ -353,11 +349,7 @@ where
             }
         }
 
-        if entry.is_fetched() {
-            Ok(())
-        } else {
-            Err(eyre!("BLOCK_DATA_NOT_FETCHED"))
-        }
+        if entry.is_fetched() { Ok(()) } else { Err(eyre!("BLOCK_DATA_NOT_FETCHED")) }
     }
     pub async fn get_or_fetch_entry_cloned(
         &self,
@@ -521,8 +513,8 @@ mod test {
     use alloy_consensus::Header;
     use alloy_node_bindings::Anvil;
     use alloy_primitives::{Address, U256};
-    use alloy_provider::ext::AnvilApi;
     use alloy_provider::ProviderBuilder;
+    use alloy_provider::ext::AnvilApi;
     use alloy_rpc_client::ClientBuilder;
     use alloy_rpc_types::BlockNumberOrTag;
     use kabu_evm_db::KabuDBType;

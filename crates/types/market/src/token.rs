@@ -101,11 +101,7 @@ impl Token {
 
     #[inline]
     pub fn get_exp(&self) -> U256 {
-        if self.decimals == 18 {
-            ONE_ETHER
-        } else {
-            U256::from(10).pow(U256::from(self.decimals))
-        }
+        if self.decimals == 18 { ONE_ETHER } else { U256::from(10).pow(U256::from(self.decimals)) }
     }
 
     #[inline]
@@ -159,11 +155,7 @@ impl Token {
     pub fn to_float_sign(&self, value: I256) -> f64 {
         let r: U256 = if value.is_positive() { value.into_raw() } else { value.neg().into_raw() };
         let f = self.to_float(r);
-        if value.is_positive() {
-            f
-        } else {
-            -f
-        }
+        if value.is_positive() { f } else { -f }
     }
 
     pub fn from_float(&self, value: f64) -> U256 {

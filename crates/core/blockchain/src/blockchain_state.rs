@@ -14,9 +14,9 @@ pub struct BlockchainState<DB: Clone + Send + Sync + 'static, NP: NodePrimitives
 }
 
 impl<
-        DB: DatabaseRef + Database + DatabaseCommit + BlockHistoryState<NP> + DatabaseKabuExt + Send + Sync + Clone + Default + 'static,
-        NP: NodePrimitives,
-    > Default for BlockchainState<DB, NP>
+    DB: DatabaseRef + Database + DatabaseCommit + BlockHistoryState<NP> + DatabaseKabuExt + Send + Sync + Clone + Default + 'static,
+    NP: NodePrimitives,
+> Default for BlockchainState<DB, NP>
 {
     fn default() -> Self {
         Self::new()
@@ -24,9 +24,9 @@ impl<
 }
 
 impl<
-        DB: DatabaseRef + Database + DatabaseCommit + BlockHistoryState<NP> + DatabaseKabuExt + Send + Sync + Clone + Default + 'static,
-        NP: NodePrimitives,
-    > BlockchainState<DB, NP>
+    DB: DatabaseRef + Database + DatabaseCommit + BlockHistoryState<NP> + DatabaseKabuExt + Send + Sync + Clone + Default + 'static,
+    NP: NodePrimitives,
+> BlockchainState<DB, NP>
 {
     pub fn new() -> Self {
         BlockchainState {

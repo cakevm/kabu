@@ -1,5 +1,5 @@
-use alloy::primitives::{keccak256, Address, U256};
-use eyre::{eyre, Result};
+use alloy::primitives::{Address, U256, keccak256};
+use eyre::{Result, eyre};
 use revm::DatabaseRef;
 use tracing::debug;
 

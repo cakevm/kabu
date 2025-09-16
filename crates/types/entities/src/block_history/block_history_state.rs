@@ -17,32 +17,32 @@ impl<N: NodePrimitives> BlockHistoryState<N> for KabuDB {
         if let Some(state_update) = &block_history_entry.state_update {
             for state_diff in state_update.iter() {
                 for (address, account_state) in state_diff.iter() {
-                    if let Some(balance) = account_state.balance {
-                        if db.is_rw_ro_account(address) {
-                            match db.load_ro_rw_account(*address) {
-                                Ok(x) => {
-                                    x.info.balance = balance;
-                                    trace!("Balance updated {:#20x} {}", address, balance);
-                                }
-                                _ => {
-                                    trace!("Balance updated for {:#20x} not found", address);
-                                }
-                            };
-                        }
+                    if let Some(balance) = account_state.balance
+                        && db.is_rw_ro_account(address)
+                    {
+                        match db.load_ro_rw_account(*address) {
+                            Ok(x) => {
+                                x.info.balance = balance;
+                                trace!("Balance updated {:#20x} {}", address, balance);
+                            }
+                            _ => {
+                                trace!("Balance updated for {:#20x} not found", address);
+                            }
+                        };
                     }
 
-                    if let Some(nonce) = account_state.nonce {
-                        if db.is_account(address) {
-                            match db.load_cached_account(*address) {
-                                Ok(x) => {
-                                    x.info.nonce = nonce;
-                                    trace!("Nonce updated {:#20x} {}", address, nonce);
-                                }
-                                _ => {
-                                    trace!("Nonce updated for {:#20x} not found", address);
-                                }
-                            };
-                        }
+                    if let Some(nonce) = account_state.nonce
+                        && db.is_account(address)
+                    {
+                        match db.load_cached_account(*address) {
+                            Ok(x) => {
+                                x.info.nonce = nonce;
+                                trace!("Nonce updated {:#20x} {}", address, nonce);
+                            }
+                            _ => {
+                                trace!("Nonce updated for {:#20x} not found", address);
+                            }
+                        };
                     }
 
                     for (slot, value) in account_state.storage.iter() {

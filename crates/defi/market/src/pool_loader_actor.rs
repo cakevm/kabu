@@ -3,21 +3,21 @@ use reth_tasks::TaskExecutor;
 use std::collections::{BTreeMap, HashMap};
 use std::marker::PhantomData;
 use std::sync::Arc;
-use tokio::sync::{broadcast, RwLock};
+use tokio::sync::{RwLock, broadcast};
 
 use alloy_network::Network;
 use alloy_primitives::Address;
 use alloy_provider::Provider;
 use alloy_rpc_types::TransactionRequest;
-use eyre::{eyre, Result};
+use eyre::{Result, eyre};
 use tracing::{debug, error, info};
 
 use kabu_core_blockchain::{Blockchain, BlockchainState};
 use kabu_node_debug_provider::DebugProviderExt;
 use kabu_types_events::{LoomTask, MarketEvents};
-use kabu_types_market::required_state::RequiredStateReader;
 use kabu_types_market::MarketState;
 use kabu_types_market::SwapDirection;
+use kabu_types_market::required_state::RequiredStateReader;
 use kabu_types_market::{Market, PoolClass, PoolId, PoolLoaders, PoolWrapper, PoolsLoadingConfig};
 
 use kabu_types_blockchain::get_touched_addresses;

@@ -2,7 +2,7 @@ use crate::pool_abi_encoder::ProtocolAbiSwapEncoderTrait;
 pub use crate::pool_opcodes_encoder::swap_opcodes_encoders::MulticallerOpcodesPayload;
 use alloy_primitives::Address;
 pub use curve::CurveSwapOpcodesEncoder;
-use eyre::{eyre, Result};
+use eyre::{Result, eyre};
 use kabu_types_blockchain::MulticallerCalls;
 use kabu_types_market::Pool;
 use kabu_types_swap::SwapAmountType;

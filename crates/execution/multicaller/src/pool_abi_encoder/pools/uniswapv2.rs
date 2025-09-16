@@ -46,19 +46,11 @@ impl ProtocolAbiSwapEncoderTrait for UniswapV2ProtocolAbiEncoder {
     }
 
     fn swap_out_amount_offset(&self, _pool: &dyn Pool, token_from_address: Address, token_to_address: Address) -> Option<u32> {
-        if UniswapV2ProtocolAbiEncoder::get_zero_for_one(&token_from_address, &token_to_address) {
-            Some(0x24)
-        } else {
-            Some(0x04)
-        }
+        if UniswapV2ProtocolAbiEncoder::get_zero_for_one(&token_from_address, &token_to_address) { Some(0x24) } else { Some(0x04) }
     }
 
     fn swap_out_amount_return_offset(&self, _pool: &dyn Pool, token_from_address: Address, token_to_address: Address) -> Option<u32> {
-        if UniswapV2ProtocolAbiEncoder::get_zero_for_one(&token_from_address, &token_to_address) {
-            Some(0x20)
-        } else {
-            Some(0x00)
-        }
+        if UniswapV2ProtocolAbiEncoder::get_zero_for_one(&token_from_address, &token_to_address) { Some(0x20) } else { Some(0x00) }
     }
 
     fn swap_in_amount_offset(&self, _pool: &dyn Pool, _token_from_address: Address, _token_to_address: Address) -> Option<u32> {

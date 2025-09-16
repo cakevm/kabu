@@ -1,7 +1,7 @@
-use eyre::{eyre, Result};
+use eyre::{Result, eyre};
 use std::sync::Arc;
 use std::time::Duration;
-use tokio::sync::{broadcast, RwLock};
+use tokio::sync::{RwLock, broadcast};
 use tracing::{debug, error, info, warn};
 
 use alloy_network::Network;
@@ -96,8 +96,8 @@ where
         loop {
             tokio::select! {
                 swap_compose_msg = recv_swap_compose_msg(&mut swap_compose_rx) => {
-                    if let Some(swap_compose) = swap_compose_msg {
-                        if let Err(e) = handle_swap_compose_signing(
+                    if let Some(swap_compose) = swap_compose_msg
+                        && let Err(e) = handle_swap_compose_signing(
                             &client,
                             &signers,
                             &account_state,
@@ -106,7 +106,6 @@ where
                             gas_price_buffer,
                         ).await {
                             error!("Error signing swap compose: {}", e);
-                        }
                     }
                 }
                 _ = tokio::time::sleep(Duration::from_secs(10)) => {
@@ -121,7 +120,7 @@ where
 async fn recv_swap_compose_msg<DB: Send + Sync + Clone + 'static, LDT: NodePrimitives>(
     swap_compose_rx: &mut Option<broadcast::Receiver<MessageSwapCompose<DB, LDT>>>,
 ) -> Option<MessageSwapCompose<DB, LDT>> {
-    if let Some(ref mut rx) = swap_compose_rx {
+    if let Some(rx) = swap_compose_rx {
         match rx.recv().await {
             Ok(msg) => Some(msg),
             Err(broadcast::error::RecvError::Lagged(missed)) => {

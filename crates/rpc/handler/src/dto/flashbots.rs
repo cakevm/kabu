@@ -1,4 +1,4 @@
-use alloy_primitives::{Bytes, B256, U64};
+use alloy_primitives::{B256, Bytes, U64};
 use serde::{Deserialize, Serialize};
 use utoipa::PartialSchema;
 use utoipa::ToSchema;

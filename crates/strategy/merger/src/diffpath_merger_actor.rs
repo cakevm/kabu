@@ -5,7 +5,7 @@ use lazy_static::lazy_static;
 use reth_tasks::TaskExecutor;
 use revm::{Database, DatabaseCommit, DatabaseRef};
 use std::collections::HashSet;
-use tokio::sync::{broadcast, broadcast::error::RecvError, broadcast::Receiver};
+use tokio::sync::{broadcast, broadcast::Receiver, broadcast::error::RecvError};
 use tracing::{debug, error, info};
 
 use kabu_core_blockchain::{Blockchain, Strategy};
@@ -79,8 +79,8 @@ where
                 let msg : Result<MessageSwapCompose<DB>, RecvError> = msg;
                 match msg {
                     Ok(compose_request)=>{
-                        if let SwapComposeMessage::Ready(sign_request) = compose_request.inner() {
-                            if matches!( sign_request.swap, Swap::BackrunSwapLine(_)) || matches!( sign_request.swap, Swap::BackrunSwapSteps(_)) {
+                        if let SwapComposeMessage::Ready(sign_request) = compose_request.inner()
+                            && (matches!( sign_request.swap, Swap::BackrunSwapLine(_)) || matches!( sign_request.swap, Swap::BackrunSwapSteps(_))) {
                                 // Create a unique key for this swap to detect duplicates
                                 let swap_key = format!("{:?}", sign_request.swap);
 
@@ -146,7 +146,6 @@ where
                                 if swap_paths.len() > 20 {
                                     swap_paths.truncate(20);
                                 }
-                            }
                         }
                     }
                     Err(e)=>{error!("{e}")}

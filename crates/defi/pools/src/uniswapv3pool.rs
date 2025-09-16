@@ -11,10 +11,10 @@ use alloy::providers::{Network, Provider};
 use alloy::sol_types::{SolCall, SolInterface};
 use alloy_evm::EvmEnv;
 use eyre::{OptionExt, Result};
+use kabu_defi_abi::IERC20;
+use kabu_defi_abi::uniswap_periphery::ITickLens;
 use kabu_defi_abi::uniswap3::IUniswapV3Pool;
 use kabu_defi_abi::uniswap3::IUniswapV3Pool::slot0Return;
-use kabu_defi_abi::uniswap_periphery::ITickLens;
-use kabu_defi_abi::IERC20;
 use kabu_defi_address_book::{FactoryAddress, PeripheryAddress};
 use kabu_evm_db::KabuDBError;
 use kabu_types_market::{
@@ -132,19 +132,11 @@ impl UniswapV3Pool {
     pub fn get_tick_bitmap_index(tick: i32, spacing: u32) -> i16 {
         let tick_bitmap_index = tick / (spacing as i32);
 
-        if tick_bitmap_index < 0 {
-            (((tick_bitmap_index + 1) / 256) - 1) as i16
-        } else {
-            (tick_bitmap_index >> 8) as i16
-        }
+        if tick_bitmap_index < 0 { (((tick_bitmap_index + 1) / 256) - 1) as i16 } else { (tick_bitmap_index >> 8) as i16 }
     }
 
     pub fn get_price_limit(token_address_from: &Address, token_address_to: &Address) -> U160 {
-        if token_address_from.lt(token_address_to) {
-            *LOWER_LIMIT
-        } else {
-            *UPPER_LIMIT
-        }
+        if token_address_from.lt(token_address_to) { *LOWER_LIMIT } else { *UPPER_LIMIT }
     }
 
     pub fn get_zero_for_one(token_address_from: &Address, token_address_to: &Address) -> bool {
@@ -507,11 +499,7 @@ impl PoolAbiEncoder for UniswapV3AbiSwapEncoder {
     }
 
     fn swap_in_amount_return_offset(&self, token_from_address: Address, token_to_address: Address) -> Option<u32> {
-        if token_from_address < token_to_address {
-            Some(0x20)
-        } else {
-            Some(0x0)
-        }
+        if token_from_address < token_to_address { Some(0x20) } else { Some(0x0) }
     }
 
     fn swap_in_amount_return_script(&self, _token_from_address: Address, _token_to_address: Address) -> Option<Bytes> {
@@ -523,7 +511,7 @@ impl PoolAbiEncoder for UniswapV3AbiSwapEncoder {
 #[cfg(test)]
 mod test {
     use super::*;
-    use alloy::primitives::{address, BlockNumber};
+    use alloy::primitives::{BlockNumber, address};
     use alloy::rpc::types::{BlockId, BlockNumberOrTag};
     use kabu_defi_abi::uniswap_periphery::IQuoterV2;
     use kabu_defi_abi::uniswap_periphery::IQuoterV2::{QuoteExactInputSingleParams, QuoteExactOutputSingleParams};

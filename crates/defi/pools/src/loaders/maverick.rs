@@ -1,8 +1,8 @@
-use crate::{pool_loader, MaverickPool};
+use crate::{MaverickPool, pool_loader};
 use alloy::primitives::{Bytes, Log};
 use alloy::sol_types::SolEventInterface;
 use alloy_evm::EvmEnv;
-use eyre::{eyre, Result};
+use eyre::{Result, eyre};
 use kabu_defi_abi::maverick::IMaverickPool::IMaverickPoolEvents;
 use kabu_evm_db::KabuDBError;
 use kabu_types_market::PoolClass;

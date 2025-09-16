@@ -5,7 +5,7 @@ use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 use std::time::Duration;
 use tokio::sync::broadcast::error::RecvError;
-use tokio::sync::{broadcast, RwLock};
+use tokio::sync::{RwLock, broadcast};
 use tracing::{debug, error, info};
 
 use kabu_core_components::Component;
@@ -92,10 +92,9 @@ pub async fn pool_health_monitor_worker(
                                                                                 .add_tag("token_from", tokens[0].to_string())
                                                                                 .add_tag("token_to", tokens[1].to_string());
 
-                                                                            if let Some(tx) = influx_channel_clone {
-                                                                                if let Err(e) = tx.send(write_query) {
+                                                                            if let Some(tx) = influx_channel_clone
+                                                                                && let Err(e) = tx.send(write_query) {
                                                                                     error!("Failed to failed pool to influxdb: {:?}", e);
-                                                                                }
                                                                             }
                                                                         }
                                                                     ).await {
@@ -160,10 +159,9 @@ pub async fn pool_health_monitor_worker(
                                                                     .add_tag("token_from", swap_error.token_from.to_string())
                                                                     .add_tag("token_to", swap_error.token_to.to_string());
 
-                                                                if let Some(tx) = influx_channel_clone {
-                                                                    if let Err(e) = tx.send(write_query) {
+                                                                if let Some(tx) = influx_channel_clone
+                                                                    && let Err(e) = tx.send(write_query) {
                                                                         error!("Failed to failed pool to influxdb: {:?}", e);
-                                                                    }
                                                                 }
                                                             }
                                                         ).await {

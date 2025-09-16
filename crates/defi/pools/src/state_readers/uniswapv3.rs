@@ -1,5 +1,5 @@
-use alloy::primitives::aliases::U24;
 use alloy::primitives::Address;
+use alloy::primitives::aliases::U24;
 use alloy::sol_types::{SolCall, SolInterface};
 use alloy_evm::EvmEnv;
 use kabu_defi_abi::uniswap3::IUniswapV3Pool;

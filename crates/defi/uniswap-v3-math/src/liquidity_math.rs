@@ -9,18 +9,10 @@ pub fn add_delta(x: u128, y: i128) -> Result<u128, UniswapV3MathError> {
     if y < 0 {
         let z = x.overflowing_sub(-y as u128);
 
-        if z.1 {
-            Err(UniswapV3MathError::LiquiditySub)
-        } else {
-            Ok(z.0)
-        }
+        if z.1 { Err(UniswapV3MathError::LiquiditySub) } else { Ok(z.0) }
     } else {
         let z = x.overflowing_add(y as u128);
-        if z.0 < x {
-            Err(UniswapV3MathError::LiquidityAdd)
-        } else {
-            Ok(z.0)
-        }
+        if z.0 < x { Err(UniswapV3MathError::LiquidityAdd) } else { Ok(z.0) }
     }
 }
 
@@ -31,22 +23,14 @@ pub fn get_liquidity_for_amount0(sqrt_ratio_a_x_96: U256, sqrt_ratio_b_x_96: U25
     //let mut denominator = Q96;
     let intermediate = mul_div(sqrt_ratio_a_x_96, sqrt_ratio_b_x_96, Q96)?;
     let ret = mul_div(amount0, intermediate, sqrt_ratio_b_x_96 - sqrt_ratio_a_x_96)?;
-    if ret > U256::from(U128::MAX) {
-        Err(eyre!("LIQUIDITY_OVERFLOWN"))
-    } else {
-        Ok(ret.to())
-    }
+    if ret > U256::from(U128::MAX) { Err(eyre!("LIQUIDITY_OVERFLOWN")) } else { Ok(ret.to()) }
 }
 
 pub fn get_liquidity_for_amount1(sqrt_ratio_a_x_96: U256, sqrt_ratio_b_x_96: U256, amount1: U256) -> eyre::Result<u128> {
     let (sqrt_ratio_a_x_96, sqrt_ratio_b_x_96) =
         if sqrt_ratio_a_x_96 > sqrt_ratio_b_x_96 { (sqrt_ratio_b_x_96, sqrt_ratio_a_x_96) } else { (sqrt_ratio_a_x_96, sqrt_ratio_b_x_96) };
     let ret = mul_div(amount1, Q96, sqrt_ratio_b_x_96 - sqrt_ratio_a_x_96)?;
-    if ret > U256::from(U128::MAX) {
-        Err(eyre!("LIQUIDITY_OVERFLOWN"))
-    } else {
-        Ok(ret.to())
-    }
+    if ret > U256::from(U128::MAX) { Err(eyre!("LIQUIDITY_OVERFLOWN")) } else { Ok(ret.to()) }
 }
 
 pub fn get_liquidity_for_amounts(
@@ -63,11 +47,7 @@ pub fn get_liquidity_for_amounts(
     } else if sqrt_ratio_x_96 < sqrt_ratio_b_x_96 {
         let liquidity0 = get_liquidity_for_amount0(sqrt_ratio_x_96, sqrt_ratio_b_x_96, amount0)?;
         let liquidity1 = get_liquidity_for_amount1(sqrt_ratio_a_x_96, sqrt_ratio_x_96, amount1)?;
-        if liquidity0 < liquidity1 {
-            liquidity0
-        } else {
-            liquidity1
-        }
+        if liquidity0 < liquidity1 { liquidity0 } else { liquidity1 }
     } else {
         get_liquidity_for_amount1(sqrt_ratio_a_x_96, sqrt_ratio_b_x_96, amount1)?
     };

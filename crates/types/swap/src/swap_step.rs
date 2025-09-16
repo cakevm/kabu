@@ -3,7 +3,7 @@ use std::sync::Arc;
 
 use alloy_evm::EvmEnv;
 use alloy_primitives::{I256, U256};
-use eyre::{eyre, Result};
+use eyre::{Result, eyre};
 use tracing::error;
 
 use crate::{SwapAmountType, SwapLine};
@@ -232,17 +232,17 @@ impl SwapStep {
             let mut swap_step_0 = SwapStep::new(multicaller);
             let mut swap_step_1 = SwapStep::new(multicaller);
 
-            if let SwapAmountType::Set(a0) = swap_path_0.amount_in {
-                if let SwapAmountType::Set(a1) = swap_path_1.amount_in {
-                    split_0_0.amount_in = SwapAmountType::Set(a0.max(a1) >> 1);
-                }
+            if let SwapAmountType::Set(a0) = swap_path_0.amount_in
+                && let SwapAmountType::Set(a1) = swap_path_1.amount_in
+            {
+                split_0_0.amount_in = SwapAmountType::Set(a0.max(a1) >> 1);
             }
 
-            if let SwapAmountType::Set(a0) = swap_path_0.amount_out {
-                if let SwapAmountType::Set(a1) = swap_path_1.amount_out {
-                    split_0_1.amount_out = SwapAmountType::Set((a0.max(a1) * a0 / (a0 + a1)) >> 1);
-                    split_1_1.amount_out = SwapAmountType::Set((a0.max(a1) * a1 / (a0 + a1)) >> 1);
-                }
+            if let SwapAmountType::Set(a0) = swap_path_0.amount_out
+                && let SwapAmountType::Set(a1) = swap_path_1.amount_out
+            {
+                split_0_1.amount_out = SwapAmountType::Set((a0.max(a1) * a0 / (a0 + a1)) >> 1);
+                split_1_1.amount_out = SwapAmountType::Set((a0.max(a1) * a1 / (a0 + a1)) >> 1);
             }
 
             swap_step_0.add(split_0_0);
@@ -260,10 +260,10 @@ impl SwapStep {
             let mut swap_step_0 = SwapStep::new(multicaller);
             let mut swap_step_1 = SwapStep::new(multicaller);
 
-            if let SwapAmountType::Set(a0) = swap_path_0.amount_out {
-                if let SwapAmountType::Set(a1) = swap_path_1.amount_out {
-                    split_0_1.amount_out = SwapAmountType::Set(a0.max(a1) >> 1);
-                }
+            if let SwapAmountType::Set(a0) = swap_path_0.amount_out
+                && let SwapAmountType::Set(a1) = swap_path_1.amount_out
+            {
+                split_0_1.amount_out = SwapAmountType::Set(a0.max(a1) >> 1);
             }
 
             /*
@@ -275,11 +275,11 @@ impl SwapStep {
 
              */
 
-            if let SwapAmountType::Set(a0) = swap_path_0.amount_in {
-                if let SwapAmountType::Set(a1) = swap_path_1.amount_in {
-                    split_0_0.amount_in = SwapAmountType::Set((a0.max(a1) * a0 / (a0 + a1)) >> 1);
-                    split_1_0.amount_in = SwapAmountType::Set((a0.max(a1) * a1 / (a0 + a1)) >> 1);
-                }
+            if let SwapAmountType::Set(a0) = swap_path_0.amount_in
+                && let SwapAmountType::Set(a1) = swap_path_1.amount_in
+            {
+                split_0_0.amount_in = SwapAmountType::Set((a0.max(a1) * a0 / (a0 + a1)) >> 1);
+                split_1_0.amount_in = SwapAmountType::Set((a0.max(a1) * a1 / (a0 + a1)) >> 1);
             }
 
             /*
@@ -326,19 +326,11 @@ impl SwapStep {
     }
 
     pub fn get_first_pool(&self) -> Option<&PoolWrapper> {
-        if self.swap_line_vec.len() == 1 {
-            self.swap_line_vec.first().and_then(|x| x.path.pools.first())
-        } else {
-            None
-        }
+        if self.swap_line_vec.len() == 1 { self.swap_line_vec.first().and_then(|x| x.path.pools.first()) } else { None }
     }
 
     pub fn get_last_pool(&self) -> Option<&PoolWrapper> {
-        if self.swap_line_vec.len() == 1 {
-            self.swap_line_vec.first().and_then(|x| x.path.pools.last())
-        } else {
-            None
-        }
+        if self.swap_line_vec.len() == 1 { self.swap_line_vec.first().and_then(|x| x.path.pools.last()) } else { None }
     }
 
     pub fn get_first_token(&self) -> Option<&Arc<Token>> {
@@ -479,21 +471,13 @@ impl SwapStep {
     pub fn arb_result(swap_step_0: &SwapStep, swap_step_1: &SwapStep) -> I256 {
         let in_amount: I256 = I256::try_from(swap_step_0.get_in_amount().unwrap_or(U256::MAX)).unwrap_or(I256::MAX);
         let out_amount: I256 = I256::try_from(swap_step_1.get_out_amount().unwrap_or(U256::ZERO)).unwrap_or(I256::ZERO);
-        if in_amount.is_negative() {
-            I256::MIN
-        } else {
-            out_amount - in_amount
-        }
+        if in_amount.is_negative() { I256::MIN } else { out_amount - in_amount }
     }
 
     pub fn arb_profit(swap_step_0: &SwapStep, swap_step_1: &SwapStep) -> U256 {
         let in_amount: U256 = swap_step_0.get_in_amount().unwrap_or(U256::MAX);
         let out_amount: U256 = swap_step_1.get_out_amount().unwrap_or(U256::ZERO);
-        if in_amount >= out_amount {
-            U256::ZERO
-        } else {
-            out_amount - in_amount
-        }
+        if in_amount >= out_amount { U256::ZERO } else { out_amount - in_amount }
     }
 
     pub fn arb_profit_eth(swap_step_0: &SwapStep, swap_step_1: &SwapStep) -> U256 {
@@ -854,10 +838,6 @@ impl SwapStep {
             }
         }
 
-        if Self::arb_result(&step_0, &step_1).is_positive() {
-            Ok((step_0, step_1))
-        } else {
-            Err(eyre!("OPTIMIZATION_FAILED"))
-        }
+        if Self::arb_result(&step_0, &step_1).is_positive() { Ok((step_0, step_1)) } else { Err(eyre!("OPTIMIZATION_FAILED")) }
     }
 }

@@ -19,11 +19,7 @@ impl MaverickProtocolAbiEncoder {
     }
 
     pub fn get_price_limit(token_address_from: &Address, token_address_to: &Address) -> U256 {
-        if *token_address_from < *token_address_to {
-            *LOWER_LIMIT
-        } else {
-            *UPPER_LIMIT
-        }
+        if *token_address_from < *token_address_to { *LOWER_LIMIT } else { *UPPER_LIMIT }
     }
 }
 

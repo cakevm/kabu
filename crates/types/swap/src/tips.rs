@@ -5,7 +5,7 @@ use std::sync::Arc;
 use crate::Swap;
 use alloy_primitives::utils::format_units;
 use alloy_primitives::{Address, U256};
-use eyre::{eyre, OptionExt, Result};
+use eyre::{OptionExt, Result, eyre};
 use kabu_evm_utils::NWETH;
 use kabu_types_market::Token;
 use lazy_static::lazy_static;
@@ -72,15 +72,15 @@ pub fn tips_and_value_for_swap_type(
     info!("Total profit eth : {}", format_units(total_profit_eth, "ether").unwrap_or_default());
     let tips_pct = randomize_tips_pct(tips_pct.unwrap_or(tips_pct_advanced(&total_profit_eth)));
 
-    if let Some(gas_cost) = gas_cost {
-        if total_profit_eth < gas_cost {
-            info!(
-                "total_profit_eth={} < {}",
-                format_units(total_profit_eth, "ether").unwrap_or_default(),
-                format_units(gas_cost, "ether").unwrap_or_default()
-            );
-            return Err(eyre!("NOT_ENOUGH_PROFIT"));
-        }
+    if let Some(gas_cost) = gas_cost
+        && total_profit_eth < gas_cost
+    {
+        info!(
+            "total_profit_eth={} < {}",
+            format_units(total_profit_eth, "ether").unwrap_or_default(),
+            format_units(gas_cost, "ether").unwrap_or_default()
+        );
+        return Err(eyre!("NOT_ENOUGH_PROFIT"));
     }
 
     match swap {
@@ -93,16 +93,16 @@ pub fn tips_and_value_for_swap_type(
             let token_in = swap.get_first_token().ok_or_eyre("NO_FIRST_TOKEN")?.clone();
             let profit_eth = token_in.calc_eth_value(profit).ok_or_eyre("CALC_ETH_VALUE_FAILED")?;
 
-            if let Some(gas_cost) = gas_cost {
-                if profit_eth < gas_cost {
-                    error!(
-                        profit_eth = NWETH::to_float(profit_eth),
-                        gas_cost = NWETH::to_float(gas_cost),
-                        %swap,
-                        "Profit doesn't exceed the gas cost"
-                    );
-                    return Err(eyre!("NO_PROFIT_EXCEEDING_GAS"));
-                }
+            if let Some(gas_cost) = gas_cost
+                && profit_eth < gas_cost
+            {
+                error!(
+                    profit_eth = NWETH::to_float(profit_eth),
+                    gas_cost = NWETH::to_float(gas_cost),
+                    %swap,
+                    "Profit doesn't exceed the gas cost"
+                );
+                return Err(eyre!("NO_PROFIT_EXCEEDING_GAS"));
             }
 
             let mut tips = profit_eth.checked_sub(gas_cost.unwrap_or_default()).ok_or_eyre("SUBTRACTION_OVERFLOWN")? * U256::from(tips_pct)
@@ -122,16 +122,16 @@ pub fn tips_and_value_for_swap_type(
 
             let profit_eth = swap.arb_profit_eth();
 
-            if let Some(gas_cost) = gas_cost {
-                if profit_eth < gas_cost {
-                    error!(
-                        profit_eth = NWETH::to_float(profit_eth),
-                        gas_cost = NWETH::to_float(gas_cost),
-                        %swap,
-                        "Profit doesn't exceed the gas cost"
-                    );
-                    return Err(eyre!("NO_PROFIT_EXCEEDING_GAS"));
-                }
+            if let Some(gas_cost) = gas_cost
+                && profit_eth < gas_cost
+            {
+                error!(
+                    profit_eth = NWETH::to_float(profit_eth),
+                    gas_cost = NWETH::to_float(gas_cost),
+                    %swap,
+                    "Profit doesn't exceed the gas cost"
+                );
+                return Err(eyre!("NO_PROFIT_EXCEEDING_GAS"));
             }
 
             let gas_cost_per_record = gas_cost.unwrap_or_default() / U256::from(swap_vec.len());

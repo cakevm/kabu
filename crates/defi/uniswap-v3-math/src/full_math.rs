@@ -1,9 +1,9 @@
 use std::ops::{Add, BitOrAssign, Div, Mul, MulAssign};
 
-use crate::{error::UniswapV3MathError, U256_1};
+use crate::{U256_1, error::UniswapV3MathError};
 // use alloy_primitives::utils::ParseUnits::U256;
 
-use alloy::primitives::{Uint, U256};
+use alloy::primitives::{U256, Uint};
 
 pub const ONE: Uint<256, 4> = Uint::<256, 4>::from_limbs([1, 0, 0, 0]);
 pub const TWO: Uint<256, 4> = Uint::<256, 4>::from_limbs([2, 0, 0, 0]);
@@ -101,11 +101,7 @@ pub fn mul_div_rounding_up(a: U256, b: U256, denominator: U256) -> Result<U256, 
     let result = mul_div(a, b, denominator)?;
 
     if a.mul_mod(b, denominator) > U256::ZERO {
-        if result == U256::MAX {
-            Err(UniswapV3MathError::ResultIsU256MAX)
-        } else {
-            Ok(result + U256_1)
-        }
+        if result == U256::MAX { Err(UniswapV3MathError::ResultIsU256MAX) } else { Ok(result + U256_1) }
     } else {
         Ok(result)
     }

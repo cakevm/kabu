@@ -1,11 +1,11 @@
 use std::vec::Vec;
 
 use crate::fast_hasher::SimpleBuildHasher;
-use alloy::primitives::map::{Entry, HashMap};
 use alloy::primitives::BlockNumber;
+use alloy::primitives::map::{Entry, HashMap};
 use alloy::{
     consensus::constants::KECCAK_EMPTY,
-    primitives::{Address, Log, B256, U256},
+    primitives::{Address, B256, Log, U256},
 };
 use revm::database::AccountState;
 use revm::state::{Account, AccountInfo, Bytecode};
@@ -58,13 +58,13 @@ impl<ExtDB> FastCacheDB<ExtDB> {
     ///
     /// Note: This will not insert into the underlying external database.
     pub fn insert_contract(&mut self, account: &mut AccountInfo) {
-        if let Some(code) = &account.code {
-            if !code.is_empty() {
-                if account.code_hash == KECCAK_EMPTY {
-                    account.code_hash = code.hash_slow();
-                }
-                self.contracts.entry(account.code_hash).or_insert_with(|| code.clone());
+        if let Some(code) = &account.code
+            && !code.is_empty()
+        {
+            if account.code_hash == KECCAK_EMPTY {
+                account.code_hash = code.hash_slow();
             }
+            self.contracts.entry(account.code_hash).or_insert_with(|| code.clone());
         }
         if account.code_hash == B256::ZERO {
             account.code_hash = KECCAK_EMPTY;
@@ -274,11 +274,7 @@ impl FastDbAccount {
     }
 
     pub fn info(&self) -> Option<AccountInfo> {
-        if matches!(self.account_state, AccountState::NotExisting) {
-            None
-        } else {
-            Some(self.info.clone())
-        }
+        if matches!(self.account_state, AccountState::NotExisting) { None } else { Some(self.info.clone()) }
     }
 }
 
@@ -302,7 +298,7 @@ mod tests {
 
     use super::FastCacheDB;
     use crate::in_memory_db::LoomInMemoryDB;
-    use alloy::primitives::{Bytes, B256};
+    use alloy::primitives::{B256, Bytes};
     use alloy::rpc::types::trace::geth::AccountState as GethAccountState;
     use revm::database::EmptyDB;
     use revm::primitives::{Address, I256, KECCAK_EMPTY, U256};

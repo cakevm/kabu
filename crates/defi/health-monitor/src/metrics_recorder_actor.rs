@@ -1,8 +1,8 @@
-use eyre::{eyre, Result};
+use eyre::{Result, eyre};
 use influxdb::{Timestamp, WriteQuery};
 use kabu_core_components::Component;
 use std::sync::Arc;
-use tokio::sync::{broadcast, RwLock};
+use tokio::sync::{RwLock, broadcast};
 
 use alloy_consensus::BlockHeader as AlloyBlockHeader;
 use kabu_core_blockchain::{Blockchain, BlockchainState};
@@ -66,8 +66,8 @@ where
 
         let block_number = block_header.inner.header.number();
 
-        if let Some(influx_tx) = influx_channel_clone {
-            if let Err(e) = tokio::time::timeout(Duration::from_secs(2), async move {
+        if let Some(influx_tx) = influx_channel_clone
+            && let Err(e) = tokio::time::timeout(Duration::from_secs(2), async move {
                 let write_query = WriteQuery::new(Timestamp::from(current_timestamp), "state_accounts")
                     .add_field("value", accounts as f32)
                     .add_field("block_number", block_number);
@@ -125,9 +125,8 @@ where
                 }
             })
             .await
-            {
-                error!("Failed to send data to influxdb: {:?}", e);
-            }
+        {
+            error!("Failed to send data to influxdb: {:?}", e);
         }
     }
 }

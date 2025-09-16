@@ -1,11 +1,11 @@
 use aes_gcm::{
-    aead::{Aead, AeadCore, KeyInit, OsRng},
     Aes256Gcm, Nonce,
+    aead::{Aead, AeadCore, KeyInit, OsRng},
 };
-use clap::{arg, Parser};
-use eyre::{eyre, Result};
+use clap::{Parser, arg};
+use eyre::{Result, eyre};
 use pbkdf2::pbkdf2_hmac;
-use rand::{rng, Rng};
+use rand::{Rng, rng};
 use sha2::Sha256;
 
 /// Size of the salt used for key derivation (32 bytes)

@@ -2,15 +2,15 @@ use kabu_core_components::Component;
 use reth_tasks::TaskExecutor;
 use std::collections::HashMap;
 use std::sync::Arc;
-use tokio::sync::{broadcast, RwLock};
+use tokio::sync::{RwLock, broadcast};
 
 use alloy_eips::BlockNumberOrTag;
 use alloy_network::Ethereum;
 use alloy_provider::Provider;
 use chrono::{DateTime, Duration, Local};
 use eyre::Result;
-use tokio::sync::broadcast::error::RecvError;
 use tokio::sync::broadcast::Receiver;
+use tokio::sync::broadcast::error::RecvError;
 use tracing::{error, info, warn};
 
 use kabu_core_blockchain::{Blockchain, BlockchainState};
@@ -43,7 +43,10 @@ async fn verify_pool_state_task<P: Provider<Ethereum> + 'static, DB: DatabaseKab
                     continue;
                 }
                 if *current_value != actual_value {
-                    warn!("verify : account storage is different : {address:?} {cell:?} {current_value:#32x} -> {actual_value:#32x} storage size : {}", account.storage.len());
+                    warn!(
+                        "verify : account storage is different : {address:?} {cell:?} {current_value:#32x} -> {actual_value:#32x} storage size : {}",
+                        account.storage.len()
+                    );
                     if let Err(e) = market_state.write().await.state_db.insert_account_storage(address, *cell, actual_value) {
                         error!("{e}");
                     }
@@ -100,8 +103,8 @@ pub async fn state_health_monitor_worker<
                 let tx_compose_update : Result<MessageTxCompose, RecvError>  = msg;
                 match tx_compose_update {
                     Ok(tx_compose_msg)=>{
-                        if let TxComposeMessageType::Sign(sign_request_data)= tx_compose_msg.inner {
-                            if let Some(swap) = sign_request_data.swap {
+                        if let TxComposeMessageType::Sign(sign_request_data)= tx_compose_msg.inner
+                            && let Some(swap) = sign_request_data.swap {
                                 let pool_address_vec =  swap.get_pool_address_vec();
                                 let now = chrono::Local::now();
                                 for pool_address in pool_address_vec {
@@ -112,8 +115,6 @@ pub async fn state_health_monitor_worker<
                                         }
                                     }
                                 }
-
-                            }
                         }
 
                     }

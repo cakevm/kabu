@@ -2,7 +2,7 @@ use alloy_evm::EvmEnv;
 use alloy_primitives::U256;
 #[cfg(not(debug_assertions))]
 use chrono::TimeDelta;
-use eyre::{eyre, Result};
+use eyre::{Result, eyre};
 use influxdb::{Timestamp, WriteQuery};
 use kabu_core_components::Component;
 use rayon::prelude::*;
@@ -14,7 +14,7 @@ use revm::{Database, DatabaseCommit, DatabaseRef};
 use std::collections::{BTreeMap, HashSet};
 use std::sync::Arc;
 use tokio::sync::broadcast::error::RecvError;
-use tokio::sync::{broadcast, RwLock};
+use tokio::sync::{RwLock, broadcast};
 #[cfg(not(debug_assertions))]
 use tracing::warn;
 use tracing::{debug, error, info};
@@ -206,17 +206,17 @@ async fn state_change_arb_searcher_task<
                     ..SwapComposeData::default()
                 });
 
-                if !backrun_config.smart() || best_answers.check(&prepare_request) {
-                    if let Err(e) = swap_request_tx_clone.send(Message::new(prepare_request)) {
-                        error!("swap_request_tx_clone.send {}", e)
-                    }
+                if (!backrun_config.smart() || best_answers.check(&prepare_request))
+                    && let Err(e) = swap_request_tx_clone.send(Message::new(prepare_request))
+                {
+                    error!("swap_request_tx_clone.send {}", e)
                 }
             }
             Err(swap_error) => {
-                if failed_pools.insert(swap_error.clone()) {
-                    if let Err(e) = pool_health_monitor_tx_clone.send(Message::new(HealthEvent::PoolSwapError(swap_error))) {
-                        error!("try_send to pool_health_monitor error : {:?}", e)
-                    }
+                if failed_pools.insert(swap_error.clone())
+                    && let Err(e) = pool_health_monitor_tx_clone.send(Message::new(HealthEvent::PoolSwapError(swap_error)))
+                {
+                    error!("try_send to pool_health_monitor error : {:?}", e)
                 }
             }
         }
@@ -242,10 +242,10 @@ async fn state_change_arb_searcher_task<
         .add_tag("origin", state_update_event.origin)
         .add_tag("stuffing", stuffing_tx_hash.to_string());
 
-    if let Some(tx) = influxdb_write_channel_tx {
-        if let Err(e) = tx.send(write_query) {
-            error!("Failed to send block latency to influxdb: {:?}", e);
-        }
+    if let Some(tx) = influxdb_write_channel_tx
+        && let Err(e) = tx.send(write_query)
+    {
+        error!("Failed to send block latency to influxdb: {:?}", e);
     }
 
     Ok(())
@@ -334,9 +334,9 @@ pub struct StateChangeArbSearcherComponent<DB: Clone + Send + Sync + 'static, LD
 }
 
 impl<
-        DB: DatabaseRef<Error = KabuDBError> + Database<Error = KabuDBError> + DatabaseCommit + Send + Sync + Clone + 'static,
-        LDT: NodePrimitives + 'static,
-    > StateChangeArbSearcherComponent<DB, LDT>
+    DB: DatabaseRef<Error = KabuDBError> + Database<Error = KabuDBError> + DatabaseCommit + Send + Sync + Clone + 'static,
+    LDT: NodePrimitives + 'static,
+> StateChangeArbSearcherComponent<DB, LDT>
 {
     pub fn new(backrun_config: BackrunConfig) -> StateChangeArbSearcherComponent<DB, LDT> {
         StateChangeArbSearcherComponent {

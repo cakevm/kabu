@@ -1,10 +1,10 @@
 use std::sync::Arc;
 
 use alloy_primitives::Bytes;
-use alloy_provider::{ext::MevApi, ProviderBuilder};
+use alloy_provider::{ProviderBuilder, ext::MevApi};
 use alloy_rpc_types_mev::EthSendBundle;
 use alloy_signer_local::PrivateKeySigner;
-use eyre::{eyre, Result};
+use eyre::{Result, eyre};
 use reth_tasks::TaskExecutor;
 use tokio::sync::broadcast;
 use tokio::sync::broadcast::error::RecvError;
@@ -110,15 +110,14 @@ async fn flashbots_broadcaster_worker(
                 let broadcast_msg : Result<MessageTxCompose, RecvError> = msg;
                 match broadcast_msg {
                     Ok(compose_request) => {
-                        if let TxComposeMessageType::Broadcast(broadcast_request) = compose_request.inner {
-                            if allow_broadcast {
+                        if let TxComposeMessageType::Broadcast(broadcast_request) = compose_request.inner
+                            && allow_broadcast {
                                 tokio::task::spawn(
                                     broadcast_task(
                                         broadcast_request,
                                         relays.clone(),
                                     )
                                 );
-                            }
                         }
                     }
                     Err(RecvError::Closed) => {

@@ -4,10 +4,10 @@ use alloy::providers::{Network, Provider};
 use alloy::sol_types::{SolCall, SolInterface};
 use alloy_evm::EvmEnv;
 use eyre::Result;
-use kabu_defi_abi::maverick::IMaverickPool::{getStateCall, IMaverickPoolCalls, IMaverickPoolInstance};
-use kabu_defi_abi::maverick::IMaverickQuoter::{calculateSwapCall, IMaverickQuoterCalls};
-use kabu_defi_abi::maverick::{IMaverickPool, IMaverickQuoter, State};
 use kabu_defi_abi::IERC20;
+use kabu_defi_abi::maverick::IMaverickPool::{IMaverickPoolCalls, IMaverickPoolInstance, getStateCall};
+use kabu_defi_abi::maverick::IMaverickQuoter::{IMaverickQuoterCalls, calculateSwapCall};
+use kabu_defi_abi::maverick::{IMaverickPool, IMaverickQuoter, State};
 use kabu_defi_address_book::PeripheryAddress;
 use kabu_evm_db::KabuDBError;
 use kabu_evm_utils::evm_call;
@@ -60,11 +60,7 @@ impl MaverickPool {
     pub fn get_tick_bitmap_index(tick: i32, spacing: u32) -> i32 {
         let tick_bitmap_index = tick / (spacing as i32);
 
-        if tick_bitmap_index < 0 {
-            ((tick_bitmap_index + 1) / 256) - 1
-        } else {
-            tick_bitmap_index >> 8
-        }
+        if tick_bitmap_index < 0 { ((tick_bitmap_index + 1) / 256) - 1 } else { tick_bitmap_index >> 8 }
     }
 
     pub fn get_price_limit(token_address_from: &Address, token_address_to: &Address) -> U256 {

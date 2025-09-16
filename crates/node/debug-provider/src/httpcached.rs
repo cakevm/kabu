@@ -1,23 +1,23 @@
 use std::collections::HashMap;
 use std::ops::RangeInclusive;
-use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::task::{Context, Poll};
 
 use alloy::primitives::{Address, U256};
 use alloy::rpc::types::trace::geth::GethDebugTracingCallOptions;
 use alloy::{
-    primitives::{BlockHash, BlockNumber, B128, B256, U128},
+    primitives::{B128, B256, BlockHash, BlockNumber, U128},
     rpc::{
         json_rpc::{Id, Request, RequestPacket, Response, ResponsePacket, ResponsePayload, SerializedRequest},
-        types::{trace::geth::GethDebugTracingOptions, Block, BlockNumberOrTag, TransactionRequest},
+        types::{Block, BlockNumberOrTag, TransactionRequest, trace::geth::GethDebugTracingOptions},
     },
     transports::{
-        http::{Http, ReqwestTransport},
         TransportError, TransportErrorKind, TransportFut,
+        http::{Http, ReqwestTransport},
     },
 };
-use eyre::{eyre, Result};
+use eyre::{Result, eyre};
 use reqwest::Client;
 use serde_json::value::RawValue;
 use tokio::sync::RwLock;
@@ -163,15 +163,15 @@ impl HttpCachedTransport {
         let mut missed_blocks: Vec<BlockHash> = Vec::new();
 
         for filter_id in raw_value {
-            if let Some(filter_block) = block_filters_guard.get(&filter_id).cloned() {
-                if filter_block < current_block {
-                    block_filters_guard.insert(filter_id, current_block);
-                    let missed_block_range = RangeInclusive::new(filter_block + 1, current_block)
-                        .map(|block_number| block_hashes_guard.get(&block_number).cloned().unwrap_or_default())
-                        .collect();
-                    missed_blocks = missed_block_range;
-                    break;
-                }
+            if let Some(filter_block) = block_filters_guard.get(&filter_id).cloned()
+                && filter_block < current_block
+            {
+                block_filters_guard.insert(filter_id, current_block);
+                let missed_block_range = RangeInclusive::new(filter_block + 1, current_block)
+                    .map(|block_number| block_hashes_guard.get(&block_number).cloned().unwrap_or_default())
+                    .collect();
+                missed_blocks = missed_block_range;
+                break;
             }
         }
         let resp_string = serde_json::to_string(&missed_blocks).map_err(TransportError::SerError)?;
@@ -197,10 +197,10 @@ impl HttpCachedTransport {
                 let mut client = self.client.clone();
                 match client.call(RequestPacket::Single(req)).await {
                     Ok(resp) => {
-                        if let ResponsePacket::Single(resp) = resp.clone() {
-                            if let Err(e) = self.write_cached(method, req_hash, resp.payload.as_success().unwrap().to_string()).await {
-                                error!("{}", e);
-                            }
+                        if let ResponsePacket::Single(resp) = resp.clone()
+                            && let Err(e) = self.write_cached(method, req_hash, resp.payload.as_success().unwrap().to_string()).await
+                        {
+                            error!("{}", e);
                         }
                         Ok(resp)
                     }
@@ -392,12 +392,12 @@ mod test {
 
     use alloy::primitives::address;
     use alloy::{
-        providers::{ext::DebugApi, Provider, ProviderBuilder},
+        providers::{Provider, ProviderBuilder, ext::DebugApi},
         rpc::{
             client::{ClientBuilder, RpcClient},
             types::{
-                trace::geth::{GethDebugBuiltInTracerType, GethDebugTracerType, GethDebugTracingOptions, PreStateConfig},
                 BlockNumberOrTag,
+                trace::geth::{GethDebugBuiltInTracerType, GethDebugTracerType, GethDebugTracingOptions, PreStateConfig},
             },
         },
     };

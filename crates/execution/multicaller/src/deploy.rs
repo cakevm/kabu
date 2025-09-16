@@ -1,13 +1,13 @@
 use alloy_eips::eip1559::BaseFeeParams;
 use alloy_network::eip2718::Encodable2718;
 use alloy_network::{Ethereum, EthereumWallet, TransactionBuilder, TxSigner};
-use alloy_primitives::{hex, Address, Bytes, TxKind, B256};
-use alloy_provider::ext::AnvilApi;
+use alloy_primitives::{Address, B256, Bytes, TxKind, hex};
 use alloy_provider::Provider;
+use alloy_provider::ext::AnvilApi;
 use alloy_rpc_types::{BlockId, BlockNumberOrTag, TransactionInput, TransactionRequest};
 use alloy_rpc_types_trace::geth::AccountState;
 use alloy_signer_local::PrivateKeySigner;
-use eyre::{eyre, OptionExt, Result};
+use eyre::{OptionExt, Result, eyre};
 use k256::SecretKey;
 use lazy_static::lazy_static;
 use std::time::Duration;

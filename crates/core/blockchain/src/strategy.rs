@@ -13,9 +13,9 @@ pub struct Strategy<DB: Clone + Send + Sync + 'static, LDT: NodePrimitives + 'st
 }
 
 impl<
-        DB: DatabaseRef + Database + DatabaseCommit + BlockHistoryState<LDT> + DatabaseKabuExt + Send + Sync + Clone + Default + 'static,
-        LDT: NodePrimitives,
-    > Default for Strategy<DB, LDT>
+    DB: DatabaseRef + Database + DatabaseCommit + BlockHistoryState<LDT> + DatabaseKabuExt + Send + Sync + Clone + Default + 'static,
+    LDT: NodePrimitives,
+> Default for Strategy<DB, LDT>
 {
     fn default() -> Self {
         Self::new()
@@ -23,9 +23,9 @@ impl<
 }
 
 impl<
-        DB: DatabaseRef + Database + DatabaseCommit + BlockHistoryState<LDT> + DatabaseKabuExt + Send + Sync + Clone + Default + 'static,
-        LDT: NodePrimitives,
-    > Strategy<DB, LDT>
+    DB: DatabaseRef + Database + DatabaseCommit + BlockHistoryState<LDT> + DatabaseKabuExt + Send + Sync + Clone + Default + 'static,
+    LDT: NodePrimitives,
+> Strategy<DB, LDT>
 {
     pub fn new() -> Self {
         let compose_channel: broadcast::Sender<MessageSwapCompose<DB, LDT>> = broadcast::channel(100).0;

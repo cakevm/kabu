@@ -7,8 +7,8 @@ use tokio::sync::RwLock;
 use tracing::{debug, error, info, warn};
 
 use alloy_network::Network;
-use alloy_primitives::utils::format_ether;
 use alloy_primitives::Address;
+use alloy_primitives::utils::format_ether;
 use futures_util::StreamExt;
 use kabu_core_components::Component;
 use kabu_types_entities::{AccountNonceAndBalanceState, TxSigners};
@@ -21,8 +21,8 @@ use reth_provider::StateProviderFactory;
 use reth_revm::database::StateProviderDatabase;
 use reth_rpc_eth_types::cache::db::StateProviderTraitObjWrapper;
 use reth_tasks::TaskExecutor;
-use revm::database::CacheDB;
 use revm::DatabaseRef;
+use revm::database::CacheDB;
 
 // TODO: Does this provider has any positive effect on performance?
 
@@ -137,16 +137,16 @@ async fn update_nonces_from_block(account_state: &Arc<RwLock<AccountNonceAndBala
     for tx in &block.body().transactions {
         let from = tx.recover_signer()?;
 
-        if state.is_monitored(&from) {
-            if let Some(account_data) = state.get_mut_account(&from) {
-                let current_nonce = account_data.get_nonce();
-                let tx_nonce = tx.nonce();
+        if state.is_monitored(&from)
+            && let Some(account_data) = state.get_mut_account(&from)
+        {
+            let current_nonce = account_data.get_nonce();
+            let tx_nonce = tx.nonce();
 
-                // Update nonce if this transaction has a higher nonce
-                if tx_nonce >= current_nonce {
-                    account_data.set_nonce(tx_nonce + 1);
-                    debug!("Updated nonce for {} to {} (from tx nonce {})", from, tx_nonce + 1, tx_nonce);
-                }
+            // Update nonce if this transaction has a higher nonce
+            if tx_nonce >= current_nonce {
+                account_data.set_nonce(tx_nonce + 1);
+                debug!("Updated nonce for {} to {} (from tx nonce {})", from, tx_nonce + 1, tx_nonce);
             }
         }
     }

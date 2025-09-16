@@ -6,7 +6,7 @@ use reth_ethereum_primitives::EthPrimitives;
 use reth_node_types::NodePrimitives;
 use reth_tasks::TaskExecutor;
 use std::sync::Arc;
-use tokio::sync::{broadcast, RwLock};
+use tokio::sync::{RwLock, broadcast};
 use tracing::{error, info};
 
 pub struct MempoolComponent<N: NodePrimitives = EthPrimitives> {
