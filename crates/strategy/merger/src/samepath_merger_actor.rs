@@ -6,6 +6,7 @@ use std::sync::Arc;
 use tokio::sync::{RwLock, broadcast};
 
 use alloy_consensus::Transaction as _;
+use alloy_consensus::transaction::TxHashRef;
 use alloy_eips::BlockNumberOrTag;
 use alloy_network::Network;
 use alloy_primitives::{Address, TxHash, U256};
@@ -27,7 +28,7 @@ use kabu_types_market::MarketState;
 use kabu_types_swap::Swap;
 use lazy_static::lazy_static;
 use reth_node_types::NodePrimitives;
-use reth_primitives_traits::{SignedTransaction, SignerRecoverable};
+use reth_primitives_traits::SignerRecoverable;
 use revm::context::{BlockEnv, ContextTr};
 use revm::context_interface::block::BlobExcessGasAndPrice;
 use revm::{Context, Database, DatabaseCommit, DatabaseRef, MainBuilder, MainContext};

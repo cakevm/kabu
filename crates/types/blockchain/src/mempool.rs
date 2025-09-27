@@ -1,6 +1,6 @@
 use crate::{AccountNonceAndTransactions, FetchState, GethStateUpdate, MempoolTx};
 use alloy_consensus::Transaction;
-use alloy_consensus::transaction::SignerRecoverable;
+use alloy_consensus::transaction::{SignerRecoverable, TxHashRef};
 use alloy_primitives::BlockNumber;
 use alloy_primitives::map::HashMap;
 use alloy_primitives::{Address, TxHash};

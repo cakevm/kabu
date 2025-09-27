@@ -1,4 +1,5 @@
 use alloy_consensus::Transaction as _;
+use alloy_consensus::transaction::TxHashRef;
 use alloy_eips::BlockNumberOrTag;
 use alloy_evm::EvmEnv;
 use alloy_network::Network;
@@ -28,7 +29,7 @@ use kabu_types_events::{MarketEvents, MempoolEvents, StateUpdateEvent};
 use kabu_types_market::{Market, MarketState};
 use kabu_types_market::{accounts_vec_len, storage_vec_len};
 use reth_node_types::NodePrimitives;
-use reth_primitives_traits::{SignedTransaction, SignerRecoverable};
+use reth_primitives_traits::SignerRecoverable;
 use reth_tasks::TaskExecutor;
 
 use super::affected_pools_code::{get_affected_pools_from_code, is_pool_code};
