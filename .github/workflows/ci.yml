@@ -69,6 +69,9 @@ jobs:
         with:
           ref: ${{ github.event.pull_request.head.sha || github.ref }}
       - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt
+
 
       - run: make fmt-check
 
@@ -116,7 +119,9 @@ jobs:
       - uses: actions/checkout@v4
         with:
           ref: ${{ github.event.pull_request.head.sha || github.ref }}
-      - uses: dtolnay/rust-toolchain@clippy
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy
       - uses: Swatinem/rust-cache@v2
         with:
           cache-on-failure: true
