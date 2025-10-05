@@ -13,11 +13,11 @@ pub mod core {
     pub use kabu_core_blockchain as blockchain;
     #[cfg(feature = "core-components")]
     pub use kabu_core_components as components;
+    #[cfg(feature = "core-config")]
+    pub use kabu_core_config as config;
     #[cfg(feature = "core-mempool")]
     pub use kabu_core_mempool as mempool;
     pub use kabu_core_router as router;
-    #[cfg(feature = "core-topology")]
-    pub use kabu_core_topology as topology;
 }
 
 #[cfg(feature = "defi")]
@@ -69,6 +69,8 @@ pub mod node {
     pub use kabu_node_exex as exex;
     #[cfg(feature = "node-json-rpc")]
     pub use kabu_node_json_rpc as json_rpc;
+    #[cfg(feature = "node-reth-api")]
+    pub use kabu_node_reth_api as reth_api;
 }
 
 #[cfg(feature = "rpc")]

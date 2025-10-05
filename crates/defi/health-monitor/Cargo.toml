@@ -40,5 +40,4 @@ revm.workspace = true
 
 # reth
 reth-node-types.workspace = true
-reth-primitives-traits.workspace = true
 reth-tasks.workspace = true

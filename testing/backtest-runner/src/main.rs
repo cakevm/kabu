@@ -12,7 +12,7 @@ use clap::Parser;
 use eyre::{OptionExt, Result, eyre};
 use kabu::core::blockchain::Blockchain;
 use kabu::core::blockchain::BlockchainState;
-use kabu::core::topology::{EncoderConfig, TopologyConfig};
+use kabu::core::config::KabuConfig;
 use kabu::defi::address_book::TokenAddressEth;
 use kabu::defi::pools::PoolsLoadingConfig;
 use kabu::defi::pools::{UniswapV2Pool, UniswapV3Pool};
@@ -20,10 +20,10 @@ use kabu::evm::db::{AlloyDB, KabuDB};
 use kabu::evm::utils::NWETH;
 use kabu::execution::multicaller::{MulticallerDeployer, MulticallerSwapEncoder};
 use kabu::node::debug_provider::AnvilDebugProviderFactory;
+use kabu::node::reth_api::KabuRethProviderWrapper;
 use kabu::strategy::backrun::BackrunConfig;
 use kabu::types::blockchain::{ChainParameters, debug_trace_block};
 use kabu::types::entities::LoomTxSigner;
-use kabu::types::events::{BlockHeaderEventData, MessageBlockHeader};
 use kabu::types::events::{MarketEvents, MempoolEvents, SwapComposeMessage};
 use kabu::types::market::{MarketState, PoolClass, Token};
 use kabu::types::market::{Pool, PoolWrapper, RequiredStateReader};
@@ -49,7 +49,11 @@ mod test_config;
 
 use reth::primitives::{EthPrimitives, TxTy};
 use reth::rpc::compat::{TryFromBlockResponse, TryFromTransactionResponse};
-use reth_primitives_traits::{Block, BlockTy, SignerRecoverable};
+use reth_ethereum_primitives::Receipt;
+use reth_primitives::Block;
+use reth_primitives_traits::block::RecoveredBlock;
+use reth_primitives_traits::{Block as BlockTrait, BlockTy, SignerRecoverable};
+use revm::database::BundleState;
 use std::io::{self, Write};
 
 #[derive(Clone, Default, Debug)]
@@ -280,7 +284,7 @@ async fn execute_test(test_path: PathBuf, args: &Commands) -> Result<()> {
     }
 
     // Update latest block with current block info
-    let (_, post) = debug_trace_block(client.clone(), BlockId::Number(BlockNumberOrTag::Number(block_number)), true).await?;
+    let (_, _post) = debug_trace_block(client.clone(), BlockId::Number(BlockNumberOrTag::Number(block_number)), true).await?;
 
     info!("Starting initialize signers actor");
 
@@ -305,27 +309,13 @@ async fn execute_test(test_path: PathBuf, args: &Commands) -> Result<()> {
         market_instance.write().await.add_token(token);
     }
 
-    // Create topology config for test environment
-    let topology_config = TopologyConfig {
+    // Create config for test environment
+    let config = KabuConfig {
+        remote_node: None, // No remote node needed for test environment
+        signers: Vec::new(),
+        builders: Vec::new(),
+        multicaller_address,
         influxdb: None,
-        clients: std::collections::HashMap::new(),
-        blockchains: std::collections::HashMap::new(),
-        actors: kabu::core::topology::ActorConfig {
-            broadcaster: None,
-            node: None,
-            node_exex: None,
-            mempool: None,
-            price: None,
-            pools: None,
-            noncebalance: None,
-            estimator: None,
-        },
-        signers: std::collections::HashMap::new(),
-        encoders: std::collections::HashMap::from([(
-            "multicaller".to_string(),
-            EncoderConfig::SwapStep(kabu::core::topology::SwapStepEncoderConfig { address: multicaller_address.to_string() }),
-        )]),
-        preloaders: None,
         webserver: None,
         database: None, // Database is optional for test runner
     };
@@ -353,18 +343,19 @@ async fn execute_test(test_path: PathBuf, args: &Commands) -> Result<()> {
     // Create channels first so we can use them throughout the test
     let mev_channels = MevComponentChannels::<KabuDB>::default();
 
-    // Create RpcBlockchainProvider for test environment
+    // Create RpcBlockchainProvider for test environment and wrap it with canonical state support
     let rpc_config = RpcBlockchainProviderConfig { compute_state_root: false, reth_rpc_support: false };
-    let reth_provider =
+    let inner_provider =
         RpcBlockchainProvider::<_, EthereumNode, Ethereum>::new_with_config(client.clone(), rpc_config).with_chain_spec(MAINNET.clone());
+    let reth_provider = KabuRethProviderWrapper::new(inner_provider);
 
     // Create EVM config
     let evm_config = EthEvmConfig::mainnet();
 
     // Create node configuration
-    let config = NodeConfig::new()
+    let node_config = NodeConfig::new()
         .chain_id(1)
-        .topology_config(topology_config.clone())
+        .config(config.clone())
         .backrun_config(backrun_config.clone())
         .multicaller_address(multicaller_address)
         .swap_encoder(multicaller_encoder.clone())
@@ -372,7 +363,8 @@ async fn execute_test(test_path: PathBuf, args: &Commands) -> Result<()> {
         .enable_web_server(false); // Disable web server for test runner
 
     // Create context with all providers and custom channels for testing
-    let mut context = KabuContext::new(reth_provider, client.clone(), evm_config, blockchain.clone(), blockchain_state.clone(), config);
+    let mut context =
+        KabuContext::new(reth_provider.clone(), client.clone(), evm_config, blockchain.clone(), blockchain_state.clone(), node_config);
 
     // Override channels with our test channels
     context.channels = mev_channels.clone();
@@ -536,34 +528,42 @@ async fn execute_test(test_path: PathBuf, args: &Commands) -> Result<()> {
         block_header.base_fee_per_gas.unwrap_or_default(),
     );
 
-    // Send block header through blockchain channel for block history component
-    let block_header_msg = MessageBlockHeader::new(BlockHeaderEventData {
+    // Send canonical state notification for the block
+    // Convert the block and state to the format needed for canonical notification
+    // Create an empty BundleState for testing
+    let bundle_state = BundleState::default();
+
+    let execution_outcome = reth_execution_types::ExecutionOutcome::<Receipt> {
+        bundle: bundle_state,
+        receipts: vec![vec![]], // Empty receipts for now
+        first_block: block_header.number,
+        requests: vec![], // requests
+    };
+
+    // We need to recover senders for the block
+    // For backtest, we can use empty senders since we're not validating signatures
+    // Convert alloy Block to reth Block
+    let reth_block = Block {
         header: block_header.clone(),
-        next_block_number: block_header.number + 1,
-        next_block_timestamp: block_header.timestamp + 12,
-    });
-    if let Err(e) = blockchain.new_block_headers_channel().send(block_header_msg) {
-        error!("Failed to send block header through blockchain channel: {}", e);
-    } else {
-        info!("Sent block header for block {}", block_header.number);
-    }
+        body: alloy_consensus::BlockBody {
+            transactions: block_header_with_txes.body().transactions.clone(),
+            ommers: vec![],
+            withdrawals: block_header_with_txes.body().withdrawals.clone(),
+        },
+    };
 
-    // Also send the block with transactions
-    use kabu::types::events::{BlockUpdate, MessageBlock};
-    let block_msg = MessageBlock::new(BlockUpdate { block: block_header_with_txes.clone() });
-    if let Err(e) = blockchain.new_block_with_tx_channel().send(block_msg) {
-        error!("Failed to send block with tx through blockchain channel: {}", e);
-    } else {
-        info!("Sent block with {} transactions", block_header_with_txes.body().transactions.len());
-    }
+    // Create RecoveredBlock with empty senders for testing
+    let senders = vec![Address::ZERO; reth_block.body.transactions.len()];
+    let recovered_block = RecoveredBlock::new_unhashed(reth_block, senders);
 
-    // Also send the block state update with state diffs
-    use kabu::types::events::{BlockStateUpdate, MessageBlockStateUpdate};
-    let block_state_msg = MessageBlockStateUpdate::new(BlockStateUpdate { block_header: block_header.clone(), state_update: post.clone() });
-    if let Err(e) = blockchain.new_block_state_update_channel().send(block_state_msg) {
-        error!("Failed to send block state update through blockchain channel: {}", e);
+    if let Err(e) = reth_provider.send_canonical_commit(recovered_block, execution_outcome) {
+        error!("Failed to send canonical state notification: {}", e);
     } else {
-        info!("Sent block state update with {} state changes", post.len());
+        info!(
+            "Sent canonical state notification for block {} with {} transactions",
+            block_header.number,
+            block_header_with_txes.body().transactions.len()
+        );
     }
 
     // Sending block header update message for market events

@@ -11,7 +11,6 @@ use kabu_broadcast_broadcaster::FlashbotsBroadcastComponent;
 use kabu_core_block_history::BlockHistoryComponent;
 use kabu_core_components::Component;
 use kabu_core_router::SwapRouterComponent;
-use kabu_core_topology::BroadcasterConfig;
 use kabu_defi_market::{HistoryPoolLoaderComponent, ProtocolPoolLoaderComponent};
 use kabu_defi_pools::PoolLoadersBuilder;
 use kabu_defi_preloader::MarketStatePreloadedOneShotComponent;
@@ -23,6 +22,7 @@ use kabu_strategy_backrun::StateChangeArbComponent;
 use kabu_strategy_merger::DiffPathMergerComponent;
 use kabu_types_entities::BlockHistoryState;
 use reth::revm::{Database, DatabaseCommit, DatabaseRef};
+use reth_chain_state::CanonStateSubscriptions;
 use reth_ethereum_primitives::EthPrimitives;
 
 #[cfg(feature = "defi-health-monitor")]
@@ -37,7 +37,7 @@ pub struct DefaultNetwork;
 
 impl<R, P, DB, Evm> ComponentBuilder<KabuContext<R, P, DB, Evm>> for DefaultNetwork
 where
-    R: Send + Sync + Clone + 'static,
+    R: CanonStateSubscriptions<Primitives = EthPrimitives> + Send + Sync + Clone + 'static,
     P: Provider<Ethereum> + DebugProviderExt<Ethereum> + Send + Sync + Clone + 'static,
     DB: DatabaseRef<Error = KabuDBError>
         + Database<Error = KabuDBError>
@@ -51,16 +51,13 @@ where
         + 'static,
     Evm: Clone + Send + Sync + 'static,
 {
-    type Component = BlockHistoryComponent<P, Ethereum, DB, EthPrimitives>;
+    type Component = BlockHistoryComponent<R, P, DB>;
 
     fn build(self, ctx: &KabuContext<R, P, DB, Evm>) -> Result<Self::Component> {
-        Ok(BlockHistoryComponent::new(ctx.provider.clone()).with_channels(
+        Ok(BlockHistoryComponent::new(ctx.reth_provider.clone(), ctx.provider.clone()).with_config(
             ctx.config.chain_params.clone(),
             ctx.market_state.clone(),
             ctx.block_history.clone(),
-            ctx.blockchain.new_block_headers_channel(),
-            ctx.blockchain.new_block_with_tx_channel(),
-            ctx.blockchain.new_block_state_update_channel(),
             ctx.channels.market_events.clone(),
         ))
     }
@@ -288,18 +285,19 @@ where
     type Component = FlashbotsBroadcastComponent;
 
     fn build(self, ctx: &KabuContext<R, P, DB, Evm>) -> Result<Self::Component> {
-        // Get flashbots relays from config
+        // Convert builders from config to relay format
         let relays = ctx
             .config
-            .topology_config
-            .actors
-            .broadcaster
-            .as_ref()
-            .and_then(|b| b.get("mainnet"))
-            .map(|b| match b {
-                BroadcasterConfig::Flashbots(f) => f.relays(),
+            .config
+            .builders
+            .iter()
+            .map(|b| kabu_broadcast_broadcaster::RelayConfig {
+                id: b.id as u64,
+                name: b.name.clone(),
+                url: b.url.clone(),
+                no_sign: Some(b.no_sign),
             })
-            .unwrap_or_default();
+            .collect::<Vec<_>>();
 
         let mut component = FlashbotsBroadcastComponent::new(None, !relays.is_empty())?;
         component = component.with_relays(relays)?;

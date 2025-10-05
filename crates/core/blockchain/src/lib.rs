@@ -1,4 +1,4 @@
-pub use app_state::{AppState, EventChannels};
+pub use app_state::AppState;
 pub use blockchain::Blockchain;
 pub use blockchain_state::BlockchainState;
 

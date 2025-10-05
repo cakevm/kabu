@@ -1,0 +1,25 @@
+[package]
+name = "kabu-core-config"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+homepage.workspace = true
+repository.workspace = true
+
+[dependencies]
+# Core dependencies
+alloy-primitives = { workspace = true, features = ["serde"] }
+eyre.workspace = true
+serde = { workspace = true, features = ["derive"] }
+toml.workspace = true
+
+# For config loading with env var support
+async-trait.workspace = true
+dotenvy = "0.15"
+regex = "1.10"
+thiserror.workspace = true
+tokio.workspace = true
+
+# For display derive
+strum_macros.workspace = true

@@ -16,13 +16,13 @@ kabu-evm-utils.workspace = true
 kabu-rpc-state.workspace = true
 kabu-storage-db.workspace = true
 kabu-types-blockchain.workspace = true
+kabu-types-events.workspace = true
 kabu-types-market.workspace = true
 
 hex.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 
-alloy-consensus.workspace = true
 alloy-primitives.workspace = true
 revm.workspace = true
 

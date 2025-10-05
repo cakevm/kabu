@@ -1,3 +1,4 @@
+mod provider_wrapper;
 mod traits;
 
 use alloy_provider::Provider;
@@ -9,8 +10,9 @@ use reth_ethereum_primitives::EthPrimitives;
 use reth_node_types::NodeTypes;
 use reth_storage_rpc_provider::RpcBlockchainProvider;
 use reth_tasks::TaskExecutor;
-use tracing::error;
+use tracing::{error, info, warn};
 
+pub use provider_wrapper::KabuRethProviderWrapper;
 pub use traits::KabuRethFullProvider;
 
 #[async_trait]
@@ -43,22 +45,34 @@ where
     Node: NodeTypes<Primitives = EthPrimitives>,
     N: alloy_network::Network,
 {
-    let chain_notifications = match provider.subscribe_chain_notifications().await {
-        Ok(subscription) => subscription,
-        Err(err) => {
-            error!(?err, "Failed to subscribe to chain notifications");
-            return Err(eyre::eyre!("Subscription failed"));
-        }
-    };
-    // Spawn task to forward canon state notifications from node to the reth provider
-    executor.spawn_critical("chain-notifications-forwarder", async move {
-        let mut stream = chain_notifications.into_stream();
-        while let Some(canon_state_notification) = stream.next().await {
-            if let Err(err) = reth_provider.canon_state_notification().send(canon_state_notification) {
-                error!(?err, "Failed to send canon state notification");
-            }
-        }
-    });
+    // Try to subscribe to Reth-specific chain notifications
+    match provider.subscribe_chain_notifications().await {
+        Ok(chain_notifications) => {
+            info!("Successfully subscribed to Reth chain notifications");
 
-    Ok(())
+            // Spawn task to forward canon state notifications from node to the reth provider
+            executor.spawn_critical("chain-notifications-forwarder", async move {
+                let mut stream = chain_notifications.into_stream();
+                while let Some(canon_state_notification) = stream.next().await {
+                    if let Err(err) = reth_provider.canon_state_notification().send(canon_state_notification) {
+                        error!(?err, "Failed to send canon state notification");
+                    }
+                }
+                warn!("Chain notifications stream ended");
+            });
+
+            Ok(())
+        }
+        Err(err) => {
+            // Log warning instead of error, as this is expected for non-Reth nodes
+            warn!(
+                ?err,
+                "Failed to subscribe to Reth chain notifications. This is expected for non-Reth nodes. The node will continue without Reth-specific features."
+            );
+
+            // Don't fail completely - allow the system to continue
+            // The BlockHistoryComponent and other components should handle missing notifications gracefully
+            Ok(())
+        }
+    }
 }

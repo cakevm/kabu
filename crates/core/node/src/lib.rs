@@ -7,7 +7,6 @@ pub mod node;
 pub mod signer;
 pub mod traits;
 
-// Re-export core types
 pub use builder::{KabuHandle, NodeBuilder};
 pub use context::{KabuContext, NodeConfig};
 pub use defaults::*;

@@ -17,7 +17,7 @@ name = "kabu"
 path = "src/main.rs"
 
 [dependencies]
-kabu-node-reth-api.workspace = true
+kabu-node-reth-api = { workspace = true, optional = true }
 # broadcast
 kabu-broadcast-accounts = { workspace = true, optional = true }
 kabu-broadcast-broadcaster = { workspace = true }
@@ -25,10 +25,10 @@ kabu-broadcast-broadcaster = { workspace = true }
 kabu-core-block-history = { workspace = true, optional = true }
 kabu-core-blockchain = { workspace = true, optional = true }
 kabu-core-components = { workspace = true, optional = true }
+kabu-core-config = { workspace = true, optional = true }
 kabu-core-mempool = { workspace = true, optional = true }
 kabu-core-node = { workspace = true }
 kabu-core-router = { workspace = true }
-kabu-core-topology = { workspace = true, optional = true }
 # defi
 kabu-defi-abi = { workspace = true, optional = true }
 kabu-defi-address-book = { workspace = true, optional = true }
@@ -105,8 +105,8 @@ broadcast-accounts = ["broadcast", "dep:kabu-broadcast-accounts"]
 core-block-history = ["core", "dep:kabu-core-block-history"]
 core-blockchain = ["core", "dep:kabu-core-blockchain"]
 core-components = ["core", "dep:kabu-core-components"]
+core-config = ["core", "dep:kabu-core-config"]
 core-mempool = ["core", "dep:kabu-core-mempool"]
-core-topology = ["core", "dep:kabu-core-topology"]
 
 defi-abi = ["defi", "dep:kabu-defi-abi"]
 defi-address-book = ["defi", "dep:kabu-defi-address-book"]
@@ -127,6 +127,7 @@ node-config = ["dep:kabu-node-config", "node"]
 node-debug-provider = ["dep:kabu-node-debug-provider", "node"]
 node-exex = ["dep:kabu-node-exex", "node"]
 node-json-rpc = ["dep:kabu-node-json-rpc", "node"]
+node-reth-api = ["dep:kabu-node-reth-api", "node"]
 
 rpc-handler = ["dep:kabu-rpc-handler", "rpc"]
 rpc-state = ["dep:kabu-rpc-state", "rpc"]
@@ -169,7 +170,7 @@ full-json-rpc = [
 ]
 
 broadcast-full = ["broadcast-accounts"]
-core-full = ["core-block-history", "core-blockchain", "core-components", "core-mempool", "core-topology"]
+core-full = ["core-block-history", "core-blockchain", "core-components", "core-config", "core-mempool"]
 full-exex = [
   "broadcast-full",
   "core-full",
@@ -197,7 +198,7 @@ defi-full = [
 evm-full = ["evm-db", "evm-utils"]
 execution-full = ["execution-estimator", "execution-multicaller"]
 metrics-full = ["metrics"]
-node-full = ["node-config", "node-debug-provider", "node-exex", "node-json-rpc"]
+node-full = ["node-config", "node-debug-provider", "node-exex", "node-json-rpc", "node-reth-api"]
 rpc-full = ["rpc-handler", "rpc-state"]
 storage-full = ["storage-db"]
 strategy-full = ["strategy-merger"]

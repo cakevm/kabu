@@ -24,18 +24,16 @@ where
     async fn build_pool(self, ctx: &BuilderContext<AppState<NP>>) -> Result<Self::Pool> {
         let state = &ctx.state;
 
-        // For now, create dummy channels - in real implementation these would come from EventChannels
+        // For now, create dummy channels
         let (_mempool_tx, mempool_rx) = broadcast::channel(1000);
-        let (_block_header_tx, block_header_rx) = broadcast::channel(1000);
-        let (_block_tx, block_rx) = broadcast::channel(1000);
+        let (_market_events_tx, market_events_rx) = broadcast::channel(1000);
         let (mempool_events_tx, _) = broadcast::channel(1000);
 
         Ok(MempoolComponent::new(
             state.chain_parameters.clone(),
             state.mempool.clone(),
             mempool_rx,
-            block_header_rx,
-            block_rx,
+            market_events_rx,
             mempool_events_tx,
             None, // influxdb_tx
         ))

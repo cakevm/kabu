@@ -1,7 +1,7 @@
 use eyre::Result;
 use kabu_core_components::Component;
 use kabu_types_blockchain::{ChainParameters, Mempool};
-use kabu_types_events::{MempoolEvents, MessageBlock, MessageBlockHeader, MessageMempoolDataUpdate};
+use kabu_types_events::{MarketEvents, MempoolEvents, MessageMempoolDataUpdate};
 use reth_ethereum_primitives::EthPrimitives;
 use reth_node_types::NodePrimitives;
 use reth_tasks::TaskExecutor;
@@ -13,8 +13,7 @@ pub struct MempoolComponent<N: NodePrimitives = EthPrimitives> {
     chain_parameters: ChainParameters,
     mempool: Arc<RwLock<Mempool<N>>>,
     mempool_update_rx: broadcast::Receiver<MessageMempoolDataUpdate<N>>,
-    block_header_rx: broadcast::Receiver<MessageBlockHeader<N>>,
-    block_with_txs_rx: broadcast::Receiver<MessageBlock<N>>,
+    market_events_rx: broadcast::Receiver<MarketEvents>,
     mempool_events_tx: broadcast::Sender<MempoolEvents>,
     influxdb_tx: Option<broadcast::Sender<influxdb::WriteQuery>>,
 }
@@ -24,12 +23,11 @@ impl<N: NodePrimitives> MempoolComponent<N> {
         chain_parameters: ChainParameters,
         mempool: Arc<RwLock<Mempool<N>>>,
         mempool_update_rx: broadcast::Receiver<MessageMempoolDataUpdate<N>>,
-        block_header_rx: broadcast::Receiver<MessageBlockHeader<N>>,
-        block_with_txs_rx: broadcast::Receiver<MessageBlock<N>>,
+        market_events_rx: broadcast::Receiver<MarketEvents>,
         mempool_events_tx: broadcast::Sender<MempoolEvents>,
         influxdb_tx: Option<broadcast::Sender<influxdb::WriteQuery>>,
     ) -> Self {
-        Self { chain_parameters, mempool, mempool_update_rx, block_header_rx, block_with_txs_rx, mempool_events_tx, influxdb_tx }
+        Self { chain_parameters, mempool, mempool_update_rx, market_events_rx, mempool_events_tx, influxdb_tx }
     }
 }
 
@@ -38,8 +36,7 @@ impl<N: NodePrimitives + 'static> Component for MempoolComponent<N> {
         let name = self.name();
 
         let mut mempool_update_rx = self.mempool_update_rx;
-        let mut block_header_rx = self.block_header_rx;
-        let mut block_with_txs_rx = self.block_with_txs_rx;
+        let mut market_events_rx = self.market_events_rx;
         let mempool = self.mempool;
         let _mempool_events_tx = self.mempool_events_tx;
         let _influxdb_tx = self.influxdb_tx;
@@ -57,17 +54,24 @@ impl<N: NodePrimitives + 'static> Component for MempoolComponent<N> {
                         // Add transaction processing logic here
                         drop(mempool_guard);
                     }
-                    Ok(_msg) = block_header_rx.recv() => {
-                        // Process new block header
-                        let mempool_guard = mempool.write().await;
-                        // Remove confirmed transactions
-                        drop(mempool_guard);
-                    }
-                    Ok(_msg) = block_with_txs_rx.recv() => {
-                        // Process block with transactions
-                        let mempool_guard = mempool.write().await;
-                        // Update mempool state
-                        drop(mempool_guard);
+                    Ok(event) = market_events_rx.recv() => {
+                        match event {
+                            MarketEvents::BlockHeaderUpdate { .. } => {
+                                // Process new block header
+                                let mempool_guard = mempool.write().await;
+                                // Remove confirmed transactions based on block number
+                                drop(mempool_guard);
+                            }
+                            MarketEvents::BlockTxUpdate { .. } => {
+                                // Process block with transactions
+                                let mempool_guard = mempool.write().await;
+                                // Update mempool state based on block transactions
+                                drop(mempool_guard);
+                            }
+                            _ => {
+                                // Ignore other market events
+                            }
+                        }
                     }
                     else => {
                         error!("All channels closed, stopping mempool component");

@@ -8,7 +8,7 @@ use tokio::sync::RwLock;
 
 use kabu_core_blockchain::{Blockchain, BlockchainState};
 use kabu_core_components::MevComponentChannels;
-use kabu_core_topology::TopologyConfig;
+use kabu_core_config::KabuConfig;
 use kabu_evm_db::{DatabaseKabuExt, KabuDBError};
 use kabu_execution_multicaller::MulticallerSwapEncoder;
 use kabu_storage_db::DbPool;
@@ -68,8 +68,8 @@ pub struct NodeConfig {
     pub chain_id: u64,
     /// Chain parameters
     pub chain_params: ChainParameters,
-    /// Topology configuration
-    pub topology_config: TopologyConfig,
+    /// Kabu configuration
+    pub config: KabuConfig,
     /// Backrun strategy configuration
     pub backrun_config: BackrunConfig,
     /// Multicaller contract address
@@ -101,24 +101,13 @@ impl NodeConfig {
             .enable(kabu_types_market::PoolClass::UniswapV2)
             .enable(kabu_types_market::PoolClass::UniswapV3);
 
-        // Create a minimal topology config with explicit ActorConfig
-        let topology_config = TopologyConfig {
+        // Create a minimal config with defaults
+        let config = KabuConfig {
+            remote_node: None, // No remote node for local/embedded mode
+            signers: Vec::new(),
+            builders: Vec::new(),
+            multicaller_address,
             influxdb: None,
-            clients: Default::default(),
-            blockchains: Default::default(),
-            actors: kabu_core_topology::ActorConfig {
-                broadcaster: None,
-                node: None,
-                node_exex: None,
-                mempool: None,
-                price: None,
-                estimator: None,
-                noncebalance: None,
-                pools: None,
-            },
-            signers: Default::default(),
-            encoders: Default::default(),
-            preloaders: None,
             webserver: None,
             database: None,
         };
@@ -126,7 +115,7 @@ impl NodeConfig {
         Self {
             chain_id: 1, // Ethereum mainnet
             chain_params: ChainParameters::ethereum(),
-            topology_config,
+            config,
             backrun_config: BackrunConfig::default(),
             multicaller_address,
             swap_encoder,
@@ -148,9 +137,9 @@ impl NodeConfig {
         self
     }
 
-    /// Set the topology configuration
-    pub fn topology_config(mut self, topology_config: TopologyConfig) -> Self {
-        self.topology_config = topology_config;
+    /// Set the configuration
+    pub fn config(mut self, config: KabuConfig) -> Self {
+        self.config = config;
         self
     }
 

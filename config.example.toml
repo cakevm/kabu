@@ -1,0 +1,51 @@
+# === Core Configuration ===
+
+# At least one signer is required
+# You can add multiple signers for redundancy
+signers = [
+  { private_key = "${SIGNER_KEY_1}" },
+  #{ private_key = "${SIGNER_KEY_2}" },
+]
+
+# MEV builders/relays for bundle submission
+builders = [
+  { id = 1, name = "flashbots", url = "https://relay.flashbots.net" },
+  { id = 2, name = "beaverbuild", url = "https://rpc.beaverbuild.org", no_sign = true },
+  { id = 3, name = "titan", url = "https://rpc.titanbuilder.xyz" },
+]
+
+# Multicaller contract address for batch operations
+multicaller_address = "0x0000000000000000000000000000000000000000"
+
+# === Services Configuration ===
+
+# Remote node connection (optional, required for remote mode)
+[remote_node]
+# Both WebSocket and HTTP URLs are required when remote_node is specified
+# A full node is sufficient, archive node is only required for tests
+ws_url = "ws://localhost:8545"       # WebSocket URL for subscriptions
+http_url = "http://localhost:8545"   # HTTP URL for RPC calls
+node = "reth"                         # Options: geth, reth
+
+# Optional: Database for persistent storage
+[database]
+url = "postgres://kabu:kabu@localhost/kabu?application_name=kabu"
+
+# Optional: Web server for monitoring
+[webserver]
+host = "0.0.0.0:3333"
+
+# Optional: InfluxDB for metrics
+[influxdb]
+url = "http://localhost:8086"
+database = "kabu"
+tags = { bot_name = "kabu" }
+
+# === Strategy Configuration ===
+
+# Backrun strategy configuration
+[backrun_strategy]
+# Optional: specific signer address for this strategy
+# If not set, the system will randomly select from available signers
+# eoa = "0x..."
+smart = true  # Enable smart routing optimizations

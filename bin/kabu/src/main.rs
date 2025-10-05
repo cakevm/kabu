@@ -10,7 +10,7 @@ use eyre::OptionExt;
 use kabu::broadcast::accounts::InitializeSignersOneShotBlockingComponent;
 use kabu::core::blockchain::{Blockchain, BlockchainState};
 use kabu::core::components::Component;
-use kabu::core::topology::{EncoderConfig, TopologyConfig};
+use kabu::core::config::KabuConfig;
 use kabu::defi::pools::PoolsLoadingConfig;
 use kabu::evm::db::{AlloyDB, KabuDB};
 use kabu::execution::multicaller::MulticallerSwapEncoder;
@@ -54,7 +54,7 @@ fn main() -> eyre::Result<()> {
     let app_args = AppArgs::from_arg_matches_mut(&mut AppArgs::command().ignore_errors(true).get_matches())?;
     match app_args.command {
         Command::Node(_) => Cli::<EthereumChainSpecParser, KabuArgs>::parse().run(|builder, kabu_args: KabuArgs| async move {
-            let topology_config = TopologyConfig::load_from_file(kabu_args.kabu_config.clone())?;
+            let config = KabuConfig::load_from_file(kabu_args.kabu_config.clone())?;
 
             let bc = Blockchain::new(builder.config().chain.chain.id());
             let NodeHandle { node, node_exit_future } = builder
@@ -84,7 +84,7 @@ fn main() -> eyre::Result<()> {
                     evm_config,
                     bc_clone,
                     bc_state,
-                    topology_config,
+                    config,
                     kabu_args.kabu_config.clone(),
                     task_executor,
                 )
@@ -124,14 +124,16 @@ fn main() -> eyre::Result<()> {
 
             rt.block_on(async {
                 info!("Loading config from {}", kabu_args.kabu_config);
-                let topology_config = TopologyConfig::load_from_file(kabu_args.kabu_config.clone())?;
+                let config = KabuConfig::load_from_file(kabu_args.kabu_config.clone())?;
 
-                let client_config = topology_config.clients.get("remote").unwrap();
-                let transport = WsConnect::new(client_config.url.clone());
+                let remote_node =
+                    config.remote_node.as_ref().ok_or_else(|| eyre::eyre!("remote_node configuration is required for remote mode"))?;
+
+                let transport = WsConnect::new(remote_node.ws_url.clone());
                 let client = ClientBuilder::default().ws(transport).await?;
                 let rpc_provider = ProviderBuilder::new().disable_recommended_fillers().connect_client(client);
-                let config = RpcBlockchainProviderConfig { compute_state_root: false, reth_rpc_support: false };
-                let reth_provider = RpcBlockchainProvider::<_, EthereumNode, Ethereum>::new_with_config(rpc_provider.clone(), config)
+                let rpc_config = RpcBlockchainProviderConfig { compute_state_root: false, reth_rpc_support: false };
+                let reth_provider = RpcBlockchainProvider::<_, EthereumNode, Ethereum>::new_with_config(rpc_provider.clone(), rpc_config)
                     .with_chain_spec(MAINNET.clone());
 
                 let bc = Blockchain::new(Chain::mainnet().id());
@@ -150,7 +152,7 @@ fn main() -> eyre::Result<()> {
                     evm_config,
                     bc,
                     bc_state,
-                    topology_config,
+                    config,
                     kabu_args.kabu_config.clone(),
                     task_executor,
                 )
@@ -172,7 +174,7 @@ async fn start_kabu_mev<RethProvider, RpcProvider, Types, DB, EvmConfig>(
     evm_config: EvmConfig,
     bc: Blockchain,
     bc_state: BlockchainState<KabuDB, EthPrimitives>,
-    topology_config: TopologyConfig,
+    config: KabuConfig,
     kabu_config_filepath: String,
     task_executor: TaskExecutor,
 ) -> eyre::Result<KabuHandle>
@@ -187,13 +189,10 @@ where
     info!(chain_id = ?chain_id, "Starting Kabu MEV bot");
 
     // Parse configuration
-    let (_encoder_name, encoder) = topology_config.encoders.iter().next().ok_or_eyre("NO_ENCODER")?;
-    let multicaller_address: alloy::primitives::Address = match encoder {
-        EncoderConfig::SwapStep(e) => e.address.parse()?,
-    };
+    let multicaller_address = config.multicaller_address;
     info!(address=?multicaller_address, "Multicaller");
 
-    let db_url = topology_config.database.clone().unwrap().url;
+    let db_url = config.database.clone().ok_or_eyre("NO_DATABASE")?.url;
 
     // Initialize database pool and handle migrations
     let db_pool = init_db_pool_with_migrations(db_url, MIGRATIONS).await?;
@@ -207,9 +206,9 @@ where
     let swap_encoder = MulticallerSwapEncoder::default_with_address(multicaller_address);
 
     // Create node configuration
-    let config = NodeConfig::new()
+    let node_config = NodeConfig::new()
         .chain_id(chain_id)
-        .topology_config(topology_config.clone())
+        .config(config.clone())
         .backrun_config(backrun_config.clone())
         .multicaller_address(multicaller_address)
         .swap_encoder(swap_encoder.clone())
@@ -217,14 +216,14 @@ where
         .db_pool(db_pool.clone());
 
     // Create context with all providers
-    let context = KabuContext::new(reth_provider, rpc_provider.clone(), evm_config, bc, bc_state.clone(), config);
+    let context = KabuContext::new(reth_provider, rpc_provider.clone(), evm_config, bc, bc_state.clone(), node_config);
 
     // Get references to channels before launching
     let signers = context.channels.signers.clone();
     let account_state = context.channels.account_state.clone();
 
     // Build and launch MEV components
-    info!("Building MEV components with new node architecture");
+    info!("Launch MEV components");
 
     let handle = NodeBuilder::new()
         .with_context(context)

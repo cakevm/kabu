@@ -12,6 +12,7 @@ version.workspace = true
 async-trait.workspace = true
 eyre.workspace = true
 futures-util.workspace = true
+tokio.workspace = true
 tracing.workspace = true
 
 # alloy
@@ -23,7 +24,10 @@ alloy-transport.workspace = true
 # reth
 reth-chain-state = { workspace = true, features = ["serde"] }
 reth-ethereum-primitives.workspace = true
+reth-execution-types.workspace = true
 reth-node-types.workspace = true
+reth-primitives.workspace = true
+reth-primitives-traits.workspace = true
 reth-provider.workspace = true
 reth-storage-api.workspace = true
 reth-storage-rpc-provider.workspace = true

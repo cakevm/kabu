@@ -4988,10 +4988,10 @@ dependencies = [
  "kabu-core-block-history",
  "kabu-core-blockchain",
  "kabu-core-components",
+ "kabu-core-config",
  "kabu-core-mempool",
  "kabu-core-node",
  "kabu-core-router",
- "kabu-core-topology",
  "kabu-defi-abi",
  "kabu-defi-address-book",
  "kabu-defi-health-monitor",
@@ -5036,6 +5036,7 @@ dependencies = [
 name = "kabu-backtest-runner"
 version = "0.6.0"
 dependencies = [
+ "alloy-consensus",
  "alloy-evm",
  "alloy-network",
  "alloy-primitives",
@@ -5054,10 +5055,14 @@ dependencies = [
  "rand 0.9.2",
  "rayon",
  "reth",
+ "reth-ethereum-primitives",
+ "reth-execution-types",
  "reth-node-ethereum",
+ "reth-primitives",
  "reth-primitives-traits",
  "reth-storage-rpc-provider",
  "reth-tasks",
+ "revm",
  "serde",
  "serde_json",
  "tokio",
@@ -5118,7 +5123,6 @@ dependencies = [
 name = "kabu-core-block-history"
 version = "0.6.0"
 dependencies = [
- "alloy-consensus",
  "alloy-eips",
  "alloy-network",
  "alloy-node-bindings",
@@ -5127,6 +5131,7 @@ dependencies = [
  "alloy-rpc-client",
  "env_logger",
  "eyre",
+ "futures-util",
  "kabu-core-blockchain",
  "kabu-core-components",
  "kabu-evm-db",
@@ -5136,10 +5141,13 @@ dependencies = [
  "kabu-types-entities",
  "kabu-types-events",
  "kabu-types-market",
+ "reth-chain-state",
  "reth-ethereum-primitives",
+ "reth-execution-types",
  "reth-node-types",
  "reth-primitives-traits",
  "reth-rpc-convert",
+ "reth-storage-api",
  "reth-tasks",
  "revm",
  "tokio",
@@ -5182,6 +5190,22 @@ dependencies = [
 ]
 
 [[package]]
+name = "kabu-core-config"
+version = "0.6.0"
+dependencies = [
+ "alloy-primitives",
+ "async-trait",
+ "dotenvy",
+ "eyre",
+ "regex",
+ "serde",
+ "strum_macros 0.27.2",
+ "thiserror 2.0.16",
+ "tokio",
+ "toml 0.8.23",
+]
+
+[[package]]
 name = "kabu-core-mempool"
 version = "0.6.0"
 dependencies = [
@@ -5210,8 +5234,8 @@ dependencies = [
  "kabu-core-block-history",
  "kabu-core-blockchain",
  "kabu-core-components",
+ "kabu-core-config",
  "kabu-core-router",
- "kabu-core-topology",
  "kabu-defi-health-monitor",
  "kabu-defi-market",
  "kabu-defi-pools",
@@ -5229,6 +5253,7 @@ dependencies = [
  "kabu-types-events",
  "kabu-types-market",
  "reth",
+ "reth-chain-state",
  "reth-ethereum-primitives",
  "reth-tasks",
  "tokio",
@@ -5249,17 +5274,6 @@ dependencies = [
  "revm",
  "tokio",
  "tracing",
-]
-
-[[package]]
-name = "kabu-core-topology"
-version = "0.6.0"
-dependencies = [
- "eyre",
- "kabu-broadcast-broadcaster",
- "serde",
- "strum_macros 0.27.2",
- "toml 0.8.23",
 ]
 
 [[package]]
@@ -5300,7 +5314,6 @@ dependencies = [
  "kabu-types-swap",
  "lazy_static",
  "reth-node-types",
- "reth-primitives-traits",
  "reth-tasks",
  "revm",
  "tikv-jemalloc-ctl",
@@ -5595,11 +5608,15 @@ dependencies = [
  "futures-util",
  "reth-chain-state",
  "reth-ethereum-primitives",
+ "reth-execution-types",
  "reth-node-types",
+ "reth-primitives",
+ "reth-primitives-traits",
  "reth-provider",
  "reth-storage-api",
  "reth-storage-rpc-provider",
  "reth-tasks",
+ "tokio",
  "tracing",
 ]
 
@@ -5607,7 +5624,6 @@ dependencies = [
 name = "kabu-rpc-handler"
 version = "0.6.0"
 dependencies = [
- "alloy-consensus",
  "alloy-primitives",
  "axum",
  "eyre",
@@ -5619,6 +5635,7 @@ dependencies = [
  "kabu-rpc-state",
  "kabu-storage-db",
  "kabu-types-blockchain",
+ "kabu-types-events",
  "kabu-types-market",
  "reth-ethereum-primitives",
  "reth-tasks",

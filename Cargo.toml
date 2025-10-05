@@ -8,10 +8,10 @@ members = [
   "crates/core/block-history",
   "crates/core/blockchain",
   "crates/core/components",
+  "crates/core/config",
   "crates/core/mempool",
   "crates/core/node",
   "crates/core/router",
-  "crates/core/topology",
   "crates/defi/abi",
   "crates/defi/address-book",
   "crates/defi/health-monitor",
@@ -61,10 +61,10 @@ kabu-broadcast-broadcaster = { path = "crates/broadcast/broadcaster" }
 kabu-core-block-history = { path = "crates/core/block-history" }
 kabu-core-blockchain = { path = "crates/core/blockchain" }
 kabu-core-components = { path = "crates/core/components" }
+kabu-core-config = { path = "crates/core/config" }
 kabu-core-mempool = { path = "crates/core/mempool" }
 kabu-core-node = { path = "crates/core/node" }
 kabu-core-router = { path = "crates/core/router" }
-kabu-core-topology = { path = "crates/core/topology" }
 # defi
 kabu-defi-abi = { path = "crates/defi/abi" }
 kabu-defi-address-book = { path = "crates/defi/address-book" }

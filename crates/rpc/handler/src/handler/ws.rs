@@ -5,9 +5,8 @@ use axum::{
 };
 
 use crate::dto::block::{BlockHeader, WebSocketMessage};
-use alloy_consensus::BlockHeader as AlloyBlockHeader;
 use kabu_rpc_state::AppState;
-use kabu_types_blockchain::ChainParameters;
+use kabu_types_events::MarketEvents;
 use revm::{DatabaseCommit, DatabaseRef};
 use std::net::SocketAddr;
 use tracing::{error, warn};
@@ -30,17 +29,22 @@ async fn on_upgrade<DB: DatabaseRef + DatabaseCommit + Send + Sync + Clone + 'st
     _who: SocketAddr,
     app_state: AppState<DB>,
 ) {
-    let mut receiver = app_state.bc.new_block_headers_channel().subscribe();
+    let mut receiver = app_state.bc.market_events_channel().subscribe();
 
-    while let Ok(header) = receiver.recv().await {
-        let gas_used = header.inner.header.gas_used();
-        let gas_limit = header.inner.header.gas_limit();
-        let base_fee = header.inner.header.base_fee_per_gas().unwrap_or_default();
+    while let Ok(event) = receiver.recv().await {
+        // Only process BlockHeaderUpdate events for WebSocket streaming
+        let (block_number, timestamp, base_fee, next_base_fee) = match event {
+            MarketEvents::BlockHeaderUpdate { block_number, timestamp, base_fee, next_base_fee, .. } => {
+                (block_number, timestamp, base_fee, next_base_fee)
+            }
+            _ => continue, // Skip non-block events
+        };
+
         let ws_msg = WebSocketMessage::BlockHeader(BlockHeader {
-            number: header.inner.header.number(),
-            timestamp: header.inner.header.timestamp(),
-            base_fee_per_gas: header.inner.header.base_fee_per_gas(),
-            next_block_base_fee: ChainParameters::ethereum().calc_next_block_base_fee(gas_used, gas_limit, base_fee),
+            number: block_number,
+            timestamp,
+            base_fee_per_gas: Some(base_fee),
+            next_block_base_fee: next_base_fee,
         });
         match serde_json::to_string(&ws_msg) {
             Ok(json) => {
