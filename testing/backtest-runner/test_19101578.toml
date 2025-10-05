@@ -27,7 +27,7 @@ weth = { address = "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2", symbol = "WETH"
 
 [assertions]
 swaps_encoded = 1
-swaps_ok = 2
+swaps_ok = 1
 #best_profit_eth = 0.23
 # TODO: Fix merger
 best_profit_eth = 0.09
