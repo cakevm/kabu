@@ -19,7 +19,7 @@ use kabu::node::exex::mempool_worker;
 use kabu::storage::db::init_db_pool_with_migrations;
 use kabu::strategy::backrun::{BackrunConfig, BackrunConfigSection};
 use kabu::types::entities::strategy_config::load_from_file;
-use kabu_core_node::{KabuBuildContext, KabuEthereumNode};
+use kabu_core_node::{KabuBuildContextBuilder, KabuEthereumNode};
 use kabu_node_reth_api::{KabuRethFullProvider, chain_notifications_forwarder};
 use kabu_types_market::{MarketState, PoolClass};
 use reth::api::{NodeTypes, NodeTypesWithDBAdapter};
@@ -212,7 +212,7 @@ where
     let swap_encoder = MulticallerSwapEncoder::default_with_address(multicaller_address);
 
     // Create KabuBuildContext
-    let kabu_context = KabuBuildContext::builder(
+    let kabu_context = KabuBuildContextBuilder::new(
         reth_provider,
         provider.clone(),
         evm_config,

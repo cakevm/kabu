@@ -114,7 +114,7 @@ let component = StateChangeArbSearcherComponent::new(backrun_config)
 component.spawn(executor)?;          // Spawn with task executor
 
 // Or using the centralized builder
-let kabu_context = KabuBuildContext::builder(
+let kabu_context = KabuBuildContextBuilder::new(
     provider.clone(),
     blockchain,
     blockchain_state.clone(),

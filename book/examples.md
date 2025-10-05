@@ -38,7 +38,7 @@ async fn main() -> Result<()> {
     let task_executor = task_manager.executor();
     
     // Build and launch
-    let kabu_context = KabuBuildContext::builder(
+    let kabu_context = KabuBuildContextBuilder::new(
         provider,
         blockchain,
         blockchain_state,

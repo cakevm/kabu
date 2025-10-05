@@ -44,7 +44,7 @@ let handle = KabuBuilder::new(kabu_context)
 The build context centralizes all configuration and shared resources:
 
 ```rust,ignore
-let kabu_context = KabuBuildContext::builder(
+let kabu_context = KabuBuildContextBuilder::new(
     provider,
     blockchain,
     blockchain_state,
@@ -168,7 +168,7 @@ let blockchain = Blockchain::new(chain_id);
 let blockchain_state = BlockchainState::<KabuDB, KabuDataTypesEthereum>::new();
 
 // Build context
-let kabu_context = KabuBuildContext::builder(
+let kabu_context = KabuBuildContextBuilder::new(
     provider,
     blockchain,
     blockchain_state,

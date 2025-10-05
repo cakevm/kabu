@@ -48,7 +48,7 @@ use kabu_types_entities::{BlockHistory, BlockHistoryState};
 use kabu_types_market::{Market, MarketState};
 use reth::revm::{Database, DatabaseCommit, DatabaseRef};
 use reth_evm::ConfigureEvm;
-use reth_node_types::NodeTypesWithDB;
+use reth_node_types::{HeaderTy, NodeTypesWithDB};
 use reth_provider::StateProviderFactory;
 
 /// Extended build context for Kabu components with all necessary resources
@@ -68,7 +68,7 @@ where
         + Clone
         + Default
         + 'static,
-    Evm: reth_evm::ConfigureEvm + 'static,
+    Evm: ConfigureEvm + 'static,
 {
     /// Reth provider for node access
     pub reth_provider: R,
@@ -109,107 +109,10 @@ where
     _phantom: std::marker::PhantomData<N>,
 }
 
-impl<N, R, P, DB, Evm> KabuBuildContext<N, R, P, DB, Evm>
-where
-    N: NodeTypesWithDB,
-    R: Send + Sync + Clone + 'static,
-    P: Provider<Ethereum> + DebugProviderExt<Ethereum> + Send + Sync + Clone + 'static,
-    DB: DatabaseRef<Error = KabuDBError>
-        + Database<Error = KabuDBError>
-        + DatabaseCommit
-        + DatabaseKabuExt
-        + BlockHistoryState<EthPrimitives>
-        + Send
-        + Sync
-        + Clone
-        + Default
-        + 'static,
-    Evm: ConfigureEvm + 'static,
-{
-    /// Create a new KabuBuildContext with defaults
-    #[allow(clippy::too_many_arguments)]
-    pub fn new(
-        reth_provider: R,
-        provider: P,
-        evm_config: Evm,
-        blockchain: Blockchain,
-        blockchain_state: BlockchainState<DB, EthPrimitives>,
-        topology_config: TopologyConfig,
-        backrun_config: BackrunConfig,
-        multicaller_address: Address,
-        db_pool: Option<DbPool>,
-        is_exex: bool,
-    ) -> Self {
-        let swap_encoder = MulticallerSwapEncoder::default_with_address(multicaller_address);
-        let mev_channels = MevComponentChannels::default();
-
-        // Get shared state from blockchain
-        let market = blockchain.market();
-        let market_state = blockchain_state.market_state_commit();
-        let mempool = blockchain.mempool();
-        let block_history = Arc::new(RwLock::new(BlockHistory::new(10)));
-
-        // Default pools config
-        let pools_config = PoolsLoadingConfig::disable_all(PoolsLoadingConfig::default())
-            .enable(kabu_types_market::PoolClass::UniswapV2)
-            .enable(kabu_types_market::PoolClass::UniswapV3);
-
-        Self {
-            reth_provider,
-            provider,
-            evm_config,
-            blockchain,
-            blockchain_state,
-            channels: mev_channels,
-            topology_config,
-            backrun_config,
-            multicaller_address,
-            swap_encoder,
-            db_pool,
-            pools_config,
-            is_exex,
-            enable_web_server: true, // Default to enabled
-            market,
-            market_state,
-            mempool,
-            block_history,
-            _phantom: PhantomData,
-        }
-    }
-
-    /// Create a builder for customizing the context
-    #[allow(clippy::too_many_arguments)]
-    pub fn builder(
-        reth_provider: R,
-        provider: P,
-        evm_config: Evm,
-        blockchain: Blockchain,
-        blockchain_state: BlockchainState<DB, EthPrimitives>,
-        topology_config: TopologyConfig,
-        backrun_config: BackrunConfig,
-        multicaller_address: Address,
-        db_pool: Option<DbPool>,
-        is_exex: bool,
-    ) -> KabuBuildContextBuilder<N, R, P, DB, Evm> {
-        KabuBuildContextBuilder::new(
-            reth_provider,
-            provider,
-            evm_config,
-            blockchain,
-            blockchain_state,
-            topology_config,
-            backrun_config,
-            multicaller_address,
-            db_pool,
-            is_exex,
-        )
-    }
-}
-
 /// Builder for KabuBuildContext
 pub struct KabuBuildContextBuilder<N, R, P, DB, Evm>
 where
-    N: reth_node_types::NodeTypesWithDB,
+    N: NodeTypesWithDB,
     R: Send + Sync + Clone + 'static,
     P: Provider<Ethereum> + DebugProviderExt<Ethereum> + Send + Sync + Clone + 'static,
     DB: DatabaseRef<Error = KabuDBError>
@@ -247,7 +150,7 @@ where
 
 impl<N, R, P, DB, Evm> KabuBuildContextBuilder<N, R, P, DB, Evm>
 where
-    N: reth_node_types::NodeTypesWithDB,
+    N: NodeTypesWithDB,
     R: Send + Sync + Clone + 'static,
     P: Provider<Ethereum> + DebugProviderExt<Ethereum> + Send + Sync + Clone + 'static,
     DB: DatabaseRef<Error = KabuDBError>
@@ -1243,8 +1146,8 @@ impl<R, P, DB> KabuMergerBuilder<R, P, DB> {
 /// Composite merger component that manages all merger sub-components
 pub struct CompositeMergerComponent<N, R, P, DB>
 where
-    N: reth_node_types::NodeTypesWithDB,
-    R: reth_provider::BlockNumReader + reth_provider::HeaderProvider<Header = reth_node_types::HeaderTy<N>> + Send + Sync + Clone + 'static,
+    N: NodeTypesWithDB,
+    R: reth_provider::BlockNumReader + reth_provider::HeaderProvider<Header = HeaderTy<N>> + Send + Sync + Clone + 'static,
     P: Provider<Ethereum> + DebugProviderExt<Ethereum> + Send + Sync + Clone + 'static,
     DB: DatabaseRef<Error = KabuDBError>
         + Database<Error = KabuDBError>
@@ -1264,8 +1167,8 @@ where
 
 impl<N, R, P, DB> Clone for CompositeMergerComponent<N, R, P, DB>
 where
-    N: reth_node_types::NodeTypesWithDB,
-    R: reth_provider::BlockNumReader + reth_provider::HeaderProvider<Header = reth_node_types::HeaderTy<N>> + Send + Sync + Clone + 'static,
+    N: NodeTypesWithDB,
+    R: reth_provider::BlockNumReader + reth_provider::HeaderProvider<Header = HeaderTy<N>> + Send + Sync + Clone + 'static,
     P: Provider<Ethereum> + DebugProviderExt<Ethereum> + Send + Sync + Clone + 'static,
     DB: DatabaseRef<Error = KabuDBError>
         + Database<Error = KabuDBError>
@@ -1289,8 +1192,8 @@ where
 
 impl<N, R, P, DB> Component for CompositeMergerComponent<N, R, P, DB>
 where
-    N: reth_node_types::NodeTypesWithDB,
-    R: reth_provider::BlockNumReader + reth_provider::HeaderProvider<Header = reth_node_types::HeaderTy<N>> + Send + Sync + Clone + 'static,
+    N: NodeTypesWithDB,
+    R: reth_provider::BlockNumReader + reth_provider::HeaderProvider<Header = HeaderTy<N>> + Send + Sync + Clone + 'static,
     P: Provider<Ethereum> + DebugProviderExt<Ethereum> + Send + Sync + Clone + 'static,
     DB: DatabaseRef<Error = KabuDBError>
         + Database<Error = KabuDBError>
@@ -1318,8 +1221,8 @@ where
 
 impl<N, R, P, DB, Evm> MergerBuilder<KabuBuildContext<N, R, P, DB, Evm>> for KabuMergerBuilder<R, P, DB>
 where
-    N: reth_node_types::NodeTypesWithDB,
-    R: reth_provider::BlockNumReader + reth_provider::HeaderProvider<Header = reth_node_types::HeaderTy<N>> + Send + Sync + Clone + 'static,
+    N: NodeTypesWithDB,
+    R: reth_provider::BlockNumReader + reth_provider::HeaderProvider<Header = HeaderTy<N>> + Send + Sync + Clone + 'static,
     P: Provider<Ethereum> + DebugProviderExt<Ethereum> + Send + Sync + Clone + 'static,
     DB: DatabaseRef<Error = KabuDBError>
         + Database<Error = KabuDBError>
@@ -1511,9 +1414,9 @@ impl<N, R, P, DB> Default for KabuEthereumComponentsBuilder<N, R, P, DB> {
 
 impl<N, R, P, DB, Evm> KabuNodeComponentsBuilder<KabuEthereumNode<N, R, P, DB, Evm>> for KabuEthereumComponentsBuilder<N, R, P, DB>
 where
-    N: reth_node_types::NodeTypesWithDB,
+    N: NodeTypesWithDB,
     R: reth_provider::BlockNumReader
-        + reth_provider::HeaderProvider<Header = reth_node_types::HeaderTy<N>>
+        + reth_provider::HeaderProvider<Header = HeaderTy<N>>
         + CanonStateSubscriptions<Primitives = EthPrimitives>
         + StateProviderFactory
         + Send
@@ -1570,7 +1473,7 @@ impl<N, R, P, DB, Evm> KabuNodeTrait<KabuEthereumNode<N, R, P, DB, Evm>> for Kab
 where
     N: NodeTypesWithDB,
     R: reth_provider::BlockNumReader
-        + reth_provider::HeaderProvider<Header = reth_node_types::HeaderTy<N>>
+        + reth_provider::HeaderProvider<Header = HeaderTy<N>>
         + CanonStateSubscriptions<Primitives = EthPrimitives>
         + StateProviderFactory
         + Send

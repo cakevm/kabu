@@ -139,7 +139,7 @@ pub struct KabuBuildContext<P, DB> {
 The context uses a builder for flexible initialization:
 
 ```rust,ignore
-let context = KabuBuildContext::builder(
+let context = KabuBuildContextBuilder::new(
     provider,
     blockchain,
     blockchain_state,

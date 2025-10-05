@@ -29,7 +29,7 @@ use kabu::types::market::{MarketState, PoolClass, Token};
 use kabu::types::market::{Pool, PoolWrapper, RequiredStateReader};
 use kabu::types::swap::Swap;
 use kabu_core_components::{KabuBuilder, MevComponentChannels};
-use kabu_core_node::{KabuBuildContext, KabuEthereumNode};
+use kabu_core_node::{KabuBuildContextBuilder, KabuEthereumNode};
 use reth::api::NodeTypesWithDBAdapter;
 use reth::chainspec::MAINNET;
 use reth_db::DatabaseEnv;
@@ -281,7 +281,7 @@ async fn main() -> Result<()> {
     let evm_config = EthEvmConfig::mainnet();
 
     // Create KabuBuildContext with our channels
-    let kabu_context = KabuBuildContext::builder(
+    let kabu_context = KabuBuildContextBuilder::new(
         reth_provider.clone(),
         client.clone(),
         evm_config.clone(),
