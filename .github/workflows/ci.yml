@@ -58,7 +58,7 @@ jobs:
         with:
           version: nightly
 
-      - run: make swap-test-all
+      - run: make swap-test-all-ci
 
   fmt:
     name: make fmt-check

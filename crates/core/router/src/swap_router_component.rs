@@ -77,11 +77,14 @@ where
         let estimate_request = MessageSwapCompose::estimate(estimate_request);
 
         match self.swap_compose_tx.send(estimate_request) {
-            Err(_) => {
-                error!("Failed to send estimate request");
-                Err(eyre!("ERROR_SENDING_REQUEST"))
+            Err(e) => {
+                error!("Failed to send estimate request: {}", e);
+                Err(eyre!("ERROR_SENDING_REQUEST: {}", e))
             }
-            Ok(_) => Ok(()),
+            Ok(count) => {
+                debug!("Sent estimate request to {} receivers", count);
+                Ok(())
+            }
         }
     }
 }

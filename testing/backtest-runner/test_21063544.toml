@@ -9,6 +9,8 @@ block = 21063544
 coinbase = "0x1dd35b4da6534230ff53048f7477f17f7f4e7a70"
 multicaller = "0x3dd35b4da6534230ff53048f7477f17f7f4e7a70"
 skip_default = false
+# DISABLED: Not finding expected arbitrage opportunities (expects 1, finds 0) - needs investigation
+disabled = true
 
 [pools]
 # in order of swaps

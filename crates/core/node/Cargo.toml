@@ -15,10 +15,10 @@ kabu-core-topology = { workspace = true }
 kabu-evm-db = { workspace = true }
 kabu-types-blockchain = { workspace = true }
 kabu-types-entities = { workspace = true }
+kabu-types-events = { workspace = true }
 kabu-types-market = { workspace = true }
 
 # Component implementations
-kabu-broadcast-accounts = { workspace = true }
 kabu-broadcast-broadcaster = { workspace = true }
 kabu-core-block-history = { workspace = true }
 kabu-core-router = { workspace = true }
@@ -28,7 +28,6 @@ kabu-defi-preloader = { workspace = true }
 kabu-defi-price = { workspace = true }
 kabu-execution-estimator = { workspace = true }
 kabu-execution-multicaller = { workspace = true }
-kabu-metrics = { workspace = true }
 kabu-node-debug-provider = { workspace = true }
 kabu-storage-db = { workspace = true }
 kabu-strategy-backrun = { workspace = true }
@@ -43,11 +42,7 @@ alloy-primitives = { workspace = true }
 alloy-provider = { workspace = true }
 eyre = { workspace = true }
 reth = { workspace = true }
-reth-chain-state = { workspace = true }
 reth-ethereum-primitives = { workspace = true }
-reth-evm = { workspace = true }
-reth-node-types = { workspace = true }
-reth-provider = { workspace = true }
 reth-tasks = { workspace = true }
 tokio = { workspace = true }
 tracing = { workspace = true }

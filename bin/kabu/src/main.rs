@@ -9,7 +9,7 @@ use diesel_migrations::{EmbeddedMigrations, embed_migrations};
 use eyre::OptionExt;
 use kabu::broadcast::accounts::InitializeSignersOneShotBlockingComponent;
 use kabu::core::blockchain::{Blockchain, BlockchainState};
-use kabu::core::components::{Component, KabuBuilder};
+use kabu::core::components::Component;
 use kabu::core::topology::{EncoderConfig, TopologyConfig};
 use kabu::defi::pools::PoolsLoadingConfig;
 use kabu::evm::db::{AlloyDB, KabuDB};
@@ -19,7 +19,7 @@ use kabu::node::exex::mempool_worker;
 use kabu::storage::db::init_db_pool_with_migrations;
 use kabu::strategy::backrun::{BackrunConfig, BackrunConfigSection};
 use kabu::types::entities::strategy_config::load_from_file;
-use kabu_core_node::{KabuBuildContextBuilder, KabuEthereumNode};
+use kabu_core_node::{KabuContext, KabuEthereumNode, NodeBuilder, NodeConfig};
 use kabu_node_reth_api::{KabuRethFullProvider, chain_notifications_forwarder};
 use kabu_types_market::{MarketState, PoolClass};
 use reth::api::{NodeTypes, NodeTypesWithDBAdapter};
@@ -180,7 +180,7 @@ async fn start_kabu_mev<RethProvider, RpcProvider, Types, DB, EvmConfig>(
     kabu_config_filepath: String,
     is_exex: bool,
     task_executor: reth::tasks::TaskExecutor,
-) -> eyre::Result<kabu::core::components::KabuHandle>
+) -> eyre::Result<kabu_core_node::KabuHandle>
 where
     RethProvider: KabuRethFullProvider<NodeTypesWithDBAdapter<Types, DB>>,
     Types: NodeTypes<Primitives = EthPrimitives>,
@@ -211,33 +211,30 @@ where
 
     let swap_encoder = MulticallerSwapEncoder::default_with_address(multicaller_address);
 
-    // Create KabuBuildContext
-    let kabu_context = KabuBuildContextBuilder::new(
-        reth_provider,
-        provider.clone(),
-        evm_config,
-        bc,
-        bc_state.clone(),
-        topology_config.clone(),
-        backrun_config.clone(),
-        multicaller_address,
-        Some(db_pool.clone()),
-        is_exex,
-    )
-    .with_pools_config(pools_config.clone())
-    .with_swap_encoder(swap_encoder.clone())
-    .build();
+    // Create node configuration
+    let config = NodeConfig::new()
+        .chain_id(chain_id)
+        .topology_config(topology_config.clone())
+        .backrun_config(backrun_config.clone())
+        .multicaller_address(multicaller_address)
+        .swap_encoder(swap_encoder.clone())
+        .pools_config(pools_config.clone())
+        .db_pool(db_pool.clone())
+        .is_exex(is_exex);
 
-    // Get references to channels before building
-    let signers = kabu_context.channels.signers.clone();
-    let account_state = kabu_context.channels.account_state.clone();
+    // Create context with all providers
+    let context = KabuContext::new(reth_provider, provider.clone(), evm_config, bc, bc_state.clone(), config);
 
-    // Build and launch MEV components using the compact builder pattern
-    info!("Building MEV components using KabuBuilder with KabuEthereumNode");
+    // Get references to channels before launching
+    let signers = context.channels.signers.clone();
+    let account_state = context.channels.account_state.clone();
 
-    let handle = KabuBuilder::new(kabu_context)
-        .node(KabuEthereumNode::<NodeTypesWithDBAdapter<Types, DB>, RethProvider, RpcProvider, KabuDB, EvmConfig>::default())
-        .build()
+    // Build and launch MEV components
+    info!("Building MEV components with new node architecture");
+
+    let handle = NodeBuilder::new()
+        .with_context(context)
+        .with_components(KabuEthereumNode::components().build())
         .launch(task_executor.clone())
         .await?;
 

@@ -33,7 +33,6 @@ alloy-rpc-types-eth.workspace = true
 
 # reth
 reth.workspace = true
-reth-db.workspace = true
 reth-node-ethereum.workspace = true
 reth-primitives-traits.workspace = true
 reth-storage-rpc-provider.workspace = true

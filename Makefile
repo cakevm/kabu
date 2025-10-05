@@ -29,7 +29,8 @@ help:
 	@echo ""
 	@echo "Testing:"
 	@echo "  make swap-test FILE=path/to/test.toml - Run specific swap test"
-	@echo "  make swap-test-all                    - Run all swap tests"
+	@echo "  make swap-test-all                    - Run all swap tests (normal timeout)"
+	@echo "  make swap-test-all-ci                 - Run all swap tests (CI timeout)"
 	@echo "  make replayer                         - Run replayer test"
 
 # Make help the default target
@@ -201,58 +202,43 @@ replayer:
 # swap tests with kabu_anvil
 .PHONY: swap-test
 swap-test:
-	@echo "Running anvil swap test case: $(FILE)\n"
-	@RL=${RL:-info}; \
-    RUST_LOG=$(RL) cargo run --package kabu-backtest-runner --bin kabu-backtest-runner -- --config $(FILE) --timeout 40 --wait-init 7; \
+	@echo "Running specific swap test: $(FILE)\n"
+	@RUST_LOG=${RL:-info} cargo run --package kabu-backtest-runner --bin kabu-backtest-runner -- \
+		--timeout 10 --wait-init 1 $(FILE); \
 	EXIT_CODE=$$?; \
 	if [ $$EXIT_CODE -ne 0 ]; then \
-		echo "\n\033[0;31mError: Anvil swap tester exited with code $$EXIT_CODE\033[0m\n"; \
+		echo "\n\033[0;31mError: Swap test failed with code $$EXIT_CODE\033[0m\n"; \
 		exit 1; \
 	else \
-		echo "\n\033[0;32mAnvil swap test passed successfully.\033[0m"; \
+		echo "\n\033[0;32mSwap test completed successfully.\033[0m"; \
 	fi
 
-.PHONY: swap-test-1
-swap-test-1: FILE="./testing/backtest-runner/test_18498188.toml"
-swap-test-1: swap-test
-
-.PHONY: swap-test-2
-swap-test-2: FILE="./testing/backtest-runner/test_18567709.toml"
-swap-test-2: swap-test
-
-.PHONY: swap-test-3
-swap-test-3: FILE="./testing/backtest-runner/test_19101578.toml"
-swap-test-3: swap-test
-
-.PHONY: swap-test-4
-swap-test-4:FILE="./testing/backtest-runner/test_19109955.toml"
-swap-test-4: swap-test
-
-.PHONY: swap-test-5
-swap-test-5:FILE="./testing/backtest-runner/test_20927846.toml"
-swap-test-5: swap-test
-
-#.PHONY: swap-test-6
-#swap-test-6:FILE="./testing/backtest-runner/test_20935488.toml"
-#swap-test-6: swap-test
-
-#.PHONY: swap-test-7
-#swap-test-7:FILE="./testing/backtest-runner/test_20937428.toml"
-#swap-test-7: swap-test
-
-.PHONY: swap-test-8
-swap-test-8:FILE="./testing/backtest-runner/test_21035613.toml"
-swap-test-8: swap-test
-
+# Run all swap tests
 .PHONY: swap-test-all
-swap-test-all: RL=off
 swap-test-all:
-	@$(MAKE) swap-test-1 RL=$(RL)
-	@$(MAKE) swap-test-2 RL=$(RL)
-	@$(MAKE) swap-test-3 RL=$(RL)
-	@$(MAKE) swap-test-4 RL=$(RL)
-	@$(MAKE) swap-test-5 RL=$(RL)
-	#@$(MAKE) swap-test-6 RL=$(RL)
-	@$(MAKE) swap-test-8 RL=$(RL)
+	@echo "Running all swap tests in ./testing/backtest-runner/\n"
+	@RUST_LOG=${RL:-off} cargo run --package kabu-backtest-runner --bin kabu-backtest-runner -- \
+		--timeout 10 --wait-init 1 --flashbots-wait 0 ./testing/backtest-runner/; \
+	EXIT_CODE=$$?; \
+	if [ $$EXIT_CODE -ne 0 ]; then \
+		echo "\n\033[0;31mError: Swap test failed with code $$EXIT_CODE\033[0m\n"; \
+		exit 1; \
+	else \
+		echo "\n\033[0;32mAll swap tests completed successfully.\033[0m"; \
+	fi
+
+# Run all swap tests with CI timeouts (longer timeouts for slower CI environments)
+.PHONY: swap-test-all-ci
+swap-test-all-ci:
+	@echo "Running all swap tests with CI timeouts\n"
+	@RUST_LOG=off cargo run --package kabu-backtest-runner --bin kabu-backtest-runner -- \
+		--timeout 60 --wait-init 10 --flashbots-wait 15 ./testing/backtest-runner/; \
+	EXIT_CODE=$$?; \
+	if [ $$EXIT_CODE -ne 0 ]; then \
+		echo "\n\033[0;31mError: CI swap test failed with code $$EXIT_CODE\033[0m\n"; \
+		exit 1; \
+	else \
+		echo "\n\033[0;32mCI swap test completed successfully.\033[0m"; \
+	fi
 
 

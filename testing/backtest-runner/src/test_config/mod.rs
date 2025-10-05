@@ -59,6 +59,8 @@ pub struct Settings {
     pub block: u64,
     pub coinbase: Option<Address>,
     pub multicaller: Option<Address>,
+    #[serde(default = "default_false")]
+    pub disabled: bool,
 }
 
 #[derive(Deserialize, Debug)]

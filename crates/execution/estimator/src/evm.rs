@@ -10,7 +10,7 @@ use eyre::{Result, eyre};
 use influxdb::{Timestamp, WriteQuery};
 use std::marker::PhantomData;
 use tokio::sync::{broadcast, broadcast::error::RecvError};
-use tracing::{debug, error, info, trace};
+use tracing::{debug, error, info, warn};
 
 use kabu_core_blockchain::{Blockchain, Strategy};
 use kabu_evm_utils::{NWETH, evm_access_list};
@@ -37,6 +37,8 @@ where
     N: Network,
     DB: DatabaseRef<Error = KabuDBError> + Database<Error = KabuDBError> + DatabaseCommit + DatabaseKabuExt + Send + Sync + Clone + 'static,
 {
+    info!("Starting estimator_task for swap: {}", estimate_request.swap);
+
     debug!(
         gas_limit = estimate_request.tx_compose.gas,
         base_fee = NWETH::to_float_gwei(estimate_request.tx_compose.next_block_base_fee as u128),
@@ -48,8 +50,10 @@ where
     let start_time = chrono::Utc::now();
 
     let tx_signer = estimate_request.tx_compose.signer.clone().ok_or(eyre!("NO_SIGNER"))?;
+    info!("Got signer: {:?}", tx_signer.address());
     let gas_price = estimate_request.tx_compose.priority_gas_fee + estimate_request.tx_compose.next_block_base_fee;
 
+    info!("Encoding swap...");
     let (to, call_value, call_data, _) = swap_encoder.encode(
         estimate_request.swap.clone(),
         estimate_request.tips_pct,
@@ -58,6 +62,8 @@ where
         Some(tx_signer.address()),
         Some(estimate_request.tx_compose.eth_balance),
     )?;
+
+    info!("Swap encoded successfully, creating transaction request with nonce {}", estimate_request.tx_compose.nonce);
 
     let tx_request = TransactionRequest {
         transaction_type: Some(2),
@@ -75,10 +81,12 @@ where
         ..TransactionRequest::default()
     };
 
+    info!("Checking for poststate...");
     let Some(mut db) = estimate_request.poststate else {
-        error!("StateDB is None");
+        error!("StateDB is None - poststate not set!");
         return Err(eyre!("STATE_DB_IS_NONE"));
     };
+    info!("Got poststate DB");
 
     if let Some(client) = client {
         let ext_db = AlloyDB::new(client, BlockNumberOrTag::Latest.into());
@@ -102,6 +110,7 @@ where
 
     let tx_env = tx_req_to_env(tx_request);
 
+    info!("Calling evm_access_list...");
     let (gas_used, access_list) = match evm_access_list(&db, &evm_env, tx_env) {
         Ok((gas_used, access_list)) => {
             let pool_id_vec = estimate_request.swap.get_pool_id_vec();
@@ -124,12 +133,12 @@ where
             (gas_used, access_list)
         }
         Err(e) => {
-            trace!(
+            warn!(
                 "evm_access_list error for block_number={}, block_timestamp={}, swap={}, err={e}",
                 estimate_request.tx_compose.next_block_number, estimate_request.tx_compose.next_block_timestamp, estimate_request.swap
             );
             // simulation has failed but this could be caused by a token / pool with unsupported fee issue
-            trace!("evm_access_list error calldata : {} {}", to, call_data);
+            debug!("evm_access_list error calldata : {} {}", to, call_data);
 
             if let Some(health_monitor_channel_tx) = &health_monitor_channel_tx
                 && let Swap::BackrunSwapLine(swap_line) = estimate_request.swap
@@ -142,6 +151,7 @@ where
                 error!("Failed to send message to health monitor channel: {:?}", e);
             }
 
+            info!("Simulation failed, returning early without sending Ready");
             return Ok(());
         }
     };
@@ -214,6 +224,7 @@ where
         None => profit_eth_f64,
     };
 
+    let swap_for_log = estimate_request.swap.clone();
     let sign_request = MessageSwapCompose::ready(SwapComposeData {
         tx_compose: TxComposeData { tx_bundle: Some(tx_with_state), ..estimate_request.tx_compose },
         poststate: Some(db),
@@ -221,6 +232,7 @@ where
         ..estimate_request
     });
 
+    info!("Sending Ready message for swap: {}", swap_for_log);
     let result = match compose_channel_tx.send(sign_request) {
         Err(error) => {
             error!(%error, "compose_channel_tx.send");
@@ -262,6 +274,7 @@ async fn estimator_worker<N, DB>(
                 match compose_request_msg {
                     Ok(compose_request) =>{
                         if let SwapComposeMessage::Estimate(estimate_request) = compose_request.inner {
+                            info!("Estimator processing Estimate request for swap: {}", estimate_request.swap);
                             let compose_channel_tx_cloned = compose_channel_tx.clone();
                             let encoder_cloned = encoder.clone();
                             let client_cloned = client.clone();
@@ -269,15 +282,16 @@ async fn estimator_worker<N, DB>(
                             let health_monitor_channel_tx_cloned = health_monitor_channel_tx.clone();
                             tokio::task::spawn(
                                 async move {
-                                if let Err(e) = estimator_task(
+                                    match estimator_task(
                                         client_cloned,
                                         encoder_cloned,
                                         estimate_request.clone(),
                                         compose_channel_tx_cloned,
                                         health_monitor_channel_tx_cloned,
                                         influxdb_channel_tx_cloned,
-                                ).await {
-                                        error!("Error in EVM estimator_task: {:?}", e);
+                                    ).await {
+                                        Ok(_) => info!("Estimator task completed successfully"),
+                                        Err(e) => error!("Error in EVM estimator_task: {:?}", e),
                                     }
                                 }
                             );

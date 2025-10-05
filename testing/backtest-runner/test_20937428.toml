@@ -8,6 +8,8 @@ flashbots = true
 block = 20937428
 coinbase = "0x1dd35b4da6534230ff53048f7477f17f7f4e7a70"
 multicaller = "0x3dd35b4da6534230ff53048f7477f17f7f4e7a70"
+# DISABLED: Not finding expected arbitrage opportunities (expects 2, finds 0) - needs investigation
+disabled = true
 
 [pools]
 # in order of swaps

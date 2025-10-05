@@ -2,14 +2,14 @@ use crate::flashbots_mock::BundleRequest;
 use crate::flashbots_mock::mount_flashbots_mock;
 use crate::test_config::TestConfig;
 use alloy_network::Ethereum;
-use alloy_primitives::{TxHash, U256, address};
+use alloy_primitives::{Address, TxHash, U256, address};
 use alloy_provider::Provider;
 use alloy_provider::network::eip2718::Encodable2718;
 use alloy_rpc_types::{BlockId, BlockNumberOrTag};
 use alloy_rpc_types_eth::TransactionTrait;
 use chrono::Local;
 use clap::Parser;
-use eyre::{OptionExt, Result};
+use eyre::{OptionExt, Result, eyre};
 use kabu::core::blockchain::Blockchain;
 use kabu::core::blockchain::BlockchainState;
 use kabu::core::topology::{EncoderConfig, TopologyConfig};
@@ -28,18 +28,15 @@ use kabu::types::events::{MarketEvents, MempoolEvents, SwapComposeMessage};
 use kabu::types::market::{MarketState, PoolClass, Token};
 use kabu::types::market::{Pool, PoolWrapper, RequiredStateReader};
 use kabu::types::swap::Swap;
-use kabu_core_components::{KabuBuilder, MevComponentChannels};
-use kabu_core_node::{KabuBuildContextBuilder, KabuEthereumNode};
-use reth::api::NodeTypesWithDBAdapter;
+use kabu_core_components::MevComponentChannels;
+use kabu_core_node::{KabuContext, KabuEthereumNode, NodeBuilder, NodeConfig};
 use reth::chainspec::MAINNET;
-use reth_db::DatabaseEnv;
 use reth_node_ethereum::{EthEvmConfig, EthereumNode};
 use reth_storage_rpc_provider::{RpcBlockchainProvider, RpcBlockchainProviderConfig};
 use reth_tasks::TaskManager;
 use std::env;
 use std::fmt::{Display, Formatter};
 use std::process::exit;
-use std::sync::Arc;
 use std::time::{Duration, Instant};
 use tracing::{debug, error, info, warn};
 use tracing_subscriber::layer::SubscriberExt;
@@ -114,18 +111,25 @@ fn parse_tx_hashes(tx_hash_vec: Vec<&str>) -> Result<Vec<TxHash>> {
     Ok(ret)
 }
 
+use std::ffi::OsStr;
+use std::path::PathBuf;
+
 #[derive(Parser, Debug)]
 struct Commands {
-    #[arg(short, long)]
-    config: String,
-
-    /// Timout in seconds after the test fails
+    /// Timeout in seconds after the test fails
     #[arg(short, long, default_value = "10")]
     timeout: u64,
 
     /// Wait xx seconds before start re-broadcasting
     #[arg(short, long, default_value = "1")]
     wait_init: u64,
+
+    /// Flashbots collection wait time in seconds
+    #[arg(short = 'f', long, default_value = "0")]
+    flashbots_wait: u64,
+
+    /// Path to test file or directory containing tests
+    path: PathBuf,
 }
 
 #[tokio::main]
@@ -137,7 +141,84 @@ async fn main() -> Result<()> {
     tracing_subscriber::registry().with(fmt_layer).init();
 
     let args = Commands::parse();
-    let test_config = TestConfig::from_file(args.config.clone()).await?;
+
+    if args.path.is_file() {
+        // Run single test
+        println!("[{}] Running single test: {}", Local::now().format("%H:%M:%S.%3f"), args.path.display());
+        execute_test(args.path.clone(), &args).await?;
+    } else if args.path.is_dir() {
+        // Find and run multiple tests
+        let mut test_files = Vec::new();
+        for entry in std::fs::read_dir(&args.path)? {
+            let path = entry?.path();
+            if path.extension() == Some(OsStr::new("toml"))
+                && path.file_name().and_then(|n| n.to_str()).map(|n| n.starts_with("test_")).unwrap_or(false)
+            {
+                test_files.push(path);
+            }
+        }
+        test_files.sort();
+
+        println!("[{}] Found {} tests in {}", Local::now().format("%H:%M:%S.%3f"), test_files.len(), args.path.display());
+
+        let mut passed = 0;
+        let mut failed = 0;
+        let mut skipped = 0;
+
+        for test_file in test_files {
+            // Quick check if test is disabled
+            let test_config = TestConfig::from_file(test_file.to_string_lossy().to_string()).await?;
+
+            if test_config.settings.disabled {
+                skipped += 1;
+                println!("\n[{}] SKIPPED: {} (disabled)", Local::now().format("%H:%M:%S.%3f"), test_file.display());
+                continue;
+            }
+
+            println!("\n{}", "=".repeat(70));
+            println!("[{}] Running: {}", Local::now().format("%H:%M:%S.%3f"), test_file.display());
+            println!("{}", "=".repeat(70));
+
+            match execute_test(test_file, &args).await {
+                Ok(()) => {
+                    passed += 1;
+                    println!("[{}] ✓ Test passed", Local::now().format("%H:%M:%S.%3f"));
+                }
+                Err(e) => {
+                    failed += 1;
+                    eprintln!("[{}] ✗ Test failed: {}", Local::now().format("%H:%M:%S.%3f"), e);
+                }
+            }
+        }
+
+        println!("\n{}", "=".repeat(70));
+        println!("[{}] TEST SUMMARY: {} passed, {} failed, {} skipped", Local::now().format("%H:%M:%S.%3f"), passed, failed, skipped);
+        println!("{}", "=".repeat(70));
+
+        if failed > 0 {
+            std::process::exit(1);
+        }
+    } else {
+        return Err(eyre!("Path does not exist: {}", args.path.display()));
+    }
+
+    Ok(())
+}
+
+// Complete test execution - everything happens here for isolation
+async fn execute_test(test_path: PathBuf, args: &Commands) -> Result<()> {
+    let test_config = TestConfig::from_file(test_path.to_string_lossy().to_string()).await?;
+
+    // Check if test is disabled
+    if test_config.settings.disabled {
+        println!("[{}] SKIPPED: Test disabled - {}", Local::now().format("%H:%M:%S.%3f"), test_path.display());
+        return Ok(());
+    }
+
+    println!("[{}] TEST STARTED: {}", Local::now().format("%H:%M:%S.%3f"), test_path.display());
+    println!("[{}] Block: {} | Timeout: {}s", Local::now().format("%H:%M:%S.%3f"), test_config.settings.block, args.timeout);
+
+    // Create a fresh Anvil instance for this test
     let node_url = env::var("MAINNET_WS")?;
     let client = AnvilDebugProviderFactory::from_node_on_block(node_url, test_config.settings.block).await?;
     let priv_key = client.privkey()?.to_bytes().to_vec();
@@ -273,31 +354,28 @@ async fn main() -> Result<()> {
     let mev_channels = MevComponentChannels::<KabuDB>::default();
 
     // Create RpcBlockchainProvider for test environment
-    let config = RpcBlockchainProviderConfig { compute_state_root: false, reth_rpc_support: false };
+    let rpc_config = RpcBlockchainProviderConfig { compute_state_root: false, reth_rpc_support: false };
     let reth_provider =
-        RpcBlockchainProvider::<_, EthereumNode, Ethereum>::new_with_config(client.clone(), config).with_chain_spec(MAINNET.clone());
+        RpcBlockchainProvider::<_, EthereumNode, Ethereum>::new_with_config(client.clone(), rpc_config).with_chain_spec(MAINNET.clone());
 
     // Create EVM config
     let evm_config = EthEvmConfig::mainnet();
 
-    // Create KabuBuildContext with our channels
-    let kabu_context = KabuBuildContextBuilder::new(
-        reth_provider.clone(),
-        client.clone(),
-        evm_config.clone(),
-        blockchain.clone(),
-        blockchain_state.clone(),
-        topology_config.clone(),
-        backrun_config.clone(),
-        multicaller_address,
-        None,  // No database pool needed for test runner
-        false, // is_exex = false for testing
-    )
-    .with_pools_config(pools_config.clone())
-    .with_swap_encoder(multicaller_encoder.clone())
-    .with_channels(mev_channels.clone()) // Use our channels
-    .with_enable_web_server(false) // Disable web server for test runner
-    .build();
+    // Create node configuration
+    let config = NodeConfig::new()
+        .chain_id(1)
+        .topology_config(topology_config.clone())
+        .backrun_config(backrun_config.clone())
+        .multicaller_address(multicaller_address)
+        .swap_encoder(multicaller_encoder.clone())
+        .pools_config(pools_config.clone())
+        .enable_web_server(false); // Disable web server for test runner
+
+    // Create context with all providers and custom channels for testing
+    let mut context = KabuContext::new(reth_provider, client.clone(), evm_config, blockchain.clone(), blockchain_state.clone(), config);
+
+    // Override channels with our test channels
+    context.channels = mev_channels.clone();
 
     // Create TaskExecutor
     let task_manager = TaskManager::new(tokio::runtime::Handle::current());
@@ -311,16 +389,27 @@ async fn main() -> Result<()> {
 
         // Add the private key directly
         let signer = signers.write().await.add_privkey(alloy_primitives::Bytes::from(priv_key));
-        account_state.write().await.add_account(signer.address());
-        println!("[{}] Test signer initialized: {:?}", Local::now().format("%H:%M:%S.%3f"), signer.address());
+
+        // Get the actual nonce and balance from Anvil
+        let nonce = client.get_transaction_count(signer.address()).await?;
+        let balance = client.get_balance(signer.address()).await?;
+
+        // Set the correct account state
+        account_state.write().await.add_account(signer.address()).set_nonce(nonce).set_balance(Address::default(), balance); // ETH balance
+
+        println!(
+            "[{}] Test signer initialized: {:?} (nonce={}, balance={})",
+            Local::now().format("%H:%M:%S.%3f"),
+            signer.address(),
+            nonce,
+            balance
+        );
     }
 
-    // Build and launch components with KabuEthereumNode - now SignersComponent will have signers configured
-    // Using Arc<DatabaseEnv> as the DB type for testing (DatabaseEnv itself doesn't implement Clone)
-    type TestNodeTypes = NodeTypesWithDBAdapter<EthereumNode, Arc<DatabaseEnv>>;
-    let _handle = KabuBuilder::new(kabu_context)
-        .node(KabuEthereumNode::<TestNodeTypes, RpcBlockchainProvider<_, EthereumNode, Ethereum>, _, KabuDB, EthEvmConfig>::default())
-        .build()
+    // Build and launch components - now SignersComponent will have signers configured
+    let _handle = NodeBuilder::new()
+        .with_context(context)
+        .with_components(KabuEthereumNode::components().build())
         .launch(task_executor.clone())
         .await?;
 
@@ -558,8 +647,6 @@ async fn main() -> Result<()> {
     });
 
     let test_start_time = Instant::now();
-    println!("\n[{}] TEST STARTED: {}", Local::now().format("%H:%M:%S.%3f"), args.config);
-    println!("[{}] Block: {} | Timeout: {}s", Local::now().format("%H:%M:%S.%3f"), test_config.settings.block, args.timeout);
     println!("[{}] Waiting for arbitrage opportunities...", Local::now().format("%H:%M:%S.%3f"));
 
     let mut tx_compose_sub = mev_channels.swap_compose.subscribe();
@@ -630,10 +717,14 @@ async fn main() -> Result<()> {
             }
         }
     }
-    if test_config.modules.flashbots {
+    if test_config.modules.flashbots && args.flashbots_wait > 0 {
         // wait for flashbots mock server to receive all requests
-        println!("[{}] Waiting 10s for Flashbots mock server to collect requests...", Local::now().format("%H:%M:%S.%3f"));
-        for i in (1..=10).rev() {
+        println!(
+            "[{}] Waiting {}s for Flashbots mock server to collect requests...",
+            Local::now().format("%H:%M:%S.%3f"),
+            args.flashbots_wait
+        );
+        for i in (1..=args.flashbots_wait).rev() {
             print!("\r[{}] Flashbots collection: {}s remaining... ", Local::now().format("%H:%M:%S.%3f"), i);
             io::stdout().flush().unwrap();
             tokio::time::sleep(Duration::from_secs(1)).await;
