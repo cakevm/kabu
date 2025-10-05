@@ -22,7 +22,6 @@ use std::sync::Arc;
 use tokio::sync::{RwLock, broadcast};
 use tracing::{debug, error, warn};
 
-use kabu_core_blockchain::{Blockchain, BlockchainState, Strategy};
 use kabu_node_debug_provider::DebugProviderExt;
 use kabu_types_blockchain::{GethStateUpdateVec, Mempool, TRACING_CALL_OPTS, debug_trace_call_diff};
 use kabu_types_events::{MarketEvents, MempoolEvents, StateUpdateEvent};
@@ -376,18 +375,6 @@ where
             mempool_events_rx: None,
             state_updates_tx: None,
             _n: PhantomData,
-        }
-    }
-
-    pub fn on_bc(self, bc: &Blockchain<LDT>, state: &BlockchainState<DB, LDT>, strategy: &Strategy<DB, LDT>) -> Self {
-        Self {
-            market: Some(bc.market()),
-            mempool: Some(bc.mempool()),
-            market_state: Some(state.market_state()),
-            market_events_rx: Some(bc.market_events_channel()),
-            mempool_events_rx: Some(bc.mempool_events_channel()),
-            state_updates_tx: Some(strategy.state_update_channel()),
-            ..self
         }
     }
 

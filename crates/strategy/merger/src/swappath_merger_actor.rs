@@ -9,7 +9,6 @@ use revm::{Database, DatabaseCommit, DatabaseRef};
 use tokio::sync::{broadcast, broadcast::error::RecvError};
 use tracing::{debug, error};
 
-use kabu_core_blockchain::{Blockchain, Strategy};
 use kabu_evm_db::KabuDBError;
 use kabu_types_events::{MarketEvents, MessageSwapCompose, SwapComposeData, SwapComposeMessage};
 use kabu_types_swap::{Swap, SwapStep};
@@ -253,15 +252,6 @@ where
 
     pub fn with_compose_channel(self, compose_channel: broadcast::Sender<MessageSwapCompose<DB>>) -> Self {
         Self { compose_channel_rx: Some(compose_channel.clone()), compose_channel_tx: Some(compose_channel), ..self }
-    }
-
-    pub fn on_bc(self, bc: &Blockchain, strategy: &Strategy<DB>) -> Self {
-        Self {
-            market_events: Some(bc.market_events_channel()),
-            compose_channel_tx: Some(strategy.swap_compose_channel()),
-            compose_channel_rx: Some(strategy.swap_compose_channel()),
-            ..self
-        }
     }
 }
 

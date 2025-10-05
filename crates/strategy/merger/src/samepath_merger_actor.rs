@@ -15,7 +15,6 @@ use alloy_rpc_types::state::StateOverride;
 use alloy_rpc_types::{BlockOverrides, TransactionInput, TransactionRequest};
 use alloy_rpc_types_trace::geth::GethDebugTracingCallOptions;
 use eyre::{Result, eyre};
-use kabu_core_blockchain::{Blockchain, BlockchainState, Strategy};
 use kabu_core_components::Component;
 use kabu_evm_db::{DatabaseHelpers, KabuDBError};
 use kabu_evm_utils::evm_env::tx_req_to_env;
@@ -419,16 +418,6 @@ where
 
     pub fn with_compose_channel(self, compose_channel: broadcast::Sender<MessageSwapCompose<DB>>) -> Self {
         Self { compose_channel_rx: Some(compose_channel.clone()), compose_channel_tx: Some(compose_channel), ..self }
-    }
-
-    pub fn on_bc<LDT: NodePrimitives>(self, bc: &Blockchain, state: &BlockchainState<DB, LDT>, strategy: &Strategy<DB>) -> Self {
-        Self {
-            market_state: Some(state.market_state_commit()),
-            market_events: Some(bc.market_events_channel()),
-            compose_channel_tx: Some(strategy.swap_compose_channel()),
-            compose_channel_rx: Some(strategy.swap_compose_channel()),
-            ..self
-        }
     }
 }
 

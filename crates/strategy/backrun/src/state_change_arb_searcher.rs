@@ -21,7 +21,6 @@ use tracing::{debug, error, info};
 
 use crate::{BackrunConfig, SwapCalculator};
 
-use kabu_core_blockchain::{Blockchain, Strategy};
 use kabu_evm_db::{DatabaseHelpers, KabuDBError};
 use kabu_types_entities::strategy_config::StrategyConfig;
 use kabu_types_events::{
@@ -346,17 +345,6 @@ impl<
             swap_tx: None,
             pool_health_monitor_tx: None,
             influxdb_write_channel_tx: None,
-        }
-    }
-
-    pub fn on_bc(self, bc: &Blockchain<LDT>, strategy: &Strategy<DB, LDT>) -> Self {
-        Self {
-            market: Some(bc.market()),
-            pool_health_monitor_tx: Some(bc.health_monitor_channel()),
-            swap_tx: Some(strategy.swap_compose_channel()),
-            state_update_rx: Some(strategy.state_update_channel()),
-            influxdb_write_channel_tx: bc.influxdb_write_channel(),
-            ..self
         }
     }
 

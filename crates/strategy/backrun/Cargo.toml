@@ -9,7 +9,6 @@ rust-version.workspace = true
 version.workspace = true
 
 [dependencies]
-kabu-core-blockchain.workspace = true
 kabu-core-components = { workspace = true }
 kabu-defi-abi.workspace = true
 kabu-defi-address-book.workspace = true

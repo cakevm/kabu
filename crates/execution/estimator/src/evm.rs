@@ -12,7 +12,6 @@ use std::marker::PhantomData;
 use tokio::sync::{broadcast, broadcast::error::RecvError};
 use tracing::{debug, error, info, warn};
 
-use kabu_core_blockchain::{Blockchain, Strategy};
 use kabu_evm_utils::{NWETH, evm_access_list};
 use kabu_types_swap::{EstimationError, Swap, SwapEncoder};
 
@@ -342,16 +341,6 @@ where
             health_monitor_channel_tx: None,
             influxdb_write_channel_tx: None,
             _n: PhantomData::<N>,
-        }
-    }
-
-    pub fn on_bc(self, bc: &Blockchain, strategy: &Strategy<DB>) -> Self {
-        Self {
-            compose_channel_tx: Some(strategy.swap_compose_channel()),
-            compose_channel_rx: Some(strategy.swap_compose_channel()),
-            health_monitor_channel_tx: Some(bc.health_monitor_channel()),
-            influxdb_write_channel_tx: bc.influxdb_write_channel(),
-            ..self
         }
     }
 

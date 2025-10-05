@@ -8,7 +8,6 @@ use std::collections::HashSet;
 use tokio::sync::{broadcast, broadcast::Receiver, broadcast::error::RecvError};
 use tracing::{debug, error, info};
 
-use kabu_core_blockchain::{Blockchain, Strategy};
 use kabu_evm_utils::NWETH;
 use kabu_types_events::{MarketEvents, MessageSwapCompose, SwapComposeData, SwapComposeMessage, TxComposeData};
 use kabu_types_market::MarketState;
@@ -191,18 +190,6 @@ where
 
     pub fn with_compose_channel(self, compose_channel: broadcast::Sender<MessageSwapCompose<DB>>) -> Self {
         Self { compose_channel_rx: Some(compose_channel.clone()), compose_channel_tx: Some(compose_channel), ..self }
-    }
-
-    pub fn on_bc(self, bc: &Blockchain) -> Self {
-        Self { market_events: Some(bc.market_events_channel()), ..self }
-    }
-
-    pub fn on_strategy(self, strategy: &Strategy<DB>) -> Self {
-        Self {
-            compose_channel_tx: Some(strategy.swap_compose_channel()),
-            compose_channel_rx: Some(strategy.swap_compose_channel()),
-            ..self
-        }
     }
 }
 
