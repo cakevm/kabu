@@ -122,20 +122,15 @@ where
     type Component = StateChangeArbComponent<P, Ethereum, DB, EthPrimitives>;
 
     fn build(self, ctx: &KabuContext<R, P, DB, Evm>) -> Result<Self::Component> {
-        let mut component = StateChangeArbComponent::new(
-            ctx.provider.clone(),
-            true,                // use_blocks
-            !ctx.config.is_exex, // use_mempool (only if not exex)
-            ctx.config.backrun_config.clone(),
-        )
-        .with_market(ctx.market.clone())
-        .with_mempool(ctx.mempool.clone())
-        .with_market_state(ctx.market_state.clone())
-        .with_block_history(ctx.block_history.clone())
-        .with_mempool_events_channel(ctx.channels.mempool_events.clone())
-        .with_market_events_channel(ctx.channels.market_events.clone())
-        .with_swap_compose_channel(ctx.channels.swap_compose.clone())
-        .with_pool_health_monitor_channel(ctx.channels.health_events.clone());
+        let mut component = StateChangeArbComponent::new(ctx.provider.clone(), ctx.config.backrun_config.clone())
+            .with_market(ctx.market.clone())
+            .with_mempool(ctx.mempool.clone())
+            .with_market_state(ctx.market_state.clone())
+            .with_block_history(ctx.block_history.clone())
+            .with_mempool_events_channel(ctx.channels.mempool_events.clone())
+            .with_market_events_channel(ctx.channels.market_events.clone())
+            .with_swap_compose_channel(ctx.channels.swap_compose.clone())
+            .with_pool_health_monitor_channel(ctx.channels.health_events.clone());
 
         if let Some(channel) = ctx.blockchain.influxdb_write_channel() {
             component = component.with_influxdb_channel(channel);

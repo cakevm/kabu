@@ -2,7 +2,7 @@ use crate::arguments::{AppArgs, Command, KabuArgs};
 use alloy::eips::BlockId;
 use alloy::network::Ethereum;
 use alloy::primitives::hex;
-use alloy::providers::{IpcConnect, ProviderBuilder, WsConnect};
+use alloy::providers::{IpcConnect, Provider, ProviderBuilder, WsConnect};
 use alloy::rpc::client::ClientBuilder;
 use clap::{CommandFactory, FromArgMatches, Parser};
 use diesel_migrations::{EmbeddedMigrations, embed_migrations};
@@ -19,17 +19,18 @@ use kabu::node::exex::mempool_worker;
 use kabu::storage::db::init_db_pool_with_migrations;
 use kabu::strategy::backrun::{BackrunConfig, BackrunConfigSection};
 use kabu::types::entities::strategy_config::load_from_file;
-use kabu_core_node::{KabuContext, KabuEthereumNode, NodeBuilder, NodeConfig};
+use kabu_core_node::{KabuContext, KabuEthereumNode, KabuHandle, NodeBuilder, NodeConfig};
 use kabu_node_reth_api::{KabuRethFullProvider, chain_notifications_forwarder};
 use kabu_types_market::{MarketState, PoolClass};
 use reth::api::{NodeTypes, NodeTypesWithDBAdapter};
 use reth::builder::NodeHandle;
 use reth::chainspec::{Chain, EthereumChainSpecParser, MAINNET};
 use reth::cli::Cli;
-use reth::tasks::TaskManager;
+use reth::tasks::{TaskExecutor, TaskManager};
 use reth_db_api::Database as RethDatabase;
 use reth_db_api::database_metrics::DatabaseMetrics;
 use reth_ethereum_primitives::EthPrimitives;
+use reth_evm::ConfigureEvm;
 use reth_node_ethereum::node::EthereumAddOns;
 use reth_node_ethereum::{EthEvmConfig, EthereumNode};
 use reth_provider::providers::BlockchainProvider;
@@ -73,7 +74,6 @@ fn main() -> eyre::Result<()> {
 
             // Start Kabu MEV components
             let task_executor = node.task_executor.clone();
-
             let bc_clone = bc.clone();
             let reth_provider = node.provider.clone();
             let evm_config = node.evm_config.clone();
@@ -86,7 +86,6 @@ fn main() -> eyre::Result<()> {
                     bc_state,
                     topology_config,
                     kabu_args.kabu_config.clone(),
-                    true,
                     task_executor,
                 )
                 .await
@@ -130,32 +129,29 @@ fn main() -> eyre::Result<()> {
                 let client_config = topology_config.clients.get("remote").unwrap();
                 let transport = WsConnect::new(client_config.url.clone());
                 let client = ClientBuilder::default().ws(transport).await?;
-                let provider = ProviderBuilder::new().disable_recommended_fillers().connect_client(client);
+                let rpc_provider = ProviderBuilder::new().disable_recommended_fillers().connect_client(client);
                 let config = RpcBlockchainProviderConfig { compute_state_root: false, reth_rpc_support: false };
-                let reth_provider = RpcBlockchainProvider::<_, EthereumNode, Ethereum>::new_with_config(provider.clone(), config)
+                let reth_provider = RpcBlockchainProvider::<_, EthereumNode, Ethereum>::new_with_config(rpc_provider.clone(), config)
                     .with_chain_spec(MAINNET.clone());
 
                 let bc = Blockchain::new(Chain::mainnet().id());
-                let bc_clone = bc.clone();
-
                 let bc_state = BlockchainState::<KabuDB, EthPrimitives>::new();
 
                 let task_manager = TaskManager::new(tokio::runtime::Handle::current());
                 let task_executor = task_manager.executor();
 
-                chain_notifications_forwarder(&task_executor, provider.clone(), reth_provider.clone()).await?;
+                chain_notifications_forwarder(&task_executor, rpc_provider.clone(), reth_provider.clone()).await?;
 
                 let evm_config = EthEvmConfig::mainnet();
 
                 let handle = start_kabu_mev::<_, _, EthereumNode, _, _>(
                     reth_provider,
-                    provider,
+                    rpc_provider,
                     evm_config,
-                    bc_clone,
+                    bc,
                     bc_state,
                     topology_config,
                     kabu_args.kabu_config.clone(),
-                    false,
                     task_executor,
                 )
                 .await?;
@@ -172,23 +168,22 @@ fn main() -> eyre::Result<()> {
 #[allow(clippy::too_many_arguments)]
 async fn start_kabu_mev<RethProvider, RpcProvider, Types, DB, EvmConfig>(
     reth_provider: RethProvider,
-    provider: RpcProvider,
+    rpc_provider: RpcProvider,
     evm_config: EvmConfig,
     bc: Blockchain,
     bc_state: BlockchainState<KabuDB, EthPrimitives>,
     topology_config: TopologyConfig,
     kabu_config_filepath: String,
-    is_exex: bool,
-    task_executor: reth::tasks::TaskExecutor,
-) -> eyre::Result<kabu_core_node::KabuHandle>
+    task_executor: TaskExecutor,
+) -> eyre::Result<KabuHandle>
 where
     RethProvider: KabuRethFullProvider<NodeTypesWithDBAdapter<Types, DB>>,
     Types: NodeTypes<Primitives = EthPrimitives>,
     DB: RethDatabase + DatabaseMetrics + Clone + Unpin + 'static,
-    RpcProvider: alloy::providers::Provider<Ethereum> + DebugProviderExt<Ethereum> + Send + Sync + Clone + 'static,
-    EvmConfig: reth_evm::ConfigureEvm + 'static,
+    RpcProvider: Provider<Ethereum> + DebugProviderExt<Ethereum> + Send + Sync + Clone + 'static,
+    EvmConfig: ConfigureEvm + 'static,
 {
-    let chain_id = provider.get_chain_id().await?;
+    let chain_id = rpc_provider.get_chain_id().await?;
     info!(chain_id = ?chain_id, "Starting Kabu MEV bot");
 
     // Parse configuration
@@ -219,11 +214,10 @@ where
         .multicaller_address(multicaller_address)
         .swap_encoder(swap_encoder.clone())
         .pools_config(pools_config.clone())
-        .db_pool(db_pool.clone())
-        .is_exex(is_exex);
+        .db_pool(db_pool.clone());
 
     // Create context with all providers
-    let context = KabuContext::new(reth_provider, provider.clone(), evm_config, bc, bc_state.clone(), config);
+    let context = KabuContext::new(reth_provider, rpc_provider.clone(), evm_config, bc, bc_state.clone(), config);
 
     // Get references to channels before launching
     let signers = context.channels.signers.clone();

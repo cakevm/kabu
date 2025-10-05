@@ -25,8 +25,6 @@ use tracing::info;
 pub struct StateChangeArbComponent<P, N, DB: Clone + Send + Sync + 'static, LDT: NodePrimitives + 'static> {
     backrun_config: BackrunConfig,
     client: P,
-    use_blocks: bool,
-    use_mempool: bool,
 
     market: Option<Arc<RwLock<Market>>>,
 
@@ -58,12 +56,10 @@ where
     DB: DatabaseRef + Send + Sync + Clone + 'static,
     LDT: NodePrimitives + 'static,
 {
-    pub fn new(client: P, use_blocks: bool, use_mempool: bool, backrun_config: BackrunConfig) -> StateChangeArbComponent<P, N, DB, LDT> {
+    pub fn new(client: P, backrun_config: BackrunConfig) -> StateChangeArbComponent<P, N, DB, LDT> {
         StateChangeArbComponent {
             backrun_config,
             client,
-            use_blocks,
-            use_mempool,
             chain_parameters: ChainParameters::ethereum(),
             market: None,
             mempool: None,
@@ -138,7 +134,7 @@ where
         searcher.spawn(executor.clone())?;
         info!("State change searcher component started successfully");
 
-        if self.mempool_events_tx.is_some() && self.use_mempool {
+        if self.mempool_events_tx.is_some() {
             let pending_tx_processor = PendingTxStateChangeProcessorComponent::new(self.client.clone())
                 .with_channels(
                     self.market_events_tx.clone().unwrap(),
@@ -152,7 +148,7 @@ where
             info!("Pending tx state processor component started successfully");
         }
 
-        if self.market_events_tx.is_some() && self.use_blocks {
+        if self.market_events_tx.is_some() {
             let block_processor = BlockStateChangeProcessorComponent::new().with_channels(
                 self.chain_parameters.clone(),
                 self.market.clone().unwrap(),

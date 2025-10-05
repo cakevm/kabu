@@ -78,8 +78,6 @@ pub struct NodeConfig {
     pub swap_encoder: MulticallerSwapEncoder,
     /// Database pool (optional - for web server)
     pub db_pool: Option<DbPool>,
-    /// Whether running as ExEx
-    pub is_exex: bool,
     /// Enable web server
     pub enable_web_server: bool,
     /// Pool loading configuration
@@ -133,7 +131,6 @@ impl NodeConfig {
             multicaller_address,
             swap_encoder,
             db_pool: None,
-            is_exex: false,
             enable_web_server: false,
             pools_config,
         }
@@ -178,12 +175,6 @@ impl NodeConfig {
     /// Set the database pool
     pub fn db_pool(mut self, db_pool: DbPool) -> Self {
         self.db_pool = Some(db_pool);
-        self
-    }
-
-    /// Set whether running as ExEx
-    pub fn is_exex(mut self, is_exex: bool) -> Self {
-        self.is_exex = is_exex;
         self
     }
 
@@ -249,10 +240,5 @@ where
     /// Get the chain parameters
     pub fn chain_params(&self) -> &ChainParameters {
         &self.config.chain_params
-    }
-
-    /// Check if running as ExEx
-    pub fn is_exex(&self) -> bool {
-        self.config.is_exex
     }
 }
