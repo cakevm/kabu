@@ -130,7 +130,10 @@ fn main() -> eyre::Result<()> {
                     config.remote_node.as_ref().ok_or_else(|| eyre::eyre!("remote_node configuration is required for remote mode"))?;
 
                 let transport = WsConnect::new(remote_node.ws_url.clone());
-                let client = ClientBuilder::default().ws(transport).await?;
+                let client = ClientBuilder::default()
+                    .ws(transport)
+                    .await
+                    .map_err(|e| eyre::eyre!("Failed to connect to remote node at {}: {}", remote_node.ws_url, e))?;
                 let rpc_provider = ProviderBuilder::new().disable_recommended_fillers().connect_client(client);
                 let rpc_config = RpcBlockchainProviderConfig { compute_state_root: false, reth_rpc_support: false };
                 let reth_provider = RpcBlockchainProvider::<_, EthereumNode, Ethereum>::new_with_config(rpc_provider.clone(), rpc_config)

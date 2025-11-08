@@ -28,7 +28,7 @@ lazy_static! {
         timeout: None,
     };
     pub static ref TRACING_CALL_OPTS: GethDebugTracingCallOptions =
-        GethDebugTracingCallOptions { tracing_options: TRACING_OPTS.clone(), state_overrides: None, block_overrides: None };
+        GethDebugTracingCallOptions { tracing_options: TRACING_OPTS.clone(), state_overrides: None, block_overrides: None, tx_index: None };
 }
 
 pub fn get_touched_addresses(state_update: &GethStateUpdate) -> Vec<Address> {
@@ -105,8 +105,9 @@ async fn debug_trace_call<N: Network, C: DebugProviderExt<N>, TR: Into<N::Transa
 
     let tracer_call_opts = GethDebugTracingCallOptions {
         tracing_options: tracer_opts.clone(),
-        state_overrides: opts.clone().and_then(|x| x.state_overrides),
-        block_overrides: opts.and_then(|x| x.block_overrides),
+        state_overrides: opts.as_ref().and_then(|x| x.state_overrides.clone()),
+        block_overrides: opts.as_ref().and_then(|x| x.block_overrides.clone()),
+        tx_index: opts.and_then(|x| x.tx_index),
     };
 
     let trace_result = client.geth_debug_trace_call(req.into(), block, tracer_call_opts.clone()).await?;
