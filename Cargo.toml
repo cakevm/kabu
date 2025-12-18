@@ -170,7 +170,7 @@ criterion = { version = "0.6.0", features = ["async_tokio"] }
 wiremock = "0.6.2"
 
 # revm
-revm = { version = "31.0.1", features = [
+revm = { version = "31.0.2", features = [
   "blst",
   "optional_balance_check",
   "optional_block_gas_limit",
@@ -219,25 +219,25 @@ alloy-sol-types = { version = "1.4.1", features = ["json"] }
 alloy-transport = "1.0.41"
 
 # reth
-reth = { git = "https://github.com/paradigmxyz/reth", tag = "v1.9.1", features = ["asm-keccak"] }
-reth-chain-state = { git = "https://github.com/paradigmxyz/reth", tag = "v1.9.1" }
-reth-db = { git = "https://github.com/paradigmxyz/reth", tag = "v1.9.1" }
-reth-db-api = { git = "https://github.com/paradigmxyz/reth", tag = "v1.9.1" }
-reth-ethereum-primitives = { git = "https://github.com/paradigmxyz/reth", tag = "v1.9.1" }
-reth-evm = { git = "https://github.com/paradigmxyz/reth", tag = "v1.9.1" }
-reth-execution-types = { git = "https://github.com/paradigmxyz/reth", tag = "v1.9.1" }
-reth-node-ethereum = { git = "https://github.com/paradigmxyz/reth", tag = "v1.9.1" }
-reth-node-types = { git = "https://github.com/paradigmxyz/reth", tag = "v1.9.1" }
-reth-primitives = { git = "https://github.com/paradigmxyz/reth", tag = "v1.9.1", features = ["asm-keccak"] }
-reth-primitives-traits = { git = "https://github.com/paradigmxyz/reth", tag = "v1.9.1" }
-reth-provider = { git = "https://github.com/paradigmxyz/reth", tag = "v1.9.1" }
-reth-revm = { git = "https://github.com/paradigmxyz/reth", tag = "v1.9.1" }
-reth-rpc-convert = { git = "https://github.com/paradigmxyz/reth", tag = "v1.9.1" }
-reth-rpc-eth-types = { git = "https://github.com/paradigmxyz/reth", tag = "v1.9.1" }
-reth-storage-api = { git = "https://github.com/paradigmxyz/reth", tag = "v1.9.1" }
-reth-storage-rpc-provider = { git = "https://github.com/paradigmxyz/reth", tag = "v1.9.1" }
-reth-tasks = { git = "https://github.com/paradigmxyz/reth", tag = "v1.9.1" }
-reth-transaction-pool = { git = "https://github.com/paradigmxyz/reth", tag = "v1.9.1" }
+reth = { git = "https://github.com/paradigmxyz/reth", tag = "v1.9.3", features = ["asm-keccak"] }
+reth-chain-state = { git = "https://github.com/paradigmxyz/reth", tag = "v1.9.3" }
+reth-db = { git = "https://github.com/paradigmxyz/reth", tag = "v1.9.3" }
+reth-db-api = { git = "https://github.com/paradigmxyz/reth", tag = "v1.9.3" }
+reth-ethereum-primitives = { git = "https://github.com/paradigmxyz/reth", tag = "v1.9.3" }
+reth-evm = { git = "https://github.com/paradigmxyz/reth", tag = "v1.9.3" }
+reth-execution-types = { git = "https://github.com/paradigmxyz/reth", tag = "v1.9.3" }
+reth-node-ethereum = { git = "https://github.com/paradigmxyz/reth", tag = "v1.9.3" }
+reth-node-types = { git = "https://github.com/paradigmxyz/reth", tag = "v1.9.3" }
+reth-primitives = { git = "https://github.com/paradigmxyz/reth", tag = "v1.9.3", features = ["asm-keccak"] }
+reth-primitives-traits = { git = "https://github.com/paradigmxyz/reth", tag = "v1.9.3" }
+reth-provider = { git = "https://github.com/paradigmxyz/reth", tag = "v1.9.3" }
+reth-revm = { git = "https://github.com/paradigmxyz/reth", tag = "v1.9.3" }
+reth-rpc-convert = { git = "https://github.com/paradigmxyz/reth", tag = "v1.9.3" }
+reth-rpc-eth-types = { git = "https://github.com/paradigmxyz/reth", tag = "v1.9.3" }
+reth-storage-api = { git = "https://github.com/paradigmxyz/reth", tag = "v1.9.3" }
+reth-storage-rpc-provider = { git = "https://github.com/paradigmxyz/reth", tag = "v1.9.3" }
+reth-tasks = { git = "https://github.com/paradigmxyz/reth", tag = "v1.9.3" }
+reth-transaction-pool = { git = "https://github.com/paradigmxyz/reth", tag = "v1.9.3" }
 
 [profile.test]
 debug = 1
@@ -255,6 +255,3 @@ strip = true # stripping of debuginfo
 codegen-units = 1
 inherits = "release"
 lto = "fat"
-
-[patch.crates-io]
-ruint = { git = "https://github.com/recmo/uint", tag = "v1.15.0" }

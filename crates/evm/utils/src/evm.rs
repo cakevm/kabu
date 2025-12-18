@@ -17,7 +17,7 @@ use revm::state::{Account, EvmState};
 use revm::{Context, Database, DatabaseCommit, DatabaseRef, MainBuilder, MainContext};
 use std::collections::BTreeMap;
 use thiserror::Error;
-use tracing::{debug, error};
+use tracing::debug;
 
 pub static COINBASE: Address = address!("1f9090aaE28b8a3dCeaDf281B0F12828e676c326");
 

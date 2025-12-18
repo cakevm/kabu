@@ -281,9 +281,9 @@ where
         let call_data = if self.is_meta {
             let i: Result<u32> = self.get_coin_idx(token_address_from);
             let j: Result<u32> = self.get_coin_idx(token_address_to);
-            if i.is_ok() && j.is_ok() {
+            if let (Ok(i), Ok(j)) = (i, j) {
                 self.pool_contract
-                    .get_dy_call_data(i.unwrap(), j.unwrap(), in_amount)
+                    .get_dy_call_data(i, j, in_amount)
                     .map_err(|_e| PoolError::InvalidInput { reason: "Failed to get dy call data" })?
             } else {
                 let i: u32 = self

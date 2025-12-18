@@ -2,9 +2,9 @@ use alloy_primitives::{Address, U256};
 
 use serde::{Deserialize, Serialize};
 use utoipa::PartialSchema;
+use utoipa::ToSchema;
 use utoipa::openapi::schema::SchemaType;
 use utoipa::openapi::{Array, Object, ToArray, Type};
-use utoipa::{ToSchema, schema};
 
 #[derive(Debug, Serialize, ToSchema)]
 pub struct PoolResponse {

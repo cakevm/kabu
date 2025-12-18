@@ -2,7 +2,7 @@ use aes_gcm::{
     Aes256Gcm, Nonce,
     aead::{Aead, AeadCore, KeyInit, OsRng},
 };
-use clap::{Parser, arg};
+use clap::Parser;
 use eyre::{Result, eyre};
 use pbkdf2::pbkdf2_hmac;
 use rand::{Rng, rng};
