@@ -1,7 +1,6 @@
 [book]
 authors = ["Kabu Contributors"]
 language = "en"
-multilingual = false
 src = "book"
 title = "Kabu - MEV Bot Documentation"
 
